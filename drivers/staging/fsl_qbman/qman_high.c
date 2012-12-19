@@ -1661,6 +1661,7 @@ int qman_retire_fq(struct qman_fq *fq, u32 *flags)
 	unsigned long irqflags __maybe_unused;
 	int rval;
 	u8 res;
+	int unlocked = 0;
 
 	if ((fq->state != qman_fq_state_parked) &&
 			(fq->state != qman_fq_state_sched))
@@ -1724,6 +1725,12 @@ int qman_retire_fq(struct qman_fq *fq, u32 *flags)
 #else
 			msg.fq.contextB = (u32)(uintptr_t)fq;
 #endif
+			if (fq_isset(fq, QMAN_FQ_FLAG_FQSCB_NEED_SLP)) {
+				FQUNLOCK(fq);
+				PORTAL_IRQ_UNLOCK(p, irqflags);
+				put_affine_portal();
+				unlocked = 1;
+			}
 			fq->cb.fqs(p, fq, &msg);
 		}
 	} else if (res == QM_MCR_RESULT_PENDING) {
@@ -1734,9 +1741,11 @@ int qman_retire_fq(struct qman_fq *fq, u32 *flags)
 		table_del_fq(p, fq);
 	}
 out:
-	FQUNLOCK(fq);
-	PORTAL_IRQ_UNLOCK(p, irqflags);
-	put_affine_portal();
+	if (unlocked == 0) {
+		FQUNLOCK(fq);
+		PORTAL_IRQ_UNLOCK(p, irqflags);
+		put_affine_portal();
+	}
 	return rval;
 }
 EXPORT_SYMBOL(qman_retire_fq);
