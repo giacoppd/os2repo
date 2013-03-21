@@ -270,6 +270,34 @@ static inline u32 read_spin_table_addr_l(void *spin_table)
 	return in_be32(&((struct epapr_spin_table *)spin_table)->addr_l);
 }
 
+#ifdef CONFIG_PPC64
+static int __cpuinit smp_85xx_kick_secondary_thread(int nr)
+{
+	cpumask_var_t saved_mask;
+
+	/*
+	 * In cpu hotplug case, Thread 1 must start by calling
+	 * fsl_enable_threads() by the thread0 on the same core.
+	 */
+	if (system_state == SYSTEM_BOOTING)
+		return 0;
+
+	if (!alloc_cpumask_var(&saved_mask, GFP_KERNEL))
+		return -ENOMEM;
+
+	cpumask_copy(saved_mask, &current->cpus_allowed);
+	if (set_cpus_allowed_ptr(current,
+		cpumask_of(cpu_first_thread_sibling(nr)))) {
+		free_cpumask_var(saved_mask);
+		return -ENOENT;
+	}
+	fsl_enable_threads();
+	set_cpus_allowed_ptr(current, saved_mask);
+	free_cpumask_var(saved_mask);
+	return 0;
+}
+#endif
+
 static int smp_85xx_kick_cpu(int nr)
 {
 	unsigned long flags;
@@ -299,16 +327,10 @@ static int smp_85xx_kick_cpu(int nr)
 		 */
 		if (cpu_online(cpu_first_thread_sibling(nr))) {
 
-			local_irq_save(flags);
-			/*
-			 * In cpu hotplug case, Thread 1 of Core 0 must
-			 * start by calling fsl_enable_threads(). Thread 1
-			 * of other cores can be started by Thread 0
-			 * after reset.
-			 */
-			if (nr == 1 && system_state == SYSTEM_RUNNING)
-				fsl_enable_threads();
+			if (smp_85xx_kick_secondary_thread(nr))
+				return -ENOENT;
 
+			local_irq_save(flags);
 			smp_generic_kick_cpu(nr);
 
 			generic_set_cpu_up(nr);
