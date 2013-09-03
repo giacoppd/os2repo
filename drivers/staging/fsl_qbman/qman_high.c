@@ -565,8 +565,10 @@ struct qman_portal *qman_create_portal(
 	isdr ^= (QM_PIRQ_DQRI | QM_PIRQ_MRI);
 	qm_isr_disable_write(__p, isdr);
 	if (qm_dqrr_current(__p) != NULL) {
-		pr_err("Qman DQRR unclean\n");
-		qm_dqrr_cdc_consume_n(__p, 0xffff);
+		if (qm_drain_dqrr(__p)) {
+			pr_err("Qman DQRR unclean\n");
+			goto fail_dqrr_mr_empty;
+		}
 	}
 	if (qm_mr_current(__p) != NULL) {
 		/* special handling, drain just in case it's a few FQRNIs */
