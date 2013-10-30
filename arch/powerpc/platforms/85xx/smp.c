@@ -101,9 +101,11 @@ static void __cpuinit mpc85xx_give_timebase(void)
 {
 	unsigned long flags;
 
+#ifndef CONFIG_KEXEC
 	/* only do time base sync when system is running */
 	if (system_state == SYSTEM_BOOTING)
 		return;
+#endif
 	/*
 	 * If the booting thread is not the first thread of the core,
 	 * skip time base sync.
@@ -160,8 +162,10 @@ static void __cpuinit mpc85xx_take_timebase(void)
 {
 	unsigned long flags;
 
+#ifndef CONFIG_KEXEC
 	if (system_state == SYSTEM_BOOTING)
 		return;
+#endif
 
 	if (smt_capable() &&
 		cur_booting_core != cpu_first_thread_sibling(cur_booting_core))
