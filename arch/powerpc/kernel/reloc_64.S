@@ -12,7 +12,8 @@
 #include <asm/ppc_asm.h>
 
 RELA = 7
-RELACOUNT = 0x6ffffff9
+RELASZ = 8
+RELAENT = 9
 R_PPC64_RELATIVE = 22
 
 /*
@@ -35,23 +36,30 @@ _GLOBAL(relocate)
 	 */
 	li	r7,0
 	li	r8,0
+	li	r4,0
 1:	ld	r6,0(r11)	/* get tag */
 	cmpdi	r6,0
 	beq	4f		/* end of list */
 	cmpdi	r6,RELA
-	bne	2f
+	bne	relasz
 	ld	r7,8(r11)	/* get RELA pointer in r7 */
 	b	3f
-2:	addis	r6,r6,(-RELACOUNT)@ha
-	cmpdi	r6,RELACOUNT@l
+relasz:	cmpdi	r6,RELASZ
+	bne	relaent
+	ld	r8,8(r11)	/* get RELASZ in r8 */
+	b	3f
+relaent:cmpdi	r6,RELAENT
 	bne	3f
-	ld	r8,8(r11)	/* get RELACOUNT value in r8 */
+	ld	r4,8(r11)	/* get RELAENT value in r4 */
 3:	addi	r11,r11,16
 	b	1b
 4:	cmpdi	r7,0		/* check we have both RELA and RELACOUNT */
 	cmpdi	cr1,r8,0
+	cmpdi	cr5,r4,0
 	beq	6f
 	beq	cr1,6f
+	beq	cr5,6f
+	divd	r8,r8,r4	/* RELA count */
 
 	/*
 	 * Work out linktime address of _stext and hence the
