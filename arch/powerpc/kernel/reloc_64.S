@@ -14,7 +14,14 @@
 RELA = 7
 RELASZ = 8
 RELAENT = 9
+
+STN_UNDEF = 0
+
+R_PPC64_ADDR16_LO = 4
+R_PPC64_ADDR16_HI = 5
 R_PPC64_RELATIVE = 22
+R_PPC64_ADDR16_HIGHER = 39
+R_PPC64_ADDR16_HIGHEST = 41
 
 /*
  * r3 = desired final address of kernel
@@ -30,6 +37,8 @@ _GLOBAL(relocate)
 	add	r9,r9,r12	/* r9 has runtime addr of .rela.dyn section */
 	ld	r10,(p_st - 0b)(r12)
 	add	r10,r10,r12	/* r10 has runtime addr of _stext */
+	ld	r5,(p_sym - 0b)(r12)
+	add	r5,r5,r12	/* r5 has runtime addr of .dynsym section */
 
 	/*
 	 * Scan the dynamic section for the RELA and RELACOUNT entries.
@@ -77,20 +86,76 @@ relaent:cmpdi	r6,RELAENT
 	 * R_PPC64_RELATIVE ones.
 	 */
 	mtctr	r8
-5:	ld	r0,8(9)		/* ELF64_R_TYPE(reloc->r_info) */
-	cmpdi	r0,R_PPC64_RELATIVE
-	bne	6f
+5:	lwz	r0,12(9)	/* ELF64_R_TYPE(reloc->r_info) */
+	lwz	r4,8(r9)	/* ELF64_R_SYM(reloc->r_info) */
+	cmpwi	r4,STN_UNDEF	/* sym == STN_UNDEF ? */
+	beq	get_type
+	/* Find the value of the symbol at index(r4) */
+	mulli	r4,r4,24	/* r4 = r4 * sizeof(ELF64_Sym) */
+	add	r4,r4,r5	/* r4 = &__dyn_sym[Index] */
+	ld	r4,8(r4)	/* r4 = __dyn_sym[Index].st_value */
+
+get_type:
+	cmpwi	r0,R_PPC64_RELATIVE
+	bne	addr16_highest
 	ld	r6,0(r9)	/* reloc->r_offset */
 	ld	r0,16(r9)	/* reloc->r_addend */
 	add	r0,r0,r3
 	stdx	r0,r7,r6
+	b	nextrela
+addr16_highest:
+	cmpwi	r0,R_PPC64_ADDR16_HIGHEST
+	bne	addr16_higher
+	ld	r6,0(r9)	/* reloc->r_offset */
+	ld	r0,16(r9)	/* reloc->r_addend */
+	add	r0,r0,r3
+	add	r0,r0,r4	/* r0 = (S + A + Offset) */
+	extrdi	r0,r0,16,0	/* r0 = (r0 >> 48) & 0xffff) */
+	b	store_half
+addr16_higher:
+	cmpwi	r0,R_PPC64_ADDR16_HIGHER
+	bne	addr16_hi
+	ld	r6,0(r9)	/* reloc->r_offset */
+	ld	r0,16(r9)	/* reloc->r_addend */
+	add	r0,r0,r3
+	add	r0,r0,r4	/* r0 = (S + A + Offset) */
+	extrdi	r0,r0,16,16	/* r0 = (r0 >> 32) & 0xffff) */
+	b	store_half
+addr16_hi:
+	cmpwi	r0,R_PPC64_ADDR16_HI
+	bne	addr16_lo
+	ld	r6,0(r9)	/* reloc->r_offset */
+	ld	r0,16(r9)	/* reloc->r_addend */
+	add	r0,r0,r3
+	add	r0,r0,r4	/* r0 = (S + A + Offset) */
+	extrdi	r0,r0,16,32	/* r0 = (r0 >> 16) & 0xffff) */
+	b	store_half
+addr16_lo:
+	cmpwi	r0,R_PPC64_ADDR16_LO
+	bne	nextrela
+	ld	r6,0(r9)	/* reloc->r_offset */
+	ld	r0,16(r9)	/* reloc->r_addend */
+	add	r0,r0,r3
+	add	r0,r0,r4	/* r0 = (S + A + Offset) */
+	extrdi	r0,r0,16,48	/* r0 = r0 & 0xffff) */
+
+	/* Store half word */
+store_half:
+	sthx	r0,r6,r7	/* memory[r6 + r7] = (u16)r0 */
+
+nextrela:
+	dcbst	r6,r7
+	sync
+	icbi	r6,r7
 	addi	r9,r9,24
 	bdnz	5b
 
-6:	blr
+6:	sync
+	isync
+	blr
 
 .balign 8
 p_dyn:	.llong	__dynamic_start - 0b
 p_rela:	.llong	__rela_dyn_start - 0b
 p_st:	.llong	_stext - 0b
-
+p_sym:	.llong  __dynamic_symtab - 0b
