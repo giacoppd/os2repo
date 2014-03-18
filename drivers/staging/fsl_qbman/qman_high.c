@@ -333,10 +333,11 @@ static inline void qman_stop_dequeues_ex(struct qman_portal *p)
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 }
 
-static int drain_mr_fqrni(struct qm_portal *p)
+static int qm_drain_mr(struct qm_portal *p)
 {
 	const struct qm_mr_entry *msg;
 loop:
+	qm_mr_pvb_update(p);
 	msg = qm_mr_current(p);
 	if (!msg) {
 		/* if MR was full and h/w had other FQRNI entries to produce, we
@@ -355,14 +356,10 @@ loop:
 		do {
 			now = mfatb();
 		} while ((then + 10000) > now);
+		qm_mr_pvb_update(p);
 		msg = qm_mr_current(p);
 		if (!msg)
 			return 0;
-	}
-	if ((msg->verb & QM_MR_VERB_TYPE_MASK) != QM_MR_VERB_FQRNI) {
-		/* We aren't draining anything but FQRNIs */
-		pr_err("QMan found verb 0x%x in MR\n", msg->verb);
-		return -1;
 	}
 	qm_mr_next(p);
 	qm_mr_cci_consume(p, 1);
@@ -571,8 +568,8 @@ struct qman_portal *qman_create_portal(
 		}
 	}
 	if (qm_mr_current(__p) != NULL) {
-		/* special handling, drain just in case it's a few FQRNIs */
-		if (drain_mr_fqrni(__p)) {
+		/* drain all mr message */
+		if (qm_drain_mr(__p)) {
 			const struct qm_mr_entry *e = qm_mr_current(__p);
 			pr_err("Qman MR unclean, MR VERB 0x%x, "
 			       "rc 0x%x\n, addr 0x%x",
