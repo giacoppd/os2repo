@@ -60,4 +60,5 @@ obj-$(CONFIG_DRM_OMAP)	+= omapdrm/
 obj-$(CONFIG_DRM_TILCDC)	+= tilcdc/
 obj-$(CONFIG_DRM_QXL) += qxl/
 obj-$(CONFIG_DRM_XILINX)	+= xilinx/
+obj-$(CONFIG_DRM_XYLON)	+= xylon/
 obj-y			+= i2c/
