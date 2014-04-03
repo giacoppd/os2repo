@@ -1448,7 +1448,7 @@ static int gfar_probe(struct platform_device *ofdev)
 
 	if ((priv->device_flags & FSL_GIANFAR_DEV_HAS_WAKE_ON_FILER) &&
 	     priv->rx_filer_enable)
-		priv->wol_supported |= 0;
+		priv->wol_supported |= GFAR_WOL_FILER_UCAST;
 
 	device_set_wakeup_capable(&ofdev->dev, priv->wol_supported);
 
@@ -1642,6 +1642,7 @@ static void gfar_filer_restore_table(struct gfar_private *priv)
 {
 	u32 rqfcr, rqfpr;
 	unsigned int i;
+	u8 rqfcr_queue;
 
 	__gfar_filer_disable(priv);
 
