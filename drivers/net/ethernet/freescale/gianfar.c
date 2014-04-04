@@ -86,6 +86,9 @@
 #include <linux/udp.h>
 #include <linux/in.h>
 #include <linux/net_tstamp.h>
+#ifdef CONFIG_PM
+#include <linux/inetdevice.h>
+#endif
 
 #include <asm/io.h>
 #ifdef CONFIG_PPC
@@ -1448,7 +1451,8 @@ static int gfar_probe(struct platform_device *ofdev)
 
 	if ((priv->device_flags & FSL_GIANFAR_DEV_HAS_WAKE_ON_FILER) &&
 	     priv->rx_filer_enable)
-		priv->wol_supported |= GFAR_WOL_FILER_UCAST;
+		priv->wol_supported |= GFAR_WOL_FILER_UCAST |
+				       GFAR_WOL_FILER_ARP;
 
 	device_set_wakeup_capable(&ofdev->dev, priv->wol_supported);
 
