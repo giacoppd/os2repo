@@ -41,6 +41,7 @@ struct poll_table_struct;
  * @p_s64:	Pointer to a 64-bit signed value.
  * @p_u8:	Pointer to a 8-bit unsigned value.
  * @p_u16:	Pointer to a 16-bit unsigned value.
+ * @p_u32:	Pointer to a 32-bit unsigned value.
  * @p_char:	Pointer to a string.
  * @p:		Pointer to a compound value.
  */
@@ -49,6 +50,7 @@ union v4l2_ctrl_ptr {
 	s64 *p_s64;
 	u8 *p_u8;
 	u16 *p_u16;
+	u32 *p_u32;
 	char *p_char;
 	void *p;
 };
@@ -607,6 +609,24 @@ void v4l2_ctrl_grab(struct v4l2_ctrl *ctrl, bool grabbed);
 int __v4l2_ctrl_modify_range(struct v4l2_ctrl *ctrl,
 			     s64 min, s64 max, u64 step, s64 def);
 
+/** v4l2_ctrl_lock() - Helper function to lock the handler
+  * associated with the control.
+  * @ctrl:	The control to lock.
+  */
+static inline void v4l2_ctrl_lock(struct v4l2_ctrl *ctrl)
+{
+	mutex_lock(ctrl->handler->lock);
+}
+
+/** v4l2_ctrl_unlock() - Helper function to unlock the handler
+  * associated with the control.
+  * @ctrl:	The control to unlock.
+  */
+static inline void v4l2_ctrl_unlock(struct v4l2_ctrl *ctrl)
+{
+	mutex_unlock(ctrl->handler->lock);
+}
+
 /** v4l2_ctrl_modify_range() - Update the range of a control.
   * @ctrl:	The control to update.
   * @min:	The control's minimum value.
@@ -634,24 +654,6 @@ static inline int v4l2_ctrl_modify_range(struct v4l2_ctrl *ctrl,
 	v4l2_ctrl_unlock(ctrl);
 
 	return rval;
-}
-
-/** v4l2_ctrl_lock() - Helper function to lock the handler
-  * associated with the control.
-  * @ctrl:	The control to lock.
-  */
-static inline void v4l2_ctrl_lock(struct v4l2_ctrl *ctrl)
-{
-	mutex_lock(ctrl->handler->lock);
-}
-
-/** v4l2_ctrl_unlock() - Helper function to unlock the handler
-  * associated with the control.
-  * @ctrl:	The control to unlock.
-  */
-static inline void v4l2_ctrl_unlock(struct v4l2_ctrl *ctrl)
-{
-	mutex_unlock(ctrl->handler->lock);
 }
 
 /** v4l2_ctrl_notify() - Function to set a notify callback for a control.
