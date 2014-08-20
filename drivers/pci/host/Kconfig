@@ -33,6 +33,13 @@ config PCI_RCAR_GEN2
 	  There are 3 internal PCI controllers available with a single
 	  built-in EHCI/OHCI host controller present on each one.
 
+config PCIE_XILINX
+	bool "Xilinx AXI PCIe host bridge support"
+	depends on ARCH_ZYNQ
+	help
+	  Say 'Y' here if you want kernel to support the Xilinx AXI PCIe
+	  Host Bridge driver.
+
 config PCI_RCAR_GEN2_PCIE
 	bool "Renesas R-Car PCIe controller"
 	depends on ARCH_SHMOBILE || (ARM && COMPILE_TEST)
