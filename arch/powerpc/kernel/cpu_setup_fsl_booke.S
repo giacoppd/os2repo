@@ -91,6 +91,7 @@ _GLOBAL(setup_altivec_idle)
 
 	blr
 
+#ifdef CONFIG_PPC_BOOK3E_64
 _GLOBAL(__setup_cpu_e6500)
 	mflr	r6
 #ifdef CONFIG_PPC64
@@ -107,6 +108,7 @@ _GLOBAL(__setup_cpu_e6500)
 	bl	__setup_cpu_e5500
 	mtlr	r6
 	blr
+#endif
 
 #ifdef CONFIG_PPC32
 _GLOBAL(__setup_cpu_e200)
