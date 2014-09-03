@@ -1023,6 +1023,12 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 		timeout += DIV_ROUND_UP(cmd->cmd_timeout_ms, 1000) * HZ + HZ;
 	else
 		timeout += 10 * HZ;
+	/* In case some controller need long time to generate command
+	 * interrupt, 1000 * HZ will be enough.
+	 */
+	if (host->quirks2 & SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ)
+		timeout = jiffies + 1000 * HZ;
+
 	mod_timer(&host->timer, timeout);
 
 	host->cmd = cmd;
