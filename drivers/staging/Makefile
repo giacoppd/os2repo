@@ -59,6 +59,7 @@ obj-$(CONFIG_DGRP)		+= dgrp/
 obj-$(CONFIG_SB105X)		+= sb105x/
 obj-$(CONFIG_FIREWIRE_SERIAL)	+= fwserial/
 obj-$(CONFIG_GOLDFISH)		+= goldfish/
+obj-$(CONFIG_FSL_DPA)           += fsl_qbman/
 obj-$(CONFIG_LUSTRE_FS)		+= lustre/
 obj-$(CONFIG_XILLYBUS)		+= xillybus/
 obj-$(CONFIG_DGNC)			+= dgnc/

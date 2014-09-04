@@ -148,4 +148,6 @@ source "drivers/staging/lttng/Kconfig"
 
 source "drivers/staging/ktap/Kconfig"
 
+source "drivers/staging/fsl_qbman/Kconfig"
+
 endif # STAGING
