@@ -61,6 +61,7 @@ obj-$(CONFIG_FIREWIRE_SERIAL)	+= fwserial/
 obj-$(CONFIG_GOLDFISH)		+= goldfish/
 obj-$(CONFIG_FSL_DPA)           += fsl_qbman/
 obj-$(CONFIG_FSL_PME2)          += fsl_pme2/
+obj-$(CONFIG_FSL_RMAN_UIO)	+= fsl_rman/
 obj-$(CONFIG_LUSTRE_FS)		+= lustre/
 obj-$(CONFIG_XILLYBUS)		+= xillybus/
 obj-$(CONFIG_DGNC)			+= dgnc/
