@@ -117,6 +117,10 @@ void __init mpc85xx_qe_init(void)
 		for_each_node_by_name(ucc, "ucc")
 			par_io_of_config(ucc);
 
+#ifdef CONFIG_SPI_FSL_SPI
+		for_each_node_by_name(qe_spi, "spi")
+			par_io_of_config(qe_spi);
+#endif	/* CONFIG_SPI_FSL_SPI */
 	}
 }
 #endif
