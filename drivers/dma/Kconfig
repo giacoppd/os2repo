@@ -351,6 +351,17 @@ config MOXART_DMA
 	help
 	  Enable support for the MOXA ART SoC DMA controller.
 
+config FSL_RAID
+        tristate "Freescale RAID Engine Device Driver"
+        depends on FSL_SOC && !FSL_DMA
+        select DMA_ENGINE
+        select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+        ---help---
+          Enable support for Freescale RAID Engine. RAID Engine is
+          available on some QorIQ SoCs (like P5020). It has
+          the capability to offload RAID5/RAID6 operations from CPU.
+          RAID5 is XOR and memcpy. RAID6 is P/Q and memcpy
+
 config DMA_ENGINE
 	bool
 
