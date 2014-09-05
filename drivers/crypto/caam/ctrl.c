@@ -267,6 +267,10 @@ static int deinstantiate_rng(struct device *ctrldev, int state_handle_mask)
 	return ret;
 }
 
+#ifdef CONFIG_FSL_QMAN
+#include "qi.h"
+#endif
+
 static int caam_remove(struct platform_device *pdev)
 {
 	struct device *ctrldev;
@@ -287,6 +291,11 @@ static int caam_remove(struct platform_device *pdev)
 	/* De-initialize RNG state handles initialized by this driver. */
 	if (ctrlpriv->rng4_sh_init)
 		deinstantiate_rng(ctrldev, ctrlpriv->rng4_sh_init);
+
+#ifdef CONFIG_FSL_QMAN
+	if (ctrlpriv->qidev)
+		caam_qi_shutdown(ctrlpriv->qidev);
+#endif
 
 	/* Shut down debug views */
 #ifdef CONFIG_DEBUG_FS
@@ -491,6 +500,12 @@ static int caam_probe(struct platform_device *pdev)
 		ctrlpriv->qi = (struct caam_queue_if __force *)&topregs->qi;
 		/* This is all that's required to physically enable QI */
 		wr_reg32(&topregs->qi.qi_control_lo, QICTL_DQEN);
+
+		/* If QMAN driver is present, init CAAM-QI backend */
+#ifdef CONFIG_FSL_QMAN
+		if (caam_qi_init(pdev, nprop))
+			dev_err(dev, "caam qi i/f init failed\n");
+#endif
 	}
 
 	/* If no QI and no rings specified, quit and go home */
