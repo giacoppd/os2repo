@@ -909,6 +909,21 @@ int pci_msi_vec_count(struct pci_dev *dev)
 }
 EXPORT_SYMBOL(pci_msi_vec_count);
 
+int __weak arch_msi_get_region_count(void) { }
+int __weak arch_msi_get_region(int region_num, struct msi_region *region) { }
+
+int msi_get_region_count(void)
+{
+	return arch_msi_get_region_count();
+}
+EXPORT_SYMBOL(msi_get_region_count);
+
+int msi_get_region(int region_num, struct msi_region *region)
+{
+	return arch_msi_get_region(region_num, region);
+}
+EXPORT_SYMBOL(msi_get_region);
+
 /**
  * pci_enable_msi_block - configure device's MSI capability structure
  * @dev: device to configure
