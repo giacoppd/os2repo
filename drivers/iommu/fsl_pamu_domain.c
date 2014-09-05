@@ -684,6 +684,7 @@ static int fsl_pamu_attach_device(struct iommu_domain *domain,
 	const u32 *liodn;
 	u32 liodn_cnt;
 	int len, ret = 0;
+#ifdef CONFIG_PCI
 	struct pci_dev *pdev = NULL;
 	struct pci_controller *pci_ctl;
 
@@ -701,6 +702,7 @@ static int fsl_pamu_attach_device(struct iommu_domain *domain,
 		 */
 		dev = pci_ctl->parent;
 	}
+#endif
 
 	liodn = of_get_property(dev->of_node, "fsl,liodn", &len);
 	if (liodn) {
@@ -722,6 +724,7 @@ static void fsl_pamu_detach_device(struct iommu_domain *domain,
 	struct fsl_dma_domain *dma_domain = domain->priv;
 	const u32 *prop;
 	int len;
+#ifdef CONFIG_PCI
 	struct pci_dev *pdev = NULL;
 	struct pci_controller *pci_ctl;
 
@@ -739,6 +742,7 @@ static void fsl_pamu_detach_device(struct iommu_domain *domain,
 		 */
 		dev = pci_ctl->parent;
 	}
+#endif
 
 	prop = of_get_property(dev->of_node, "fsl,liodn", &len);
 	if (prop)
@@ -905,6 +909,13 @@ static struct iommu_group *get_device_iommu_group(struct device *dev)
 	return group;
 }
 
+#ifdef CONFIG_PCI
+static void swap_pci_ref(struct pci_dev **from, struct pci_dev *to)
+{
+	pci_dev_put(*from);
+	*from = to;
+}
+
 static  bool check_pci_ctl_endpt_part(struct pci_controller *pci_ctl)
 {
 	u32 version;
@@ -1044,13 +1055,15 @@ root_bus:
 
 	return group;
 }
+#endif
 
 static int fsl_pamu_add_device(struct device *dev)
 {
 	struct iommu_group *group = NULL;
-	struct pci_dev *pdev;
 	const u32 *prop;
 	int ret, len;
+#ifdef CONFIG_PCI
+	struct pci_dev *pdev;
 
 	/*
 	 * For platform devices we allocate a separate group for
@@ -1065,6 +1078,7 @@ static int fsl_pamu_add_device(struct device *dev)
 		group = get_pci_device_group(pdev);
 
 	} else {
+#endif
 		prop = of_get_property(dev->of_node, "fsl,liodn", &len);
 		if (prop)
 			group = get_device_iommu_group(dev);
@@ -1142,8 +1156,9 @@ static u32 fsl_pamu_get_windows(struct iommu_domain *domain)
 
 static struct iommu_domain *fsl_get_dev_domain(struct device *dev)
 {
-	struct pci_controller *pci_ctl;
 	struct device_domain_info *info;
+#ifdef CONFIG_PCI
+	struct pci_controller *pci_ctl;
 	struct pci_dev *pdev;
 
 	/*
@@ -1161,6 +1176,7 @@ static struct iommu_domain *fsl_get_dev_domain(struct device *dev)
 		 */
 		dev = pci_ctl->parent;
 	}
+#endif
 
 	info = dev->archdata.iommu_domain;
 	if (info && info->domain)
@@ -1196,7 +1212,9 @@ int pamu_domain_init()
 		return ret;
 
 	bus_set_iommu(&platform_bus_type, &fsl_pamu_ops);
+#ifdef CONFIG_PCI
 	bus_set_iommu(&pci_bus_type, &fsl_pamu_ops);
+#endif
 
 	return ret;
 }
