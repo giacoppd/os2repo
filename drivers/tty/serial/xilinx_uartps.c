@@ -240,6 +240,10 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 					continue;
 			}
 
+#ifdef CONFIG_CONSOLE_POLL
+			if (port->poll_rx_cb && port->poll_rx_cb((unsigned char)data))
+				return;
+#endif
 #ifdef SUPPORT_SYSRQ
 			/*
 			 * uart_handle_sysrq_char() doesn't work if
