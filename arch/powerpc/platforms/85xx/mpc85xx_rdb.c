@@ -104,8 +104,14 @@ static void __init mpc85xx_rdb_setup_arch(void)
 
 #ifdef CONFIG_QUICC_ENGINE
 	mpc85xx_qe_init();
-#if defined(CONFIG_UCC_GETH) || defined(CONFIG_SERIAL_QE)
-	if (machine_is(p1025_rdb)) {
+	mpc85xx_qe_par_io_init();
+	np = of_find_node_by_name(NULL, "par_io");
+	if (np) {
+#ifdef CONFIG_SPI_FSL_SPI
+		for_each_node_by_name(qe_spi, "spi")
+			par_io_of_config(qe_spi);
+#endif	/* CONFIG_SPI_FSL_SPI */
+	}
 
 	np = of_find_node_by_name(NULL, "global-utilities");
 	if (np) {
