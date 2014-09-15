@@ -371,9 +371,9 @@ static void disable_device_dma(struct device_domain_info *info,
 #ifdef CONFIG_PCI
 	if (info->dev->bus == &pci_bus_type) {
 		struct pci_dev *pdev = NULL;
+
 		pdev = to_pci_dev(info->dev);
-		if (pci_is_enabled(pdev))
-			pci_disable_device(pdev);
+		pci_clear_master(pdev);
 	}
 #endif
 
@@ -401,9 +401,8 @@ static int check_for_shared_liodn(struct device_domain_info *info)
 
 static void remove_device_ref(struct device_domain_info *info, u32 win_cnt)
 {
-	int enable_dma_window = 0;
-
 	unsigned long flags;
+	int enable_dma_window = 0;
 
 	list_del(&info->link);
 	spin_lock_irqsave(&iommu_lock, flags);
@@ -974,9 +973,6 @@ static int fsl_pamu_set_domain_attr(struct iommu_domain *domain,
 	case DOMAIN_ATTR_FSL_PAMU_ENABLE:
 		ret = configure_domain_dma_state(dma_domain, *(int *)data);
 		break;
-	case DOMAIN_ATTR_PAMU_OP_MAP:
-		ret = configure_domain_op_map(dma_domain, data);
-		break;
 	case DOMAIN_ATTR_FSL_PAMU_OP_MAP:
 		ret = configure_domain_op_map(dma_domain, data);
 		break;
@@ -1228,16 +1224,6 @@ static int fsl_pamu_add_device(struct device *dev)
 static void fsl_pamu_remove_device(struct device *dev)
 {
 	iommu_group_remove_device(dev);
-}
-
-static void dma_domain_init_windows(struct fsl_dma_domain *dma_domain)
-{
-	int i;
-
-	for (i = 0; i < dma_domain->win_cnt; i++) {
-		dma_domain->win_arr[i].stash_id = ~(u32)0;
-		dma_domain->win_arr[i].omi = ~(u32)0;
-	}
 }
 
 static void dma_domain_init_windows(struct fsl_dma_domain *dma_domain)
