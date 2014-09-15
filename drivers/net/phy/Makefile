@@ -37,5 +37,6 @@ obj-$(CONFIG_MDIO_BUS_MUX_GPIO)	+= mdio-mux-gpio.o
 obj-$(CONFIG_MDIO_BUS_MUX_MMIOREG) += mdio-mux-mmioreg.o
 obj-$(CONFIG_QCA833X_PHY)       += qca833x.o
 obj-$(CONFIG_MARVELL_88X3120_PHY) += marvell-88x3120.o
+obj-$(CONFIG_FSL_10GBASE_KR)	+= fsl_10gkr.o
 obj-$(CONFIG_MDIO_SUN4I)	+= mdio-sun4i.o
 obj-$(CONFIG_MDIO_MOXART)	+= mdio-moxart.o
