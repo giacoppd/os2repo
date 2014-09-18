@@ -242,7 +242,7 @@ static irqreturn_t xuartps_isr(int irq, void *dev_id)
 
 #ifdef CONFIG_CONSOLE_POLL
 			if (port->poll_rx_cb && port->poll_rx_cb((unsigned char)data))
-				return;
+				continue;
 #endif
 #ifdef SUPPORT_SYSRQ
 			/*
