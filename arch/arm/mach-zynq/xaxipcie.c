@@ -26,6 +26,7 @@
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/irqchip/chained_irq.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/export.h>
@@ -644,7 +645,7 @@ static int xaxi_pcie_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 }
 
 /* Interrupt handler */
-static irqreturn_t xaxi_pcie_intr_handler(int irq, void *data)
+static irqreturn_t xaxi_pcie_handler(int irq, void *data)
 {
 	struct xaxi_pcie_port *port = (struct xaxi_pcie_port *)data;
 	u32 val = 0, mask = 0;
@@ -794,6 +795,22 @@ static irqreturn_t xaxi_pcie_intr_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_PCI_MSI
+static void xaxi_pcie_intr_handler(unsigned int irq, struct irq_desc *desc)
+{
+	struct irq_chip *chip = irq_get_chip(irq);
+
+	chained_irq_enter(chip, desc);
+	xaxi_pcie_handler(irq, irq_get_handler_data(irq));
+	chained_irq_exit(chip, desc);
+}
+#else
+static irqreturn_t xaxi_pcie_intr_handler(int irq, void *data)
+{
+	return xaxi_pcie_handler(irq, data)
+}
+#endif
+
 /**
  * xaxi_pcie_init_port - Initialize hardware
  * @port: A pointer to a pcie port that needs to be initialized
@@ -805,9 +822,10 @@ static irqreturn_t xaxi_pcie_intr_handler(int irq, void *data)
 static int xaxi_pcie_init_port(struct xaxi_pcie_port *port)
 {
 	void __iomem *base_addr_remap = NULL;
-	int err = 0;
 #ifdef CONFIG_PCI_MSI
 	unsigned long xaxipcie_msg_addr;
+#else
+	int err = 0;
 #endif
 
 	base_addr_remap = ioremap(port->reg_base, port->reg_len);
@@ -865,6 +883,10 @@ static int xaxi_pcie_init_port(struct xaxi_pcie_port *port)
 	 */
 	bridge_enable(port->base_addr_remap);
 
+#if CONFIG_PCI_MSI
+	irq_set_handler_data(port->irq_num, port);
+	irq_set_chained_handler(port->irq_num, xaxi_pcie_intr_handler);
+#else
 	/* Register Interrupt Handler */
 	err = request_irq(port->irq_num, xaxi_pcie_intr_handler,
 					IRQF_SHARED, "zynqpcie", port);
@@ -872,6 +894,7 @@ static int xaxi_pcie_init_port(struct xaxi_pcie_port *port)
 		pr_err("%s: Could not allocate interrupt\n", __func__);
 		return err;
 	}
+#endif
 
 	return 0;
 }
