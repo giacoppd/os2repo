@@ -146,6 +146,7 @@ define_machine(p1023_rds) {
 	.progress		= udbg_progress,
 #ifdef CONFIG_PCI
 	.pcibios_fixup_bus	= fsl_pcibios_fixup_bus,
+	.pcibios_fixup_phb	= fsl_pcibios_fixup_phb,
 #endif
 	.init_early		= p1023_rds_init_early,
 };
@@ -161,5 +162,6 @@ define_machine(p1023_rdb) {
 	.progress		= udbg_progress,
 #ifdef CONFIG_PCI
 	.pcibios_fixup_bus	= fsl_pcibios_fixup_bus,
+	.pcibios_fixup_phb	= fsl_pcibios_fixup_phb,
 #endif
 };
