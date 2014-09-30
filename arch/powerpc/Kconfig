@@ -1059,7 +1059,4 @@ config KEYS_COMPAT
 
 source "crypto/Kconfig"
 
-config PPC_LIB_RHEAP
-	bool
-
 source "arch/powerpc/kvm/Kconfig"
