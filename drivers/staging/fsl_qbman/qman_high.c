@@ -2796,37 +2796,6 @@ static int qman_ceetm_configure_lfqmt(struct qm_mcc_ceetm_lfqmt_config *opts)
 	return 0;
 }
 
-static int qman_ceetm_query_lfqmt(int lfqid,
-			struct qm_mcr_ceetm_lfqmt_query *lfqmt_query)
-{
-	struct qm_mc_command *mcc;
-	struct qm_mc_result *mcr;
-	struct qman_portal *p;
-	unsigned long irqflags __maybe_unused;
-	u8 res;
-
-	p = get_affine_portal();
-	PORTAL_IRQ_LOCK(p, irqflags);
-
-	mcc = qm_mc_start(&p->p);
-	mcc->lfqmt_query.lfqid = lfqid;
-	qm_mc_commit(&p->p, QM_CEETM_VERB_LFQMT_QUERY);
-	while (!(mcr = qm_mc_result(&p->p)))
-		cpu_relax();
-	DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) == QM_CEETM_VERB_LFQMT_QUERY);
-	res = mcr->result;
-	if (res == QM_MCR_RESULT_OK)
-		*lfqmt_query = mcr->lfqmt_query;
-
-	PORTAL_IRQ_UNLOCK(p, irqflags);
-	put_affine_portal();
-	if (res != QM_MCR_RESULT_OK) {
-		pr_err("CEETM: QUERY LFQMT failed\n");
-		return -EIO;
-	}
-	return 0;
-}
-
 static int qman_ceetm_configure_cq(struct qm_mcc_ceetm_cq_config *opts)
 {
 	struct qm_mc_command *mcc;
@@ -3142,51 +3111,6 @@ int qman_ceetm_query_ccgr(struct qm_mcc_ceetm_ccgr_query *ccgr_query,
 }
 EXPORT_SYMBOL(qman_ceetm_query_ccgr);
 
-static int qman_ceetm_cq_peek_pop_xsfdrread(struct qm_ceetm_cq *cq,
-			u8 command_type, u16 xsfdr,
-			struct qm_mcr_ceetm_cq_peek_pop_xsfdrread *cq_ppxr)
-{
-	struct qm_mc_command *mcc;
-	struct qm_mc_result *mcr;
-	struct qman_portal *p;
-	unsigned long irqflags __maybe_unused;
-	u8 res;
-
-	p = get_affine_portal();
-	PORTAL_IRQ_LOCK(p, irqflags);
-
-	mcc = qm_mc_start(&p->p);
-	switch (command_type) {
-	case 0:
-	case 1:
-		mcc->cq_ppxr.cqid = (cq->parent->idx << 4) | cq->idx;
-		break;
-	case 2:
-		mcc->cq_ppxr.xsfdr = xsfdr;
-		break;
-	default:
-		break;
-	}
-	mcc->cq_ppxr.ct = command_type;
-	mcc->cq_ppxr.dcpid = cq->parent->dcp_idx;
-	qm_mc_commit(&p->p, QM_CEETM_VERB_CQ_PEEK_POP_XFDRREAD);
-	while (!(mcr = qm_mc_result(&p->p)))
-		cpu_relax();
-	DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) ==
-				QM_CEETM_VERB_CQ_PEEK_POP_XFDRREAD);
-
-	PORTAL_IRQ_UNLOCK(p, irqflags);
-	put_affine_portal();
-
-	res = mcr->result;
-	if (res != QM_MCR_RESULT_OK) {
-		pr_err("CEETM: CQ PEEK/POP/XSFDR READ failed\n");
-		return -EIO;
-	}
-	*cq_ppxr = mcr->cq_ppxr;
-	return 0;
-}
-
 static int qman_ceetm_query_statistics(u16 cid,
 			enum qm_dc_portal dcp_idx,
 			u16 command_type,
@@ -3221,42 +3145,6 @@ static int qman_ceetm_query_statistics(u16 cid,
 		return -EIO;
 	}
 	*query_result = mcr->stats_query;
-	return 0;
-}
-
-static int qman_ceetm_write_statistics(u16 cid, enum qm_dc_portal dcp_idx,
-			u16 command_type, u64 frame_count, u64 byte_count)
-{
-	struct qm_mc_command *mcc;
-	struct qm_mc_result *mcr;
-	struct qman_portal *p;
-	unsigned long irqflags __maybe_unused;
-	u8 res;
-
-	p = get_affine_portal();
-	PORTAL_IRQ_LOCK(p, irqflags);
-
-	mcc = qm_mc_start(&p->p);
-	mcc->stats_query_write.cid = cid;
-	mcc->stats_query_write.dcpid = dcp_idx;
-	mcc->stats_query_write.ct = command_type;
-	mcc->stats_query_write.frm_cnt = frame_count;
-	mcc->stats_query_write.byte_cnt = byte_count;
-	qm_mc_commit(&p->p, QM_CEETM_VERB_STATISTICS_QUERY_WRITE);
-
-	while (!(mcr = qm_mc_result(&p->p)))
-		cpu_relax();
-	DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) ==
-					 QM_CEETM_VERB_STATISTICS_QUERY_WRITE);
-
-	PORTAL_IRQ_UNLOCK(p, irqflags);
-	put_affine_portal();
-
-	res = mcr->result;
-	if (res != QM_MCR_RESULT_OK) {
-		pr_err("CEETM: STATISTICS WRITE failed\n");
-		return -EIO;
-	}
 	return 0;
 }
 
