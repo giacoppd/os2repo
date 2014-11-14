@@ -240,6 +240,11 @@ retry:		reg_addr = MII_ADDR_C45 | i << 16 | 6;
 			return -EIO;
 		c45_ids->devices_in_package |= (phy_reg & 0xffff);
 
+		if ((i == 0) && (c45_ids->devices_in_package == 0)) {
+			*phy_id = 0xffffffff;
+			return 0;
+		}
+
 		if ((c45_ids->devices_in_package & 0x1fffffff) == 0x1fffffff) {
 			if (i) {
 				/*  If mostly Fs, there is no device there,
