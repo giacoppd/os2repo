@@ -909,8 +909,15 @@ int pci_msi_vec_count(struct pci_dev *dev)
 }
 EXPORT_SYMBOL(pci_msi_vec_count);
 
-int __weak arch_msi_get_region_count(void) { }
-int __weak arch_msi_get_region(int region_num, struct msi_region *region) { }
+int __weak arch_msi_get_region_count(void)
+{
+	return 0;
+}
+
+int __weak arch_msi_get_region(int region_num, struct msi_region *region)
+{
+	return 0;
+}
 
 int msi_get_region_count(void)
 {
