@@ -46,6 +46,7 @@ static void __iomem *zynq_slcr_base_priv;
 #define SLCR_CAN_MIOCLK_CTRL		(zynq_slcr_base_priv + 0x160)
 #define SLCR_DBG_CLK_CTRL		(zynq_slcr_base_priv + 0x164)
 #define SLCR_PCAP_CLK_CTRL		(zynq_slcr_base_priv + 0x168)
+#define SLCR_TOPSW_CLK_CTRL		(zynq_slcr_base_priv + 0x16c)
 #define SLCR_FPGA0_CLK_CTRL		(zynq_slcr_base_priv + 0x170)
 #define SLCR_621_TRUE			(zynq_slcr_base_priv + 0x1c4)
 #define SLCR_SWDT_CLK_SEL		(zynq_slcr_base_priv + 0x304)
@@ -99,6 +100,60 @@ static const char *dbgtrc_emio_input_names[] __initdata = {"trace_emio_clk"};
 static const char *gem0_emio_input_names[] __initdata = {"gem0_emio_clk"};
 static const char *gem1_emio_input_names[] __initdata = {"gem1_emio_clk"};
 static const char *swdt_ext_clk_input_names[] __initdata = {"swdt_ext_clk"};
+
+#ifdef CONFIG_SUSPEND
+unsigned int zynq_clk_suspended;
+static struct clk *armpll_save_parent;
+static struct clk *iopll_save_parent;
+
+#define TOPSW_CLK_CTRL_DIS_MASK	BIT(0)
+
+int zynq_clk_suspend_early(void)
+{
+	int ret;
+
+	zynq_clk_suspended = 1;
+
+	iopll_save_parent = clk_get_parent(clks[iopll]);
+	armpll_save_parent = clk_get_parent(clks[armpll]);
+
+	ret = clk_set_parent(clks[iopll], ps_clk);
+	if (ret)
+		pr_info("%s: reparent iopll failed %d\n", __func__, ret);
+
+	ret = clk_set_parent(clks[armpll], ps_clk);
+	if (ret)
+		pr_info("%s: reparent armpll failed %d\n", __func__, ret);
+
+	return 0;
+}
+
+void zynq_clk_resume_late(void)
+{
+	clk_set_parent(clks[armpll], armpll_save_parent);
+	clk_set_parent(clks[iopll], iopll_save_parent);
+
+	zynq_clk_suspended = 0;
+}
+
+void zynq_clk_topswitch_enable(void)
+{
+	u32 reg;
+
+	reg = readl(SLCR_TOPSW_CLK_CTRL);
+	reg &= ~TOPSW_CLK_CTRL_DIS_MASK;
+	writel(reg, SLCR_TOPSW_CLK_CTRL);
+}
+
+void zynq_clk_topswitch_disable(void)
+{
+	u32 reg;
+
+	reg = readl(SLCR_TOPSW_CLK_CTRL);
+	reg |= TOPSW_CLK_CTRL_DIS_MASK;
+	writel(reg, SLCR_TOPSW_CLK_CTRL);
+}
+#endif
 
 static void __init zynq_clk_register_fclk(enum zynq_clk fclk,
 		const char *clk_name, void __iomem *fclk_ctrl_reg,
@@ -220,7 +275,7 @@ static void __init zynq_clk_setup(struct device_node *np)
 	int ret;
 	struct clk *clk;
 	char *clk_name;
-	unsigned int fclk_enable = 0;
+	unsigned int fclk_enable;
 	const char *clk_output_name[clk_max];
 	const char *cpu_parents[4];
 	const char *periph_parents[4];
@@ -246,8 +301,6 @@ static void __init zynq_clk_setup(struct device_node *np)
 	periph_parents[2] = clk_output_name[armpll];
 	periph_parents[3] = clk_output_name[ddrpll];
 
-	of_property_read_u32(np, "fclk-enable", &fclk_enable);
-
 	/* ps_clk */
 	ret = of_property_read_u32(np, "ps-clk-frequency", &tmp);
 	if (ret) {
@@ -256,6 +309,10 @@ static void __init zynq_clk_setup(struct device_node *np)
 	}
 	ps_clk = clk_register_fixed_rate(NULL, "ps_clk", NULL, CLK_IS_ROOT,
 			tmp);
+
+	ret = of_property_read_u32(np, "fclk-enable", &fclk_enable);
+	if (ret)
+		fclk_enable = 0xf;
 
 	/* PLLs */
 	clk = clk_register_zynq_pll("armpll_int", "ps_clk", SLCR_ARMPLL_CTRL,
