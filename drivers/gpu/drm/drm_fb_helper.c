@@ -541,7 +541,7 @@ void drm_fb_helper_prepare(struct drm_device *dev, struct drm_fb_helper *helper,
 			   const struct drm_fb_helper_funcs *funcs)
 {
 	INIT_LIST_HEAD(&helper->kernel_fb_list);
-	helper->funcs = funcs;
+	helper->funcs = (struct drm_fb_helper_funcs *)funcs;
 	helper->dev = dev;
 }
 EXPORT_SYMBOL(drm_fb_helper_prepare);
