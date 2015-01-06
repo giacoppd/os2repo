@@ -16,6 +16,7 @@ config ARCH_ZYNQ
 	select HAVE_SMP
 	select ICST
 	select MFD_SYSCON
+	select SOC_BUS
 	select MIGHT_HAVE_CACHE_L2X0
 	select MIGHT_HAVE_PCI
 	help
