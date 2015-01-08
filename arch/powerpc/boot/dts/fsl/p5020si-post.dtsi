@@ -454,11 +454,13 @@
 	};
 /include/ "qoriq-sata2-0.dtsi"
 	sata@220000 {
+		compatible = "fsl,p5020-sata", "fsl,pq-sata-v2";
 		fsl,iommu-parent = <&pamu1>;
 		fsl,liodn-reg = <&guts 0x550>; /* SATA1LIODNR */
 	};
 /include/ "qoriq-sata2-1.dtsi"
 	sata@221000 {
+		compatible = "fsl,p5020-sata", "fsl,pq-sata-v2";
 		fsl,iommu-parent = <&pamu1>;
 		fsl,liodn-reg = <&guts 0x554>; /* SATA2LIODNR */
 	};
