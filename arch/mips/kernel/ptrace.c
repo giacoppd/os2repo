@@ -138,13 +138,21 @@ int ptrace_getfpregs(struct task_struct *child, __u32 __user *data)
 			unsigned int vpflags = dvpe();
 			flags = read_c0_status();
 			__enable_fpu(FPU_AS_IS);
-			__asm__ __volatile__("cfc1\t%0,$0" : "=r" (tmp));
+			__asm__ __volatile__(
+				".set push\n"
+				"\t.set mips1\n"
+				"\tcfc1\t%0,$0\n"
+				"\t.set pop" : "=r" (tmp));
 			write_c0_status(flags);
 			evpe(vpflags);
 		} else {
 			flags = read_c0_status();
 			__enable_fpu(FPU_AS_IS);
-			__asm__ __volatile__("cfc1\t%0,$0" : "=r" (tmp));
+			__asm__ __volatile__(
+				".set push\n"
+				"\t.set mips1\n"
+				"\tcfc1\t%0,$0\n"
+				"\t.set pop" : "=r" (tmp));
 			write_c0_status(flags);
 		}
 	} else {
@@ -619,13 +627,21 @@ long arch_ptrace(struct task_struct *child, long request,
 				unsigned int vpflags = dvpe();
 				flags = read_c0_status();
 				__enable_fpu(FPU_AS_IS);
-				__asm__ __volatile__("cfc1\t%0,$0": "=r" (tmp));
+				__asm__ __volatile__(
+					".set push\n"
+					"\t.set mips1\n"
+					"\tcfc1\t%0,$0\n"
+					"\t.set pop" : "=r" (tmp));
 				write_c0_status(flags);
 				evpe(vpflags);
 			} else {
 				flags = read_c0_status();
 				__enable_fpu(FPU_AS_IS);
-				__asm__ __volatile__("cfc1\t%0,$0": "=r" (tmp));
+				__asm__ __volatile__(
+					".set push\n"
+					"\t.set mips1\n"
+					"\tcfc1\t%0,$0\n"
+					"\t.set pop" : "=r" (tmp));
 				write_c0_status(flags);
 			}
 #ifdef CONFIG_MIPS_MT_SMTC
