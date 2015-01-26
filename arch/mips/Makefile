@@ -156,6 +156,13 @@ ifeq (,$(findstring march=octeon, $(cflags-$(CONFIG_CPU_CAVIUM_OCTEON))))
 cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += -Wa,-march=octeon
 endif
 cflags-$(CONFIG_CAVIUM_CN63XXP1) += -Wa,-mfix-cn63xxp1
+
+ifdef  CONFIG_CAVIUM_OCTEON_CHK_CVMX_ADDRESS
+cflags-y += -DCVMX_ENABLE_CSR_ADDRESS_CHECKING=1
+else
+cflags-y += -DCVMX_ENABLE_CSR_ADDRESS_CHECKING=0
+endif
+
 cflags-$(CONFIG_CPU_BMIPS)	+= -march=mips32 -Wa,-mips32 -Wa,--trap
 
 cflags-$(CONFIG_CPU_R4000_WORKAROUNDS)	+= $(call cc-option,-mfix-r4000,)
