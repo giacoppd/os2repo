@@ -9,8 +9,6 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
-#include <linux/i2c.h>
-#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
