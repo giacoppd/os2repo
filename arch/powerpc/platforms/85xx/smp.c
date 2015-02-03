@@ -489,25 +489,14 @@ static int smp_85xx_kick_cpu(int nr)
 #ifdef CONFIG_PPC_E500MC
 			if (system_state == SYSTEM_RUNNING) {
 				/*
-				 * In cpu hotplug case, Thread 1 of Core0
-				 * must start by Thread0 of Core0 calling
-				 * fsl_enable_threads().
+				 * In cpu hotplug case, Thread 1 must start by calling
+				 * fsl_enable_threads() by the thread0 on the same core.
 				 */
-				if (nr == 1) {
-					if (get_cpu() == boot_cpuid)
-						fsl_enable_threads(&ret);
-					else
-						work_on_cpu(boot_cpuid,
-						    fsl_enable_threads, NULL);
-				}
-
-				/*
-				 * Thread 1 of other cores can be waken up from
-				 * low-power state when Thread 0 is online,
-				 * or restart by Thread 0 after core reset.
-				 */
-				if (!strcmp(cur_cpu_spec->cpu_name, "e6500"))
-					arch_send_call_function_single_ipi(nr);
+				if (smp_processor_id() == cpu_first_thread_sibling(nr))
+					fsl_enable_threads(NULL);
+				else
+					work_on_cpu(cpu_first_thread_sibling(nr),
+						fsl_enable_threads, NULL);
 
 				if (qoriq_pm_ops->irq_unmask)
 					qoriq_pm_ops->irq_unmask(nr);
