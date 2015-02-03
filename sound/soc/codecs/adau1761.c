@@ -903,7 +903,7 @@ static struct adau1761_platform_data zed_pdata = {
 	.digmic_jackdetect_pin_mode = ADAU1761_DIGMIC_JACKDET_PIN_MODE_NONE,
 };
 
-int adau1761_probe(struct device *dev, struct regmap *regmap,
+int adau1761_bus_probe(struct device *dev, struct regmap *regmap,
 	enum adau17x1_type type, void (*switch_mode)(struct device *dev))
 {
 	struct snd_soc_dai_driver *dai_drv;
@@ -913,7 +913,7 @@ int adau1761_probe(struct device *dev, struct regmap *regmap,
 	if (!dev->platform_data)
 		dev->platform_data = &zed_pdata;
 
-	ret = adau17x1_probe(dev, regmap, type, switch_mode);
+	ret = adau17x1_bus_probe(dev, regmap, type, switch_mode);
 	if (ret)
 		return ret;
 
@@ -924,7 +924,7 @@ int adau1761_probe(struct device *dev, struct regmap *regmap,
 
 	return snd_soc_register_codec(dev, &adau1761_codec_driver, dai_drv, 1);
 }
-EXPORT_SYMBOL_GPL(adau1761_probe);
+EXPORT_SYMBOL_GPL(adau1761_bus_probe);
 
 const struct regmap_config adau1761_regmap_config = {
 	.val_bits = 8,

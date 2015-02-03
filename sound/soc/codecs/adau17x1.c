@@ -774,6 +774,10 @@ int adau17x1_add_widgets(struct snd_soc_codec *codec)
 	struct adau *adau = snd_soc_codec_get_drvdata(codec);
 	int ret;
 
+        ret = snd_soc_codec_set_cache_io(codec, 0, 0, SND_SOC_REGMAP);
+        if (ret)
+                return ret;
+
 	ret = snd_soc_add_codec_controls(codec, adau17x1_controls,
 		ARRAY_SIZE(adau17x1_controls));
 	if (ret)
@@ -836,7 +840,7 @@ int adau17x1_resume(struct snd_soc_codec *codec)
 }
 EXPORT_SYMBOL_GPL(adau17x1_resume);
 
-int adau17x1_probe(struct device *dev, struct regmap *regmap,
+int adau17x1_bus_probe(struct device *dev, struct regmap *regmap,
 	enum adau17x1_type type, void (*switch_mode)(struct device *dev))
 {
 	struct adau *adau;
@@ -859,7 +863,7 @@ int adau17x1_probe(struct device *dev, struct regmap *regmap,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(adau17x1_probe);
+EXPORT_SYMBOL_GPL(adau17x1_bus_probe);
 
 MODULE_DESCRIPTION("ASoC ADAU1X61/ADAU1X81 common code");
 MODULE_AUTHOR("Lars-Peter Clausen <lars@metafoo.de>");

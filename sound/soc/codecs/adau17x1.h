@@ -46,8 +46,9 @@ struct adau {
 
 int adau17x1_add_widgets(struct snd_soc_codec *codec);
 int adau17x1_add_routes(struct snd_soc_codec *codec);
-int adau17x1_probe(struct device *dev, struct regmap *regmap,
+int adau17x1_bus_probe(struct device *dev, struct regmap *regmap,
 	enum adau17x1_type type, void (*switch_mode)(struct device *dev));
+
 int adau17x1_set_micbias_voltage(struct snd_soc_codec *codec,
 	enum adau17x1_micbias_voltage micbias);
 bool adau17x1_readable_register(struct device *dev, unsigned int reg);

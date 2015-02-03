@@ -24,7 +24,7 @@ static int adau1761_i2c_probe(struct i2c_client *client,
 	config.val_bits = 8;
 	config.reg_bits = 16;
 
-	return adau1761_probe(&client->dev,
+	return adau1761_bus_probe(&client->dev,
 		devm_regmap_init_i2c(client, &config),
 		id->driver_data, NULL);
 }
