@@ -136,6 +136,7 @@ static void r4k_blast_dcache_page_setup(void)
 		break;
 	default:
 		break;
+	}
 }
 
 static void (* r4k_blast_dcache_page_indexed)(unsigned long addr);
