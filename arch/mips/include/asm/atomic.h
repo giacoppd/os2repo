@@ -49,7 +49,15 @@
  */
 static __inline__ void atomic_add(int i, atomic_t * v)
 {
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_saa) {
+		__asm__ __volatile__(
+		".set	push\n\t"
+		".set	arch=octeon+\n\t"
+		"saa    %1, (%2)\t# atomic_add (%0)\n\t"
+		".set	pop"
+		: "+m" (v->counter)
+		: "r" (i), "r" (&v->counter));
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		int temp;
 
 		__asm__ __volatile__(
@@ -92,7 +100,15 @@ static __inline__ void atomic_add(int i, atomic_t * v)
  */
 static __inline__ void atomic_sub(int i, atomic_t * v)
 {
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_saa) {
+		__asm__ __volatile__(
+		".set	push\n\t"
+		".set	arch=octeon+\n\t"
+		"saa    %1, (%2)\t# atomic_sub(%0)\n\t"
+		".set	pop"
+		: "+m" (v->counter)
+		: "r" (-i), "r" (&v->counter));
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		int temp;
 
 		__asm__ __volatile__(
@@ -135,7 +151,25 @@ static __inline__ int atomic_add_return(int i, atomic_t * v)
 
 	smp_mb__before_llsc();
 
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_octeon2_isa && kernel_uses_llsc) {
+		/*
+		 * For proper barrier semantics, the preceding
+		 * smp_mb__before_llsc() must expand to syncw.
+		 */
+		if (__builtin_constant_p(i) && i == 1)
+			__asm__ __volatile__("lai\t%0,(%2)\t# atomic_add_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else if (__builtin_constant_p(i) && i == -1)
+			__asm__ __volatile__("lad\t%0,(%2)\t# atomic_add_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else
+			__asm__ __volatile__("laa\t%0,(%2),%3\t# atomic_add_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter), "r" (i));
+		result += i;
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		int temp;
 
 		__asm__ __volatile__(
@@ -184,7 +218,25 @@ static __inline__ int atomic_sub_return(int i, atomic_t * v)
 
 	smp_mb__before_llsc();
 
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_octeon2_isa && kernel_uses_llsc) {
+		/*
+		 * For proper barrier semantics, the preceding
+		 * smp_mb__before_llsc() must expand to syncw.
+		 */
+		if (__builtin_constant_p(i) && i == -1)
+			__asm__ __volatile__("lai\t%0,(%2)\t# atomic_sub_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else if (__builtin_constant_p(i) && i == 1)
+			__asm__ __volatile__("lad\t%0,(%2)\t# atomic_sub_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else
+			__asm__ __volatile__("laa\t%0,(%2),%3\t# atomic_sub_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter), "r" (-i));
+		result -= i;
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		int temp;
 
 		__asm__ __volatile__(
@@ -416,7 +468,15 @@ static __inline__ int __atomic_add_unless(atomic_t *v, int a, int u)
  */
 static __inline__ void atomic64_add(long i, atomic64_t * v)
 {
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_saa) {
+		__asm__ __volatile__(
+		".set	push\n\t"
+		".set	arch=octeon+\n\t"
+		"saad   %1, (%2)\t# atomic64_add (%0)\n\t"
+		".set	pop"
+		: "+m" (v->counter)
+		: "r" (i), "r" (v));
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		long temp;
 
 		__asm__ __volatile__(
@@ -459,7 +519,15 @@ static __inline__ void atomic64_add(long i, atomic64_t * v)
  */
 static __inline__ void atomic64_sub(long i, atomic64_t * v)
 {
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_saa) {
+		__asm__ __volatile__(
+		".set	push\n\t"
+		".set	arch=octeon+\n\t"
+		"saad    %1, (%2)\t# atomic64_sub (%0)\n\t"
+		".set	pop"
+		: "+m" (v->counter)
+		: "r" (-i), "r" (v));
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		long temp;
 
 		__asm__ __volatile__(
@@ -502,7 +570,25 @@ static __inline__ long atomic64_add_return(long i, atomic64_t * v)
 
 	smp_mb__before_llsc();
 
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_octeon2_isa && kernel_uses_llsc) {
+		/*
+		 * For proper barrier semantics, the preceding
+		 * smp_mb__before_llsc() must expand to syncw.
+		 */
+		if (__builtin_constant_p(i) && i == 1)
+			__asm__ __volatile__("laid\t%0,(%2)\t# atomic64_add_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else if (__builtin_constant_p(i) && i == -1)
+			__asm__ __volatile__("ladd\t%0,(%2)\t# atomic64_add_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else
+			__asm__ __volatile__("laad\t%0,(%2),%3\t# atomic64_add_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter), "r" (i));
+		result += i;
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		long temp;
 
 		__asm__ __volatile__(
@@ -552,7 +638,25 @@ static __inline__ long atomic64_sub_return(long i, atomic64_t * v)
 
 	smp_mb__before_llsc();
 
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_octeon2_isa && kernel_uses_llsc) {
+		/*
+		 * For proper barrier semantics, the preceding
+		 * smp_mb__before_llsc() must expand to syncw.
+		 */
+		if (__builtin_constant_p(i) && i == -1)
+			__asm__ __volatile__("laid\t%0,(%2)\t# atomic64_sub_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else if (__builtin_constant_p(i) && i == 1)
+			__asm__ __volatile__("ladd\t%0,(%2)\t# atomic64_sub_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter));
+		else
+			__asm__ __volatile__("laad\t%0,(%2),%3\t# atomic64_sub_return (%1)"
+					: "=r" (result), "+m" (v->counter)
+					: "r" (&v->counter), "r" (-i));
+		result -= i;
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		long temp;
 
 		__asm__ __volatile__(

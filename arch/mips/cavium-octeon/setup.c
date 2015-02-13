@@ -265,7 +265,7 @@ static void octeon_crash_shutdown(struct pt_regs *regs)
 
 #endif /* CONFIG_KEXEC */
 
-#ifdef CONFIG_CAVIUM_RESERVE32
+#ifndef CONFIG_CAVIUM_RESERVE32
 #define  CONFIG_CAVIUM_RESERVE32        0ULL
 #endif
 
@@ -676,9 +676,6 @@ void __init prom_init(void)
 	int argc;
 
 	octeon_scache_init = octeon_soc_scache_init;
-#ifdef CONFIG_CAVIUM_RESERVE32
-	int64_t addr = -1;
-#endif
 	/*
 	 * The bootloader passes a pointer to the boot descriptor in
 	 * $a3, this is available as fw_arg3.
@@ -807,7 +804,6 @@ void __init prom_init(void)
 	 * Allocate memory for RESERVED32 aligned on 2MB boundary. This
 	 * is in case we later use hugetlb entries with it.
 	 */
-#ifdef CONFIG_CAVIUM_RESERVE32
 	if (CONFIG_CAVIUM_RESERVE32 > 0) {
 		int64_t addr = -1;
 		addr = cvmx_bootmem_phy_named_block_alloc(
@@ -819,7 +815,6 @@ void __init prom_init(void)
 		else
 			octeon_reserve32_memory = addr;
 	}
-#endif
 	octeon_check_cpu_bist();
 
 	octeon_uart = octeon_get_boot_uart();

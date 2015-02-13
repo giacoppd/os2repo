@@ -68,6 +68,68 @@ config FAST_ACCESS_TO_THREAD_POINTER
 	  the TLB fault handlers. This CVMSEG address is not available to user
 	  applications.
 
+choice
+	prompt "Allow User space to access hardware IO directly"
+	default CAVIUM_OCTEON_USER_IO_PER_PROCESS
+	depends on CPU_CAVIUM_OCTEON
+
+config CAVIUM_OCTEON_USER_IO
+	bool "Allowed"
+	depends on CPU_CAVIUM_OCTEON
+	help
+	  Allows user applications to directly access the Octeon hardware
+	  IO addresses (0x1000000000000 - 0x1ffffffffffff). This allows high
+	  performance networking applications to run in user space with minimal
+	  performance penalties. This also means a user application can bring
+	  down the entire system. Only use this option on embedded devices
+	  where all user applications are strictly controlled.
+
+config CAVIUM_OCTEON_USER_IO_PER_PROCESS
+	bool "Per process"
+	help
+	  Allows user applications to use XKPHYS addresses directly to IO.
+	  This option dynamically enable/disable with sysmips syscall,
+	  by a process with root privilege. Without root privilege you can
+	  only remove access.
+
+config CAVIUM_OCTEON_USER_IO_DISABLED
+	bool "Disabled"
+
+endchoice
+
+choice
+	prompt "Allow User space to access memory directly"
+	default CAVIUM_OCTEON_USER_MEM_PER_PROCESS
+	depends on CPU_CAVIUM_OCTEON
+
+config CAVIUM_OCTEON_USER_MEM
+	bool "Allowed"
+	help
+	  Allows user applications to use XKPHYS addresses directly to memory.
+	  This allows user space direct access to shared memory not in use by
+	  Linux. This memory is suitable for use with the Octeon hardware.
+	  Cavium simple executive applications also share this memory. Since
+	  this bypass all of the Linux memory protection, only use this option
+	  on embedded devices where all user applications are strictly
+	  controlled.
+
+config CAVIUM_OCTEON_USER_MEM_PER_PROCESS
+	bool "Per process"
+	help
+	  Allows user applications to use XKPHYS addresses directly to memory.
+	  This option dynamically enable/disable with sysmips syscall,
+	  by a process with root privilege. Without root privilege you can only
+	  remove access.
+
+config CAVIUM_OCTEON_USER_MEM_DISABLED
+	bool "Disabled"
+
+endchoice
+
+endif # CPU_CAVIUM_OCTEON
+
+if CAVIUM_OCTEON_SOC
+
 config CAVIUM_OCTEON_LOCK_L2
 	bool "Lock often used kernel code in the L2"
 	default "y"
@@ -109,6 +171,53 @@ config CAVIUM_OCTEON_LOCK_L2_MEMCPY
 	help
 	  Lock the kernel's implementation of memcpy() into L2.
 
+config CAVIUM_RESERVE32
+	int "Memory to reserve for user processes shared region (MB)"
+	range 0 1536
+	depends on CPU_CAVIUM_OCTEON
+	default "0"
+	help
+	  Reserve a shared memory region for user processes to use for hardware
+	  memory buffers. This is required for 32bit applications to be able to
+	  send and receive packets directly. Applications access this memory by
+	  memory mapping /dev/mem for the addresses in /proc/octeon_info. For
+	  optimal performance with HugeTLBs, keep this size an even number of
+	  megabytes.
+
+config CAVIUM_OCTEON_NAND
+	tristate "Octeon NAND driver"
+	depends on MTD_NAND && !CPU_LITTLE_ENDIAN
+	help
+	  This option enables a MTD driver for the NAND controller introduced
+	  in the Octeon CN52XX pass 2 processor. It supports up to 8 NAND
+	  devices connected directly to Octeon's boot bus.
+
+config CAVIUM_OCTEON_RAPIDIO
+	bool "Enable support for Octeon Serial Rapid IO"
+	select RAPIDIO
+	select OCTEON_ETHERNET_MEM
+	help
+	  Connect the SRIO interfaces available in the Octeon II series of
+	  processors to the kernel's RapidIO subsystem. The existence of the
+	  SRIO ports is automatically detected and configured as either a
+	  host or device. Bus enumeration will be performed on host interfaces
+	  as appropriate. After configuring this option, you will likely want
+	  to enable the RapidIO network adapter under the devices menu.
+
+config CAVIUM_OCTEON_ERROR_TREE
+	bool "OCTEON hardware error reporting"
+	default y
+	help
+	  Install handlers for error signals from many on-SoC devices.
+
+config CAVIUM_OCTEON_KERNEL_CRYPTO
+	bool "Enable support for use of OCTEON crypto instructions from kernel code"
+	help
+	  Use of OCTEON crypto instructions from kernel code requires
+	  great care, and if done improperly, can corrupt userspace
+	  crypto state.  If OCTEON crypto instruction support is
+	  needed, select this option.
+
 config CAVIUM_OCTEON_PERF
 	bool "OCTEON-specific hardware performance counters"
 	default y
@@ -127,6 +236,12 @@ config SWIOTLB
 	select IOMMU_HELPER
 	select NEED_SG_DMA_LENGTH
 
+config DISABLE_ELF_NOTE_HEADER
+	bool "Disable the creation of the ELF PT_NOTE program header in vmlinux"
+	help
+	  Some early Octeon bootloaders cannot process PT_NOTE program
+	  headers.  Select y to omit these headers so that the kernel
+	  can be loaded with older bootloaders.
 
 config OCTEON_ILM
 	tristate "Module to measure interrupt latency using Octeon CIU Timer"
@@ -137,4 +252,14 @@ config OCTEON_ILM
 	  To compile this driver as a module, choose M here.  The module
 	  will be called octeon-ilm
 
-endif # CAVIUM_OCTEON_SOC
+config OCTEON_ERROR_INJECTOR
+	tristate "Module to inject hardware errors into the system"
+	help
+	  Used to test hardware error reporting.  Should never be used
+	  in a normal running system.
+
+# To be enabled later
+# source "arch/mips/cavium-octeon/executive/Kconfig"
+
+endif # CPU_CAVIUM_OCTEON
+

@@ -1668,11 +1668,6 @@ asmlinkage void do_ade(struct pt_regs *regs)
 			memcpy((void *)(CVMSEG_BASE + 256), current->thread.cvmseg.cvmseg[2],
 				cvmseg_size - 256);
 
-#if defined(CONFIG_CAVIUM_OCTEON_USER_IO_PER_PROCESS)
-		struct task_struct *group_leader = current->group_leader;
-		if (!test_tsk_thread_flag(group_leader, TIF_XKPHYS_IO_EN))
-			goto sigbus;
-#endif
 		preempt_enable();
 		return;
 	}
