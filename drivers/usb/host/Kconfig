@@ -284,6 +284,14 @@ config USB_EHCI_HCD_PLATFORM
 
 	  If unsure, say N.
 
+config USB_OCTEON_HCD
+	tristate "Octeon usb host driver"
+	depends on CAVIUM_OCTEON_SOC
+	default n
+	 help
+	  The Octeon DWC_OTG USB host controller.  All CN3XXX and
+	  CN5XXX based chips with USB are supported.
+
 config USB_OCTEON_EHCI
 	bool "Octeon on-chip EHCI support"
 	depends on CAVIUM_OCTEON_SOC
