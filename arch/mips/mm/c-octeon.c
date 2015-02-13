@@ -34,17 +34,17 @@ EXPORT_SYMBOL_GPL(cache_err_dcache);
 static RAW_NOTIFIER_HEAD(co_cache_error_chain);
 
 /**
- * Octeon automatically flushes the dcache on tlb changes, so
- * from Linux's viewpoint it acts much like a physically
- * tagged cache. No flushing is needed
+ * Octeon automatically flushes the dcache on tlb changes, but we need
+ * a full barrier to make sure subsequent icache fills see any queued
+ * stores.
  *
  */
 static void octeon_flush_data_cache_page(unsigned long addr)
 {
-    /* Nothing to do */
+	mb(); /* SYNC */
 }
 
-static inline void octeon_local_flush_icache(void)
+static void octeon_local_flush_icache(void)
 {
 	asm volatile ("synci 0($0)");
 }
@@ -52,9 +52,19 @@ static inline void octeon_local_flush_icache(void)
 /*
  * Flush local I-cache for the specified range.
  */
-static void local_octeon_flush_icache_range(unsigned long start,
+static void octeon_local_flush_icache_all(void)
+{
+	mb();
+	octeon_local_flush_icache();
+}
+
+/*
+ * Flush local I-cache for the specified range.
+ */
+static void octeon_local_flush_icache_range(unsigned long start,
 					    unsigned long end)
 {
+	mb();
 	octeon_local_flush_icache();
 }
 
@@ -66,8 +76,8 @@ static void local_octeon_flush_icache_range(unsigned long start,
  */
 static void octeon_flush_icache_all_cores(struct vm_area_struct *vma)
 {
-	extern void octeon_send_ipi_single(int cpu, unsigned int action);
 #ifdef CONFIG_SMP
+	extern struct plat_smp_ops *mp_ops;	/* private */
 	int cpu;
 	cpumask_t mask;
 #endif
@@ -87,8 +97,7 @@ static void octeon_flush_icache_all_cores(struct vm_area_struct *vma)
 	else
 		mask = *cpu_online_mask;
 	cpumask_clear_cpu(cpu, &mask);
-	for_each_cpu(cpu, &mask)
-		octeon_send_ipi_single(cpu, SMP_ICACHE_FLUSH);
+	mp_ops->send_ipi_mask(&mask, SMP_ICACHE_FLUSH);
 
 	preempt_enable();
 #endif
@@ -191,8 +200,8 @@ static int octeon2_be_handler(struct pt_regs *regs, int is_fixup)
 	dcache_err = read_octeon_c0_dcacheerr();
 	if (dcache_err & wbfperr_mask) {
 		int rv = raw_notifier_call_chain(&co_cache_error_chain,
-						CO_CACHE_ERROR_WB_PARITY,
-						NULL);
+						 CO_CACHE_ERROR_WB_PARITY,
+						 NULL);
 		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
 			unsigned int coreid = cvmx_get_core_num();
 
@@ -235,8 +244,8 @@ static int octeon2_mcheck_handler(struct pt_regs *regs)
 		write_c0_cvmmemctl(cvmmemctl.u64);
 
 		rv = raw_notifier_call_chain(&co_cache_error_chain,
-						CO_CACHE_ERROR_TLB_PARITY,
-						NULL);
+					     CO_CACHE_ERROR_TLB_PARITY,
+					     NULL);
 		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
 			unsigned int coreid = cvmx_get_core_num();
 
@@ -262,8 +271,8 @@ static int octeon3_be_handler(struct pt_regs *regs, int is_fixup)
 	dcache_err = read_octeon_c0_errctl();
 	if (dcache_err & wbfperr_mask) {
 		int rv = raw_notifier_call_chain(&co_cache_error_chain,
-						CO_CACHE_ERROR_WB_PARITY,
-						NULL);
+						 CO_CACHE_ERROR_WB_PARITY,
+						 NULL);
 		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
 			unsigned int coreid = cvmx_get_core_num();
 
@@ -306,8 +315,8 @@ static int octeon3_mcheck_handler(struct pt_regs *regs)
 		write_c0_cvmmemctl(cvmmemctl.u64);
 
 		rv = raw_notifier_call_chain(&co_cache_error_chain,
-						CO_CACHE_ERROR_TLB_PARITY,
-						NULL);
+					     CO_CACHE_ERROR_TLB_PARITY,
+					     NULL);
 		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
 			unsigned int coreid = cvmx_get_core_num();
 
@@ -447,9 +456,10 @@ void octeon_cache_init(void)
 	flush_cache_range		= octeon_flush_cache_range;
 	flush_cache_sigtramp		= octeon_flush_cache_sigtramp;
 	flush_icache_all		= octeon_flush_icache_all;
+	local_flush_icache_all		= octeon_local_flush_icache_all;
 	flush_data_cache_page		= octeon_flush_data_cache_page;
 	flush_icache_range		= octeon_flush_icache_range;
-	local_flush_icache_range	= local_octeon_flush_icache_range;
+	local_flush_icache_range	= octeon_local_flush_icache_range;
 
 	__flush_kernel_vmap_range	= octeon_flush_kernel_vmap_range;
 
