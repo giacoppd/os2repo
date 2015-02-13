@@ -37,6 +37,7 @@
 #include <asm/bootinfo.h>
 #include <asm/sections.h>
 #include <asm/time.h>
+#include <asm/perf_event.h>
 
 #include <asm/octeon/octeon.h>
 #include <asm/octeon/pci-octeon.h>
@@ -925,6 +926,43 @@ void __init prom_init(void)
 	octeon_user_io_init();
 	octeon_setup_smp();
 }
+
+#ifdef CONFIG_HW_PERF_EVENTS
+static int octeon_mipspmu_notifier(struct notifier_block *nb,
+				   unsigned long action, void *data)
+{
+	u64 cvmctl_orig = read_c0_cvmctl();
+	u64 cvmctl_new = cvmctl_orig;
+	u64 mask = (1ull << 15) | (1ull << 17);
+
+	switch (action) {
+	case MIPSPMU_ACTIVE:
+		cvmctl_new = cvmctl_orig | mask;
+		/*
+		 * Set CvmCtl[DCICLK,DISCE] for more accurate profiling at
+		 * the expense of power consumption.
+		 */
+		break;
+	case MIPSPMU_INACTIVE:
+		cvmctl_new = cvmctl_orig & ~mask;
+		break;
+	default:
+		break;
+	}
+	if (cvmctl_new != cvmctl_orig)
+		write_c0_cvmctl(cvmctl_new);
+	return NOTIFY_OK;
+}
+static struct notifier_block octeon_mipspmu_nb = {
+	.notifier_call = octeon_mipspmu_notifier
+};
+
+static int __init octeon_setup_mipspmu_notifiers(void)
+{
+	return mipspmu_notifier_register(&octeon_mipspmu_nb);
+}
+late_initcall(octeon_setup_mipspmu_notifiers);
+#endif
 
 /* Exclude a single page from the regions obtained in plat_mem_setup. */
 #ifndef CONFIG_CRASH_DUMP
