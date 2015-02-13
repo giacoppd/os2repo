@@ -239,6 +239,8 @@ end_clock:
 
 	/* Set uSOF cycle period to 60,000 bits. */
 	cvmx_write_csr(CVMX_UCTLX_EHCI_FLA(0), 0x20ull);
+
+	octeon_error_tree_enable(CVMX_ERROR_GROUP_USB, -1);
 exit:
 	mutex_unlock(&octeon2_usb_clocks_mutex);
 }
@@ -248,6 +250,8 @@ void octeon2_usb_clocks_stop(void)
 {
 	mutex_lock(&octeon2_usb_clocks_mutex);
 	octeon2_usb_clock_start_cnt--;
+	if (octeon2_usb_clock_start_cnt == 0)
+		octeon_error_tree_disable(CVMX_ERROR_GROUP_USB, -1);
 	mutex_unlock(&octeon2_usb_clocks_mutex);
 }
 EXPORT_SYMBOL(octeon2_usb_clocks_stop);
