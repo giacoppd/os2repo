@@ -363,12 +363,8 @@ void octeon_write_lcd(const char *s)
 int octeon_get_boot_uart(void)
 {
 	int uart;
-#ifdef CONFIG_CAVIUM_OCTEON_2ND_KERNEL
-	uart = 1;
-#else
 	uart = (octeon_boot_desc_ptr->flags & OCTEON_BL_FLAG_CONSOLE_UART1) ?
 		1 : 0;
-#endif
 	return uart;
 }
 
@@ -908,14 +904,10 @@ void __init prom_init(void)
 		octeon_pci_console_init(strstr(arcs_cmdline, "console=pci") + 8);
 
 	if (strstr(arcs_cmdline, "console=") == NULL) {
-#ifdef CONFIG_CAVIUM_OCTEON_2ND_KERNEL
-		strcat(arcs_cmdline, " console=ttyS0,115200");
-#else
 		if (octeon_uart == 1)
 			strcat(arcs_cmdline, " console=ttyS1,115200");
 		else
 			strcat(arcs_cmdline, " console=ttyS0,115200");
-#endif
 	}
 
 	if (octeon_is_simulation()) {
