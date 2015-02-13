@@ -716,6 +716,7 @@ config CAVIUM_OCTEON_SOC
 	select HW_HAS_PCI
 	select ZONE_DMA32
 	select HOLES_IN_ZONE
+	select MIPS_NR_CPU_NR_MAP_1024
 	select ARCH_REQUIRE_GPIOLIB
 	help
 	  This option supports all of the Octeon reference boards from Cavium
@@ -2215,6 +2216,14 @@ config NR_CPUS
 
 config MIPS_PERF_SHARED_TC_COUNTERS
 	bool
+
+config  MIPS_NR_CPU_NR_MAP_1024
+        bool
+
+config MIPS_NR_CPU_NR_MAP
+        int
+        default 1024 if MIPS_NR_CPU_NR_MAP_1024
+        default NR_CPUS if !MIPS_NR_CPU_NR_MAP_1024
 
 #
 # Timer Interrupt Frequency Configuration

@@ -3,7 +3,8 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 2004-2008 Cavium Networks
+ * Copyright (c) 2003-2013 Cavium Inc. All rights reserved.
+ *
  */
 #ifndef __ASM_OCTEON_OCTEON_H
 #define __ASM_OCTEON_OCTEON_H
@@ -13,27 +14,6 @@
 #include <asm/octeon/cvmx.h>
 #include <linux/irq.h>
 
-extern uint64_t octeon_bootmem_alloc_range_phys(uint64_t size,
-						uint64_t alignment,
-						uint64_t min_addr,
-						uint64_t max_addr,
-						int do_locking);
-extern void *octeon_bootmem_alloc(uint64_t size, uint64_t alignment,
-				  int do_locking);
-extern void *octeon_bootmem_alloc_range(uint64_t size, uint64_t alignment,
-					uint64_t min_addr, uint64_t max_addr,
-					int do_locking);
-extern void *octeon_bootmem_alloc_named(uint64_t size, uint64_t alignment,
-					char *name);
-extern void *octeon_bootmem_alloc_named_range(uint64_t size, uint64_t min_addr,
-					      uint64_t max_addr, uint64_t align,
-					      char *name);
-extern void *octeon_bootmem_alloc_named_address(uint64_t size, uint64_t address,
-						char *name);
-extern int octeon_bootmem_free_named(char *name);
-extern void octeon_bootmem_lock(void);
-extern void octeon_bootmem_unlock(void);
-
 extern int octeon_is_simulation(void);
 extern int octeon_is_pci_host(void);
 extern int octeon_usb_is_ref_clk(void);
@@ -41,16 +21,7 @@ extern uint64_t octeon_get_clock_rate(void);
 extern u64 octeon_get_io_clock_rate(void);
 extern const char *octeon_board_type_string(void);
 extern const char *octeon_get_pci_interrupts(void);
-extern int octeon_get_southbridge_interrupt(void);
-extern int octeon_get_boot_coremask(void);
-extern int octeon_get_boot_num_arguments(void);
-extern const char *octeon_get_boot_argument(int arg);
-extern void octeon_hal_setup_reserved32(void);
 extern void octeon_user_io_init(void);
-struct octeon_cop2_state;
-extern unsigned long octeon_crypto_enable(struct octeon_cop2_state *state);
-extern void octeon_crypto_disable(struct octeon_cop2_state *state,
-				  unsigned long flags);
 extern asmlinkage void octeon_cop2_restore(struct octeon_cop2_state *task);
 
 extern void octeon_init_cvmcount(void);
@@ -61,6 +32,7 @@ extern void octeon_io_clk_delay(unsigned long);
 #define OCTOEN_SERIAL_LEN	20
 
 struct octeon_boot_descriptor {
+#ifdef __BIG_ENDIAN_BITFIELD
 	/* Start of block referenced by assembly code - do not change! */
 	uint32_t desc_version;
 	uint32_t desc_size;
@@ -112,11 +84,64 @@ struct octeon_boot_descriptor {
 	uint8_t mac_addr_base[6];
 	uint8_t mac_addr_count;
 	uint64_t cvmx_desc_vaddr;
+#else
+	uint32_t desc_size;
+	uint32_t desc_version;
+	uint64_t stack_top;
+	uint64_t heap_base;
+	uint64_t heap_end;
+	/* Only used by bootloader */
+	uint64_t entry_point;
+	uint64_t desc_vaddr;
+	/* End of This block referenced by assembly code - do not change! */
+	uint32_t stack_size;
+	uint32_t exception_base_addr;
+	uint32_t argc;
+	uint32_t heap_size;
+	/* Argc count for application. Warning low bit scrambled in little-endian. */
+	uint32_t argv[OCTEON_ARGV_MAX_ARGS];
+
+#define  BOOT_FLAG_INIT_CORE		(1 << 0)
+#define  OCTEON_BL_FLAG_DEBUG		(1 << 1)
+#define  OCTEON_BL_FLAG_NO_MAGIC	(1 << 2)
+	/* If set, use uart1 for console */
+#define  OCTEON_BL_FLAG_CONSOLE_UART1	(1 << 3)
+	/* If set, use PCI console */
+#define  OCTEON_BL_FLAG_CONSOLE_PCI	(1 << 4)
+	/* Call exit on break on serial port */
+#define  OCTEON_BL_FLAG_BREAK		(1 << 5)
+
+	uint32_t core_mask;
+	uint32_t flags;
+	/* physical address of free memory descriptor block. */
+	uint32_t phy_mem_desc_addr;
+	/* DRAM size in megabyes. */
+	uint32_t dram_size;
+	/* CPU clock speed, in hz. */
+	uint32_t eclock_hz;
+	/* used to pass flags from app to debugger. */
+	uint32_t debugger_flags_base_addr;
+	/* SPI4 clock in hz. */
+	uint32_t spi_clock_hz;
+	/* DRAM clock speed, in hz. */
+	uint32_t dclock_hz;
+	uint8_t chip_rev_minor;
+	uint8_t chip_rev_major;
+	uint16_t chip_type;
+	uint8_t board_rev_minor;
+	uint8_t board_rev_major;
+	uint16_t board_type;
+
+	uint64_t unused1[4]; /* Not even filled in by bootloader. */
+
+	uint64_t cvmx_desc_vaddr;
+#endif
 };
 
 union octeon_cvmemctl {
 	uint64_t u64;
 	struct {
+#ifdef __BIG_ENDIAN_BITFIELD
 		/* RO 1 = BIST fail, 0 = BIST pass */
 		uint64_t tlbbist:1;
 		/* RO 1 = BIST fail, 0 = BIST pass */
@@ -130,7 +155,12 @@ union octeon_cvmemctl {
 		/* RO 1 = BIST fail, 0 = BIST pass */
 		uint64_t wbfbist:1;
 		/* Reserved */
-		uint64_t reserved:13;
+		uint64_t reserved:6;
+		/* When set, LMTDMA/LMTST operations are permitted */
+		uint64_t lmtena:1;
+		/* Selects the CVMSEG LM cacheline used by LMTDMA
+		   LMTST and wide atomic store operations */
+		uint64_t lmtline:6;
 		/* When set, TLB parity errors can occur. */
 		uint64_t tlbperrena:1;
 		/* OCTEON II - When set, CVMSET LM parity errors are enabled. */
@@ -143,6 +173,22 @@ union octeon_cvmemctl {
 		/* OCTEON II - If set, NORMAL and NOTL2 prefetch
 		 * operations become NOPs. */
 		uint64_t disldpref:1;
+		/* OCTEON II - TLB replacement policy: 0 = bitmask LRU; 1 = NLU.
+		 * This field selects between the TLB replacement policies:
+		 * bitmask LRU or NLU. Bitmask LRU maintains a mask of
+		 * recently used TLB entries and avoids them as new entries
+		 * are allocated. NLU simply guarantees that the next
+		 * allocation is not the last used TLB entry. */
+		uint64_t tlbnlu:1;
+		/* OCTEON II - Selects the bit in the counter used for releasing
+		 * a PAUSE. This counter trips every 2(8+PAUSETIME) cycles. If
+		 * not already released, the cnMIPS II core will always release
+		 * a given PAUSE instruction within 2(8+PAUSETIME). If the
+		 * counter trip happens to line up, the cnMIPS II core may
+		 * release the PAUSE instantly. */
+		uint64_t pausetime:3;
+		/* OCTEON II - This field is an extension of CvmMemCtl[DIDTTO] */
+		uint64_t didtto2:1;
 		/* R/W If set, marked write-buffer entries time out
 		 * the same as as other entries; if clear, marked
 		 * write-buffer entries use the maximum timeout. */
@@ -221,7 +267,67 @@ union octeon_cvmemctl {
 		/* R/W Size of local memory in cache blocks, 54 (6912
 		 * bytes) is max legal value. */
 		uint64_t lmemsz:6;
+#else
+		uint64_t lmemsz:6;
+		uint64_t cvmsegenau:1;
+		uint64_t cvmsegenas:1;
+		uint64_t cvmsegenak:1;
+		uint64_t reserved2:2;
+		uint64_t wbthresh:4;
+		uint64_t istrnol2:1;
+		uint64_t wbfltime:3;
+		uint64_t mclkalwys:1;
+		uint64_t csrckalwys:1;
+		uint64_t didtto:2;
+		uint64_t nomerge:1;
+		uint64_t allsyncw:1;
+		uint64_t xkioenau:1;
+		uint64_t xkioenas:1;
+		uint64_t xkmemenau:1;
+		uint64_t xkmemenas:1;
+		uint64_t diswbfst:1;
+		uint64_t dissyncws:1;
+		uint64_t syncwsmarked:1;
+		uint64_t iobdmascrmsb:2;
+		uint64_t dismrgclrwbto:1;
+		uint64_t dismarkwblongto:1;
+		uint64_t didtto2:1;
+		uint64_t pausetime:3;
+		uint64_t tlbnlu:1;
+		uint64_t disldpref:1;
+		uint64_t disstpref:1;
+		uint64_t lmemperrena:1;
+		uint64_t tlbperrena:1;
+		uint64_t lmtline:6;
+		uint64_t lmtena:1;
+		uint64_t reserved:6;
+		uint64_t wbfbist:1;
+		uint64_t ptgbist:1;
+		uint64_t dcmbist:1;
+		uint64_t l1dbist:1;
+		uint64_t l1cbist:1;
+		uint64_t tlbbist:1;
+#endif
 	} s;
+};
+
+struct octeon_ciu_chip_data {
+	union {
+		struct {		/* only used for ciu3 */
+			u64 ciu3_addr;
+			union {
+				unsigned int intsn;
+				unsigned int idt; /* For errbit irq */
+			};
+		};
+		struct {		/* only used for ciu/ciu2 */
+			u8 line;
+			u8 bit;
+			u8 gpio_line;
+		};
+	};
+	int current_cpu;	/* Next CPU expected to take this irq */
+	int ciu_node; /* NUMA node number of the CIU */
 };
 
 extern void octeon_write_lcd(const char *s);
@@ -259,14 +365,78 @@ static inline uint32_t octeon_npi_read32(uint64_t address)
 
 extern struct cvmx_bootinfo *octeon_bootinfo;
 
-extern uint64_t octeon_bootloader_entry_addr;
+extern u32 octeon_cvmseg_lines;
+
+static inline uint64_t octeon_read_ptp_csr(u64 csr)
+{
+	if (OCTEON_IS_MODEL(OCTEON_CN63XX_PASS1_X)) {
+		u64 result;
+		unsigned long flags;
+		/*
+		 * CN63XX pass 1.x has an errata where you must read
+		 * this register twice to get the correct result.
+		 */
+		local_irq_save(flags);
+		cvmx_read_csr(csr);
+		result = cvmx_read_csr(csr);
+		local_irq_restore(flags);
+		return result;
+	} else {
+		return cvmx_read_csr(csr);
+	}
+}
 
 extern void (*octeon_irq_setup_secondary)(void);
 
-typedef void (*octeon_irq_ip4_handler_t)(void);
-void octeon_irq_set_ip4_handler(octeon_irq_ip4_handler_t);
+int octeon_coreid_for_cpu(int cpu);
+int octeon_cpu_for_coreid(int coreid);
 
 extern void octeon_fixup_irqs(void);
+
+void octeon_pci_console_init(const char *);
+
+typedef void (*octeon_message_fn_t)(void);
+int octeon_request_ipi_handler(octeon_message_fn_t fn);
+void octeon_send_ipi_single(int cpu, unsigned int action);
+void octeon_release_ipi_handler(int action);
+void octeon_ciu3_mbox_send(int cpu, unsigned int mbox);
+void octeon_irq_ciu3_enable(struct irq_data *data);
+void octeon_irq_ciu3_disable(struct irq_data *data);
+void octeon_irq_ciu3_mask(struct irq_data *data);
+void octeon_irq_ciu3_ack(struct irq_data *data);
+void octeon_irq_ciu3_mask_ack(struct irq_data *data);
+int octeon_irq_ciu3_set_affinity(struct irq_data *data,
+				 const struct cpumask *dest, bool force);
+void octeon_irq_free_cd(struct irq_domain *d, unsigned int irq);
+int octeon_irq_ciu3_xlat(struct irq_domain *d, struct device_node *node,
+			 const u32 *intspec, unsigned int intsize,
+			 unsigned long *out_hwirq, unsigned int *out_type);
+int octeon_irq_ciu3_mapx(struct irq_domain *d, unsigned int virq,
+			 irq_hw_number_t hw, struct irq_chip *chip);
+void *octeon_irq_get_ciu3_info(int node);
+void octeon_irq_add_block_domain(int node, uint8_t block,
+				 struct irq_domain *domain);
+struct irq_domain *octeon_irq_get_block_domain(int node, uint8_t block);
+
+#define OCTEON_DEBUG_UART 1
+
+#if IS_ENABLED(CONFIG_CAVIUM_OCTEON_ERROR_TREE)
+int octeon_error_tree_enable(enum cvmx_error_groups group, int unit);
+int octeon_error_tree_disable(enum cvmx_error_groups group, int unit);
+#else
+static inline int octeon_error_tree_enable(enum cvmx_error_groups group, int unit)
+{
+	return 0;
+}
+static inline int octeon_error_tree_disable(enum cvmx_error_groups group, int unit)
+{
+	return 0;
+}
+#endif
+
+int octeon_ciu3_errbits_set_handler(void (* handler)(int node, int intsn));
+int octeon_ciu3_errbits_enable_intsn(int node, int intsn);
+int octeon_ciu3_errbits_disable_intsn(int node , int intsn);
 
 int octeon_i2c_cvmx2i2c(unsigned int cvmx_twsi_bus_num);
 
@@ -274,6 +444,13 @@ int octeon_i2c_cvmx2i2c(unsigned int cvmx_twsi_bus_num);
 void octeon_setup_smp(void);
 #else
 static inline void octeon_setup_smp(void) {}
+#endif
+#ifdef CONFIG_NUMA
+void octeon_setup_numa(void);
+void octeon_numa_cpu_online(void);
+#else
+static inline void octeon_setup_numa(void) {}
+static inline void octeon_numa_cpu_online(void) {}
 #endif
 
 extern struct semaphore octeon_bootbus_sem;

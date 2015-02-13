@@ -455,7 +455,7 @@ static void octeon_halt(void)
 	smp_call_function(octeon_kill_core, NULL, 0);
 
 	switch (octeon_bootinfo->board_type) {
-	case CVMX_BOARD_TYPE_NAO38:
+	case CVMX_BOARD_TYPE_NAC38:
 		/* Driving a 1 to GPIO 12 shuts off this board */
 		cvmx_write_csr(CVMX_GPIO_BIT_CFGX(12), 1);
 		cvmx_write_csr(CVMX_GPIO_TX_SET, 0x1000);
@@ -665,14 +665,28 @@ void __init prom_init(void)
 	octeon_boot_desc_ptr = (struct octeon_boot_descriptor *)fw_arg3;
 	octeon_bootinfo =
 		cvmx_phys_to_ptr(octeon_boot_desc_ptr->cvmx_desc_vaddr);
-	cvmx_bootmem_init(cvmx_phys_to_ptr(octeon_bootinfo->phy_mem_desc_addr));
+	cvmx_bootmem_init(octeon_bootinfo->phy_mem_desc_addr);
 
 	sysinfo = cvmx_sysinfo_get();
 	memset(sysinfo, 0, sizeof(*sysinfo));
 	sysinfo->system_dram_size = octeon_bootinfo->dram_size << 20;
-	sysinfo->phy_mem_desc_ptr =
-		cvmx_phys_to_ptr(octeon_bootinfo->phy_mem_desc_addr);
-	sysinfo->core_mask = octeon_bootinfo->core_mask;
+
+	sysinfo->phy_mem_desc_addr = (u64)phys_to_virt(octeon_bootinfo->phy_mem_desc_addr);
+
+	if ((octeon_bootinfo->major_version > 1) ||
+	    (octeon_bootinfo->major_version == 1 &&
+	     octeon_bootinfo->minor_version >= 4))
+		cvmx_coremask_copy(&sysinfo->core_mask,
+				   &octeon_bootinfo->ext_core_mask);
+	else
+		cvmx_coremask_set64(&sysinfo->core_mask,
+				    octeon_bootinfo->core_mask);
+
+	/* Some broken u-boot pass garbage in upper bits, clear them out */
+	if (!OCTEON_IS_MODEL(OCTEON_CN78XX))
+		for (i = 512; i < 1024; i++)
+			cvmx_coremask_clear_core(&sysinfo->core_mask, i);
+
 	sysinfo->exception_base_addr = octeon_bootinfo->exception_base_addr;
 	sysinfo->cpu_clock_hz = octeon_bootinfo->eclock_hz;
 	sysinfo->dram_data_rate_hz = octeon_bootinfo->dclock_hz * 2;
@@ -742,6 +756,9 @@ void __init prom_init(void)
 			memcpy(octeon_mult_restore, restore, restore_len);
 		}
 	}
+
+	/* init octeon feature map */
+	octeon_feature_init();
 
 	/*
 	 * Only enable the LED controller if we're running on a CN38XX, CN58XX,

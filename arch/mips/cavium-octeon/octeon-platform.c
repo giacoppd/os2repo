@@ -704,7 +704,7 @@ end_led:
 			fdt_nop_property(initial_boot_params, aliases, "usbn");
 		} else  {
 			__be32 new_f[1];
-			enum cvmx_helper_board_usb_clock_types c;
+			cvmx_helper_board_usb_clock_types_t c;
 			c = __cvmx_helper_board_usb_get_clock_type();
 			switch (c) {
 			case USB_CLOCK_TYPE_REF_48:

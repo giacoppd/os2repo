@@ -155,8 +155,16 @@ cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += $(call cc-option,-march=octeon) -Wa,--trap
 ifeq (,$(findstring march=octeon, $(cflags-$(CONFIG_CPU_CAVIUM_OCTEON))))
 cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += -Wa,-march=octeon
 endif
+
+cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += -DCVMX_BUILD_FOR_LINUX_KERNEL=1 -DUSE_RUNTIME_MODEL_CHECKS=1
+
 cflags-$(CONFIG_CAVIUM_CN63XXP1) += -Wa,-mfix-cn63xxp1
 
+ifdef  CONFIG_CAVIUM_OCTEON_CHK_CVMX_PARAMETER
+cflags-y += -DCVMX_ENABLE_PARAMETER_CHECKING=1
+else
+cflags-y += -DCVMX_ENABLE_PARAMETER_CHECKING=0
+endif
 ifdef  CONFIG_CAVIUM_OCTEON_CHK_CVMX_ADDRESS
 cflags-y += -DCVMX_ENABLE_CSR_ADDRESS_CHECKING=1
 else

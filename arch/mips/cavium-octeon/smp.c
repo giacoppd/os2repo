@@ -97,10 +97,11 @@ static void octeon_smp_setup(void)
 	const int coreid = cvmx_get_core_num();
 	int cpus;
 	int id;
-	int core_mask = octeon_get_boot_coremask();
 #ifdef CONFIG_HOTPLUG_CPU
 	unsigned int num_cores = cvmx_octeon_num_cores();
 #endif
+
+	struct cvmx_sysinfo *sysinfo = cvmx_sysinfo_get();
 
 	/* The present CPUs are initially just the boot cpu (CPU 0). */
 	for (id = 0; id < NR_CPUS; id++) {
@@ -113,8 +114,8 @@ static void octeon_smp_setup(void)
 
 	/* The present CPUs get the lowest CPU numbers. */
 	cpus = 1;
-	for (id = 0; id < NR_CPUS; id++) {
-		if ((id != coreid) && (core_mask & (1 << id))) {
+	for (id = 0; id < CONFIG_MIPS_NR_CPU_NR_MAP; id++) {
+		if ((id != coreid) && cvmx_coremask_is_core_set(&sysinfo->core_mask, id)) {
 			set_cpu_possible(cpus, true);
 			set_cpu_present(cpus, true);
 			__cpu_number_map[id] = cpus;
@@ -130,7 +131,7 @@ static void octeon_smp_setup(void)
 	 * are always consecutively numberd from 0.
 	 */
 	for (id = 0; id < num_cores && id < NR_CPUS; id++) {
-		if (!(core_mask & (1 << id))) {
+		if (!(cvmx_coremask_is_core_set(&sysinfo->core_mask, id))) {
 			set_cpu_possible(cpus, true);
 			__cpu_number_map[id] = cpus;
 			__cpu_logical_map[cpus] = id;
