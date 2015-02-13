@@ -28,6 +28,7 @@
 #include <linux/of_fdt.h>
 #include <linux/libfdt.h>
 #include <linux/kexec.h>
+#include <linux/initrd.h>
 
 #include <linux/bootmem.h>
 #include <linux/memblock.h>
@@ -269,16 +270,13 @@ static void octeon_crash_shutdown(struct pt_regs *regs)
 uint64_t octeon_reserve32_memory;
 EXPORT_SYMBOL(octeon_reserve32_memory);
 
-#ifdef CONFIG_KEXEC
-/* crashkernel cmdline parameter is parsed _after_ memory setup
- * we also parse it here (workaround for EHB5200) */
-static uint64_t crashk_size, crashk_base;
-#endif
-
 static int octeon_uart;
 
 extern asmlinkage void handle_int(void);
 extern asmlinkage void plat_irq_dispatch(void);
+
+/* If an initrd named block is specified, its name goes here. */
+static char __initdata rd_name[64];
 
 /* Up to four blocks may be specified. */
 static char __initdata named_memory_blocks[4][CVMX_BOOTMEM_NAME_LEN];
@@ -437,10 +435,12 @@ static void octeon_restart(char *command)
  */
 static void octeon_kill_core(void *arg)
 {
-	if (octeon_is_simulation())
+	if (octeon_is_simulation()) {
+			/* The simulator needs the watchdog to stop for dead cores */
+			cvmx_write_csr(CVMX_CIU_WDOGX(cvmx_get_core_num()), 0);
 		/* A break instruction causes the simulator stop a core */
 		asm volatile ("break" ::: "memory");
-
+	}
 	local_irq_disable();
 	/* Disable watchdog on this core. */
 	cvmx_write_csr(CVMX_CIU_WDOGX(cvmx_get_core_num()), 0);
@@ -531,16 +531,22 @@ void octeon_user_io_init(void)
 
 	/* R/W If set (and UX set), user-level loads/stores can use
 	 * XKPHYS addresses with VA<48>==0 */
+#ifdef CONFIG_CAVIUM_OCTEON_USER_MEM
+	cvmmemctl.s.xkmemenau = 1;
+#else
 	cvmmemctl.s.xkmemenau = 0;
-
+#endif
 	/* R/W If set (and SX set), supervisor-level loads/stores can
 	 * use XKPHYS addresses with VA<48>==1 */
 	cvmmemctl.s.xkioenas = 0;
 
 	/* R/W If set (and UX set), user-level loads/stores can use
 	 * XKPHYS addresses with VA<48>==1 */
+#ifdef CONFIG_CAVIUM_OCTEON_USER_IO
+	cvmmemctl.s.xkioenau = 1;
+#else
 	cvmmemctl.s.xkioenau = 0;
-
+#endif
 	/* R/W If set, all stores act as SYNCW (NOMERGE must be set
 	 * when this is set) RW, reset to 0. */
 	cvmmemctl.s.allsyncw = 0;
@@ -794,7 +800,7 @@ void __init prom_init(void)
 	 * bootloader. Later, after the memory allocations are
 	 * complete, the reserve32 will be freed.
 	 *
-	 * Allocate memory for RESERVED32 aligned on 2MB boundary. This
+	 * Allocate memory for RESERVE32 aligned on 2MB boundary. This
 	 * is in case we later use hugetlb entries with it.
 	 */
 	if (CONFIG_CAVIUM_RESERVE32 > 0) {
@@ -875,31 +881,25 @@ void __init prom_init(void)
 				max_memory = 2ull << 49;
 			if (*p == '@')
 				RESERVE_LOW_MEM = memparse(p + 1, &p);
+		} else if (strncmp(arg, "rd_name=", 8) == 0) {
+			strncpy(rd_name, arg + 8, sizeof(rd_name));
+			rd_name[sizeof(rd_name) - 1] = 0;
+			goto append_arg;
 		} else if (strcmp(arg, "ecc_verbose") == 0) {
 #ifdef CONFIG_CAVIUM_REPORT_SINGLE_BIT_ECC
 			__cvmx_interrupt_ecc_report_single_bit_errors = 1;
 			pr_notice("Reporting of single bit ECC errors is turned on\n");
 #endif
-#ifdef CONFIG_KEXEC
-		} else if (strncmp(arg, "crashkernel=", 12) == 0) {
-			crashk_size = memparse(arg+12, &p);
-			if (*p == '@')
-				crashk_base = memparse(p+1, &p);
-			strcat(arcs_cmdline, " ");
-			strcat(arcs_cmdline, arg);
-			/*
-			 * To do: switch parsing to new style, something like:
-			 * parse_crashkernel(arg, sysinfo->system_dram_size,
-			 *		  &crashk_size, &crashk_base);
-			 */
-#endif
-		} else if (strlen(arcs_cmdline) + strlen(arg) + 1 <
-			   sizeof(arcs_cmdline) - 1) {
-			strcat(arcs_cmdline, " ");
-			strcat(arcs_cmdline, arg);
+			goto append_arg;
+		} else {
+append_arg:
+			if (strlen(arcs_cmdline) + strlen(arg) + 1 <
+				sizeof(arcs_cmdline) - 1) {
+				strcat(arcs_cmdline, " ");
+				strcat(arcs_cmdline, arg);
+			}
 		}
 	}
-
 	if (strstr(arcs_cmdline, "console=pci"))
 		octeon_pci_console_init(strstr(arcs_cmdline, "console=pci") + 8);
 
@@ -1043,11 +1043,23 @@ void __init plat_mem_setup(void)
 	s64 memory;
 	u64 limit_max, limit_min;
 	u64 system_limit = cvmx_bootmem_available_mem(mem_alloc_size);
-	uint64_t crashk_end;
 	const struct cvmx_bootmem_named_block_desc *named_block;
 
-	total = 0;
-	crashk_end = 0;
+#ifdef CONFIG_BLK_DEV_INITRD
+	if (rd_name[0]) {
+		const struct cvmx_bootmem_named_block_desc *initrd_block;
+
+		initrd_block = cvmx_bootmem_find_named_block(rd_name);
+		if (initrd_block != NULL) {
+			initrd_start = initrd_block->base_addr + PAGE_OFFSET;
+			initrd_end = initrd_start + initrd_block->size;
+			add_memory_region(initrd_block->base_addr, initrd_block->size,
+					BOOT_MEM_INIT_RAM);
+			initrd_in_reserved = 1;
+			total += initrd_block->size;
+		}
+	}
+#endif
         if (named_memory_blocks[0][0]) {
                 phys_t kernel_begin, kernel_end;
                 phys_t block_begin, block_size;

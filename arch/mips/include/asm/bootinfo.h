@@ -103,6 +103,7 @@ struct boot_mem_map {
 };
 
 extern struct boot_mem_map boot_mem_map;
+extern bool initrd_in_reserved;
 
 extern void add_memory_region(phys_t start, phys_t size, long type);
 extern void detect_memory_region(phys_t start, phys_t sz_min,  phys_t sz_max);

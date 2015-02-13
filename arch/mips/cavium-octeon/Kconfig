@@ -258,7 +258,4 @@ config OCTEON_ERROR_INJECTOR
 	  Used to test hardware error reporting.  Should never be used
 	  in a normal running system.
 
-# To be enabled later
-# source "arch/mips/cavium-octeon/executive/Kconfig"
-
 endif #CAVIUM_OCTEON_SOC
