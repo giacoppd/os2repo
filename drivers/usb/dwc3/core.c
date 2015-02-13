@@ -88,7 +88,7 @@ static void dwc3_core_soft_reset(struct dwc3 *dwc)
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 
 	index = (((uint64_t)(dwc->regs) & 0x10000000000ull) ? 1:0);
-#ifdef CONFIG_USB_XHCI_HCD_OCTEON
+#if IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	octeon3_usb_phy_reset(index);
 #else
 	usb_phy_init(dwc->usb2_phy);
@@ -353,7 +353,7 @@ err0:
 
 static void dwc3_core_exit(struct dwc3 *dwc)
 {
-#ifndef CONFIG_USB_XHCI_HCD_OCTEON
+#if !IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	usb_phy_shutdown(dwc->usb2_phy);
 	usb_phy_shutdown(dwc->usb3_phy);
 #endif
@@ -484,7 +484,7 @@ static int dwc3_probe(struct platform_device *pdev)
 	dwc->regs	= regs;
 	dwc->regs_size	= resource_size(res);
 	dwc->dev	= dev;
-#ifdef CONFIG_USB_XHCI_HCD_OCTEON
+#if IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	dev->dma_mask   = &xhci_octeon_dma_mask;
 #else
 	dev->dma_mask   = dev->parent->dma_mask;
@@ -598,7 +598,7 @@ err2:
 
 err1:
 
-#ifndef CONFIG_USB_XHCI_HCD_OCTEON
+#ifndef CONFIG_USB_XHCI_HCD_OCTEON	
 	usb_phy_set_suspend(dwc->usb2_phy, 1);
 	usb_phy_set_suspend(dwc->usb3_phy, 1);
 #endif
@@ -635,7 +635,7 @@ static int dwc3_remove(struct platform_device *pdev)
 	dwc3_event_buffers_cleanup(dwc);
 	dwc3_free_event_buffers(dwc);
 
-#ifndef CONFIG_USB_XHCI_HCD_OCTEON
+#if !IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	usb_phy_set_suspend(dwc->usb2_phy, 1);
 	usb_phy_set_suspend(dwc->usb3_phy, 1);
 #endif
@@ -644,7 +644,7 @@ static int dwc3_remove(struct platform_device *pdev)
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 
-#ifdef CONFIG_USB_XHCI_HCD_OCTEON
+#if IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	xhci_octeon_stop(pdev);
 #endif
 	return 0;
@@ -716,7 +716,7 @@ static int dwc3_suspend(struct device *dev)
 	dwc->gctl = dwc3_readl(dwc->regs, DWC3_GCTL);
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
-#ifndef CONFIG_USB_XHCI_HCD_OCTEON
+#if !IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	usb_phy_shutdown(dwc->usb3_phy);
 	usb_phy_shutdown(dwc->usb2_phy);
 #endif
@@ -729,7 +729,7 @@ static int dwc3_resume(struct device *dev)
 	struct dwc3	*dwc = dev_get_drvdata(dev);
 	unsigned long	flags;
 
-#ifndef CONFIG_USB_XHCI_HCD_OCTEON
+#if !IS_ENABLED(CONFIG_USB_XHCI_HCD_OCTEON)
 	usb_phy_init(dwc->usb3_phy);
 	usb_phy_init(dwc->usb2_phy);
 #endif
