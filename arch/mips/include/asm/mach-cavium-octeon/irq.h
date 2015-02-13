@@ -44,17 +44,7 @@ enum octeon_irq {
 	OCTEON_IRQ_SRIO1,
 	OCTEON_IRQ_SRIO2,
 	OCTEON_IRQ_SRIO3,
-	OCTEON_IRQ_USB0,
-	OCTEON_IRQ_USB1,
 	OCTEON_IRQ_LAST = 511
 };
-
-#ifdef CONFIG_PCI_MSI
-/* 256 - 511 represent the MSI interrupts 0-255 */
-#define OCTEON_IRQ_MSI_BIT0	(256)
-
-#define OCTEON_IRQ_MSI_LAST	 (OCTEON_IRQ_MSI_BIT0 + 255)
-#define OCTEON_IRQ_LAST		 (OCTEON_IRQ_MSI_LAST + 1)
-#endif
 
 #endif
