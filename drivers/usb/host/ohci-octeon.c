@@ -30,8 +30,14 @@ static void ohci_octeon_hw_start(struct device *dev)
 
 	ohci_ctl.u64 = cvmx_read_csr(CVMX_UCTLX_OHCI_CTL(0));
 	ohci_ctl.s.l2c_addr_msb = 0;
+#ifdef __BIG_ENDIAN
 	ohci_ctl.s.l2c_buff_emod = 1; /* Byte swapped. */
 	ohci_ctl.s.l2c_desc_emod = 1; /* Byte swapped. */
+#else
+	ohci_ctl.s.l2c_buff_emod = 0; /* not swapped. */
+	ohci_ctl.s.l2c_desc_emod = 0; /* not swapped. */
+	ohci_ctl.s.inv_reg_a2 = 1;
+#endif
 	cvmx_write_csr(CVMX_UCTLX_OHCI_CTL(0), ohci_ctl.u64);
 
 }
