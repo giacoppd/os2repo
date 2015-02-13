@@ -69,6 +69,7 @@
 #define CP0_DEPC $24
 #define CP0_PERFORMANCE $25
 #define CP0_ECC $26
+#define CP0_ERRCTL $26
 #define CP0_CACHEERR $27
 #define CP0_TAGLO $28
 #define CP0_TAGHI $29
@@ -1202,6 +1203,9 @@ do {									\
 
 #define read_octeon_c0_dcacheerr()	__read_64bit_c0_register($27, 1)
 #define write_octeon_c0_dcacheerr(val)	__write_64bit_c0_register($27, 1, val)
+
+#define read_octeon_c0_errctl()                __read_64bit_c0_register($26, 0)
+#define write_octeon_c0_errctl(val)    __write_64bit_c0_register($26, 0, val)
 
 /* BMIPS3300 */
 #define read_c0_brcm_config_0()		__read_32bit_c0_register($22, 0)

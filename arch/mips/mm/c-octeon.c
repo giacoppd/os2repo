@@ -31,6 +31,8 @@
 unsigned long long cache_err_dcache[NR_CPUS];
 EXPORT_SYMBOL_GPL(cache_err_dcache);
 
+static RAW_NOTIFIER_HEAD(co_cache_error_chain);
+
 /**
  * Octeon automatically flushes the dcache on tlb changes, so
  * from Linux's viewpoint it acts much like a physically
@@ -176,6 +178,148 @@ static void octeon_flush_kernel_vmap_range(unsigned long vaddr, int size)
 	BUG();
 }
 
+/*
+ * Octeon specific bus error handler, as write buffer parity errors
+ * trigger bus errors.  These are fatal since the copy in the write buffer
+ * is the only copy of the data.
+ */
+static int octeon2_be_handler(struct pt_regs *regs, int is_fixup)
+{
+	u64 dcache_err;
+	u64 wbfperr_mask = 1ULL << 1;
+
+	dcache_err = read_octeon_c0_dcacheerr();
+	if (dcache_err & wbfperr_mask) {
+		int rv = raw_notifier_call_chain(&co_cache_error_chain,
+						CO_CACHE_ERROR_WB_PARITY,
+						NULL);
+		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
+			unsigned int coreid = cvmx_get_core_num();
+
+			pr_err("Core%u: Write buffer parity error:\n", coreid);
+			pr_err("CacheErr (Dcache) == %llx\n", dcache_err);
+		}
+
+		write_octeon_c0_dcacheerr(wbfperr_mask);
+		return MIPS_BE_FATAL;
+	}
+	if (is_fixup)
+		return MIPS_BE_FIXUP;
+	else
+		return MIPS_BE_FATAL;
+}
+
+/*
+ * Octeon specific MachineCheck handler, as TLB parity errors
+ * trigger MachineCheck errors.
+ */
+static int octeon2_mcheck_handler(struct pt_regs *regs)
+{
+	u64 dcache_err;
+	u64 tlbperr_mask = 1ULL << 5;
+	dcache_err = read_octeon_c0_dcacheerr();
+	if (dcache_err & tlbperr_mask) {
+		int rv;
+		union octeon_cvmemctl cvmmemctl;
+
+		/* Clear the indicator */
+		write_octeon_c0_dcacheerr(tlbperr_mask);
+		/*
+		 * Blow everything away to (hopefully) write good
+		 * parity to all TLB entries
+		 */
+		local_flush_tlb_all();
+		/* Reenable TLB parity error reporting. */
+		cvmmemctl.u64 = read_c0_cvmmemctl();
+		cvmmemctl.s.tlbperrena = 1;
+		write_c0_cvmmemctl(cvmmemctl.u64);
+
+		rv = raw_notifier_call_chain(&co_cache_error_chain,
+						CO_CACHE_ERROR_TLB_PARITY,
+						NULL);
+		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
+			unsigned int coreid = cvmx_get_core_num();
+
+			pr_err("Core%u: TLB parity error:\n", coreid);
+			return MIPS_MC_FATAL;
+		}
+
+		return MIPS_MC_DISCARD;
+	}
+	return MIPS_MC_NOT_HANDLED;
+}
+
+/*
+ * Octeon3 specific bus error handler, as write buffer parity errors
+ * trigger bus errors.  These are fatal since the copy in the write buffer
+ * is the only copy of the data.
+ */
+static int octeon3_be_handler(struct pt_regs *regs, int is_fixup)
+{
+	u64 dcache_err;
+	u64 wbfperr_mask = 1ULL << 9;
+
+	dcache_err = read_octeon_c0_errctl();
+	if (dcache_err & wbfperr_mask) {
+		int rv = raw_notifier_call_chain(&co_cache_error_chain,
+						CO_CACHE_ERROR_WB_PARITY,
+						NULL);
+		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
+			unsigned int coreid = cvmx_get_core_num();
+
+			pr_err("Core%u: Write buffer parity error:\n", coreid);
+			pr_err("CacheErr (Dcache) == %llx\n", dcache_err);
+		}
+
+		write_octeon_c0_errctl(wbfperr_mask);
+		return MIPS_BE_FATAL;
+	}
+	if (is_fixup)
+		return MIPS_BE_FIXUP;
+	else
+		return MIPS_BE_FATAL;
+}
+
+/*
+ * Octeon3 specific MachineCheck handler, as TLB parity errors
+ * trigger MachineCheck errors.
+ */
+static int octeon3_mcheck_handler(struct pt_regs *regs)
+{
+	u64 dcache_err;
+	u64 tlbperr_mask = 1ULL << 14;
+	dcache_err = read_octeon_c0_errctl();
+	if (dcache_err & tlbperr_mask) {
+		int rv;
+		union octeon_cvmemctl cvmmemctl;
+
+		/* Clear the indicator */
+		write_octeon_c0_errctl(tlbperr_mask);
+		/*
+		 * Blow everything away to (hopefully) write good
+		 * parity to all TLB entries
+		 */
+		local_flush_tlb_all();
+		/* Reenable TLB parity error reporting. */
+		cvmmemctl.u64 = read_c0_cvmmemctl();
+		cvmmemctl.s.tlbperrena = 1;
+		write_c0_cvmmemctl(cvmmemctl.u64);
+
+		rv = raw_notifier_call_chain(&co_cache_error_chain,
+						CO_CACHE_ERROR_TLB_PARITY,
+						NULL);
+		if ((rv & ~NOTIFY_STOP_MASK) != NOTIFY_OK) {
+			unsigned int coreid = cvmx_get_core_num();
+
+			pr_err("Core%u: TLB parity error:\n", coreid);
+			return MIPS_MC_FATAL;
+		}
+
+		return MIPS_MC_DISCARD;
+	}
+	return MIPS_MC_NOT_HANDLED;
+}
+
 /**
  * Probe Octeon's caches
  *
@@ -223,6 +367,9 @@ static void probe_octeon(void)
 		c->dcache.sets = 8;
 		dcache_size = c->dcache.sets * c->dcache.ways * c->dcache.linesz;
 		c->options |= MIPS_CPU_PREFETCH;
+
+		board_be_handler = octeon2_be_handler;
+		board_mcheck_handler = octeon2_mcheck_handler;
 		break;
 
 	case CPU_CAVIUM_OCTEON3:
@@ -237,6 +384,9 @@ static void probe_octeon(void)
 		c->dcache.sets = 8;
 		dcache_size = c->dcache.sets * c->dcache.ways * c->dcache.linesz;
 		c->options |= MIPS_CPU_PREFETCH;
+
+		board_be_handler = octeon3_be_handler;
+		board_mcheck_handler = octeon3_mcheck_handler;
 		break;
 
 	default:
@@ -268,8 +418,13 @@ static void probe_octeon(void)
 
 static void  octeon_cache_error_setup(void)
 {
-	extern char except_vec2_octeon;
-	set_handler(0x100, &except_vec2_octeon, 0x80);
+	if (current_cpu_type() == CPU_CAVIUM_OCTEON3) {
+		extern char except_vec2_octeon3;
+		set_handler(0x100, &except_vec2_octeon3, 0x80);
+	} else {
+		extern char except_vec2_octeon;
+		set_handler(0x100, &except_vec2_octeon, 0x80);
+	}
 }
 
 /**
@@ -304,8 +459,6 @@ void octeon_cache_init(void)
 /*
  * Handle a cache error exception
  */
-static RAW_NOTIFIER_HEAD(co_cache_error_chain);
-
 int register_co_cache_error_notifier(struct notifier_block *nb)
 {
 	return raw_notifier_chain_register(&co_cache_error_chain, nb);
@@ -330,7 +483,10 @@ static void co_cache_error_call_notifiers(unsigned long val)
 			dcache_err = cache_err_dcache[coreid];
 			cache_err_dcache[coreid] = 0;
 		} else {
-			dcache_err = read_octeon_c0_dcacheerr();
+			if (current_cpu_type() == CPU_CAVIUM_OCTEON3)
+				dcache_err = read_octeon_c0_errctl();
+			else
+				dcache_err = read_octeon_c0_dcacheerr();
 		}
 
 		pr_err("Core%lu: Cache error exception:\n", coreid);
@@ -353,7 +509,7 @@ static void co_cache_error_call_notifiers(unsigned long val)
 
 asmlinkage void cache_parity_error_octeon_recoverable(void)
 {
-	co_cache_error_call_notifiers(0);
+	co_cache_error_call_notifiers(CO_CACHE_ERROR_RECOVERABLE);
 }
 
 /**
@@ -362,6 +518,6 @@ asmlinkage void cache_parity_error_octeon_recoverable(void)
 
 asmlinkage void cache_parity_error_octeon_non_recoverable(void)
 {
-	co_cache_error_call_notifiers(1);
+	co_cache_error_call_notifiers(CO_CACHE_ERROR_UNRECOVERABLE);
 	panic("Can't handle cache error: nested exception");
 }

@@ -88,6 +88,7 @@ extern asmlinkage void handle_reserved(void);
 
 void (*board_be_init)(void);
 int (*board_be_handler)(struct pt_regs *regs, int is_fixup);
+int (*board_mcheck_handler)(struct pt_regs *regs);
 void (*board_nmi_handler_setup)(void);
 void (*board_ejtag_handler_setup)(void);
 void (*board_bind_eic_interrupt)(int irq, int regset);
@@ -1232,7 +1233,15 @@ asmlinkage void do_mcheck(struct pt_regs *regs)
 	enum ctx_state prev_state;
 
 	prev_state = exception_enter();
-	show_regs(regs);
+	if (board_mcheck_handler) {
+		int resp = board_mcheck_handler(regs);
+		if (resp == MIPS_MC_DISCARD)
+			return;
+		if (resp == MIPS_MC_FATAL)
+			multi_match = 0;
+	}
+
+	show_registers(regs);
 
 	if (multi_match) {
 		printk("Index	: %0x\n", read_c0_index());

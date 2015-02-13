@@ -381,7 +381,10 @@ void octeon_check_cpu_bist(void)
 		pr_err("Core%d BIST Failure: CacheErr(icache) = 0x%llx\n",
 		       coreid, bist_val);
 
-	bist_val = read_octeon_c0_dcacheerr();
+	if (current_cpu_type() == CPU_CAVIUM_OCTEON3)
+		bist_val = read_octeon_c0_errctl();
+	else
+		bist_val = read_octeon_c0_dcacheerr();
 	if (bist_val & 1)
 		pr_err("Core%d L1 Dcache parity error: "
 		       "CacheErr(dcache) = 0x%llx\n",
@@ -392,7 +395,9 @@ void octeon_check_cpu_bist(void)
 	if (bist_val & mask)
 		pr_err("Core%d BIST Failure: COP0_CVM_MEM_CTL = 0x%llx\n",
 		       coreid, bist_val);
-
+	if (current_cpu_type() == CPU_CAVIUM_OCTEON3)
+		write_octeon_c0_errctl(1);
+	else
 		write_octeon_c0_dcacheerr(0);
 }
 
@@ -583,7 +588,8 @@ void octeon_user_io_init(void)
 	cvmmemctl.s.cvmsegenau = 0;
 
 	/* Enable TLB parity error reporting on OCTEON II */
-	if (current_cpu_type() == CPU_CAVIUM_OCTEON2)
+	if (current_cpu_type() == CPU_CAVIUM_OCTEON2 ||
+	    current_cpu_type() == CPU_CAVIUM_OCTEON3)
 		cvmmemctl.s.tlbperrena = 1;
 
 	write_c0_cvmmemctl(cvmmemctl.u64);

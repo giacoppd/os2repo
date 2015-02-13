@@ -8,7 +8,10 @@
 #ifndef __ASM_OCTEON_OCTEON_H
 #define __ASM_OCTEON_OCTEON_H
 
+#include <linux/irqflags.h>
+#include <linux/notifier.h>
 #include <asm/octeon/cvmx.h>
+#include <linux/irq.h>
 
 extern uint64_t octeon_bootmem_alloc_range_phys(uint64_t size,
 						uint64_t alignment,
@@ -264,5 +267,14 @@ typedef void (*octeon_irq_ip4_handler_t)(void);
 void octeon_irq_set_ip4_handler(octeon_irq_ip4_handler_t);
 
 extern void octeon_fixup_irqs(void);
+
+int register_co_cache_error_notifier(struct notifier_block *nb);
+int unregister_co_cache_error_notifier(struct notifier_block *nb);
+#define CO_CACHE_ERROR_RECOVERABLE 0
+#define CO_CACHE_ERROR_UNRECOVERABLE 1
+#define CO_CACHE_ERROR_WB_PARITY 2
+#define CO_CACHE_ERROR_TLB_PARITY 3
+
+extern unsigned long long cache_err_dcache[NR_CPUS];
 
 #endif /* __ASM_OCTEON_OCTEON_H */
