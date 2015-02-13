@@ -17,7 +17,9 @@ OUTPUT_ARCH(mips)
 ENTRY(kernel_entry)
 PHDRS {
 	text PT_LOAD FLAGS(7);	/* RWX */
+#ifndef CONFIG_DISABLE_ELF_NOTE_HEADER
 	note PT_NOTE FLAGS(4);	/* R__ */
+#endif
 }
 
 #ifdef CONFIG_32BIT
@@ -70,8 +72,12 @@ SECTIONS
 		*(__dbe_table)
 		__stop___dbe_table = .;
 	}
-
-	NOTES :text :note
+#ifdef CONFIG_DISABLE_ELF_NOTE_HEADER
+#define NOTES_HEADER
+#else
+#define NOTES_HEADER :note
+#endif
+	NOTES :text NOTES_HEADER
 	.dummy : { *(.dummy) } :text
 
 	_sdata = .;			/* Start of data section */
