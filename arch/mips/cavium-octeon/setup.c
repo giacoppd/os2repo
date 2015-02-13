@@ -604,7 +604,7 @@ void octeon_user_io_init(void)
 
 	/* Setup of CVMSEG is done in kernel-entry-init.h */
 	if (smp_processor_id() == 0)
-		pr_notice("CVMSEG size: %d cache lines (%d bytes)\n",
+		pr_notice("CVMSEG size: %u cache lines (%u bytes)\n",
 			  octeon_cvmseg_lines,
 			  octeon_cvmseg_lines * 128);
 
