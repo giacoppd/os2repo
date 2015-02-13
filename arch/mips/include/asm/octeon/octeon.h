@@ -127,7 +127,19 @@ union octeon_cvmemctl {
 		/* RO 1 = BIST fail, 0 = BIST pass */
 		uint64_t wbfbist:1;
 		/* Reserved */
-		uint64_t reserved:22;
+		uint64_t reserved:13;
+		/* When set, TLB parity errors can occur. */
+		uint64_t tlbperrena:1;
+		/* OCTEON II - When set, CVMSET LM parity errors are enabled. */
+		uint64_t lmemperrena:1;
+		/* OCTEON II - If set, NUDGE/WRITEBACK_INVALIDATE,
+		 * NUDGE_WB, EVICT_SOON, LC, CONT_WRITE_BACK,
+		 * PREPARE_FOR_STORE and PREPARE_FOR_STORE_THROUGH
+		 * prefetch operations become NOPs. */
+		uint64_t disstpref:1;
+		/* OCTEON II - If set, NORMAL and NOTL2 prefetch
+		 * operations become NOPs. */
+		uint64_t disldpref:1;
 		/* R/W If set, marked write-buffer entries time out
 		 * the same as as other entries; if clear, marked
 		 * write-buffer entries use the maximum timeout. */

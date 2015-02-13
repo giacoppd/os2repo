@@ -687,6 +687,7 @@ end_led:
 	alias_prop = fdt_getprop(initial_boot_params, aliases,
 				 "usbn", NULL);
 	if (alias_prop) {
+
 		int usbn = fdt_path_offset(initial_boot_params, alias_prop);
 
 		if (usbn >= 0 && (current_cpu_type() == CPU_CAVIUM_OCTEON2 ||
