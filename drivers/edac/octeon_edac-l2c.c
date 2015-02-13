@@ -62,8 +62,57 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
 {
 	union cvmx_l2c_err_tdtx err_tdtx, err_tdtx_reset;
 	union cvmx_l2c_err_ttgx err_ttgx, err_ttgx_reset;
+	union cvmx_l2c_int_reg l2c_int_reg;
+	bool l2c_clear = false;
 	char buf1[64];
 	char buf2[80];
+
+	/* Poll for L2C bigrd/bigwr/holewr/holerd */
+	l2c_int_reg.u64 = cvmx_read_csr(CVMX_L2C_INT_REG);
+	if (l2c_int_reg.s.bigrd) {
+		snprintf(buf1, sizeof(buf1),
+			"Read reference past L2C_BIG_CTL[MAXDRAM] occurred:");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.bigwr) {
+		snprintf(buf1, sizeof(buf1),
+			"Write reference past L2C_BIG_CTL[MAXDRAM] occurred:");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.vrtpe) {
+		snprintf(buf1, sizeof(buf1),
+			"L2C_VRT_MEM read found a parity error");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.vrtadrng) {
+		snprintf(buf1, sizeof(buf1),
+			"Address outside of virtualization range");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.vrtidrng) {
+		snprintf(buf1, sizeof(buf1),
+			"Virtualization ID out of range");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.vrtwr) {
+		snprintf(buf1, sizeof(buf1),
+			"Virtualization ID prevented a write");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.holewr) {
+		snprintf(buf1, sizeof(buf1),
+			"Write reference to 256MB hole occurred:");
+		l2c_clear = true;
+	}
+	if (l2c_int_reg.s.holerd) {
+		snprintf(buf1, sizeof(buf1),
+			"Read reference to 256MB hole occurred:");
+		l2c_clear = true;
+	}
+	if (l2c_clear) {
+		edac_device_handle_ce(l2c, tad, 1, buf1);
+		cvmx_write_csr(CVMX_L2C_INT_REG, l2c_int_reg.u64);
+	}
 
 	err_tdtx_reset.u64 = 0;
 	err_tdtx.u64 = cvmx_read_csr(CVMX_L2C_ERR_TDTX(tad));
