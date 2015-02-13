@@ -409,6 +409,8 @@ static int dwc3_probe(struct platform_device *pdev)
 	if (dwc->maximum_speed == USB_SPEED_UNKNOWN)
 		dwc->maximum_speed = USB_SPEED_SUPER;
 
+#if !defined(CONFIG_USB_XHCI_HCD_OCTEON) && !defined(CONFIG_USB_XHCI_HCD_OCTEON_MODULE)
+
 	if (IS_ERR(dwc->usb2_phy)) {
 		ret = PTR_ERR(dwc->usb2_phy);
 
@@ -438,6 +440,7 @@ static int dwc3_probe(struct platform_device *pdev)
 		dev_err(dev, "no usb3 phy configured\n");
 		return -EPROBE_DEFER;
 	}
+#endif
 
 	dwc->xhci_resources[0].start = res->start;
 	dwc->xhci_resources[0].end = dwc->xhci_resources[0].start +
