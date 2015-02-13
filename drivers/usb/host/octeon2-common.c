@@ -3,12 +3,14 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 2010, 2011 Cavium Networks
+ * Copyright (C) 2010 - 2012 Cavium, Inc.
  */
 
-#include <linux/module.h>
+#include <linux/device.h>
+#include <linux/export.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
+#include <linux/of.h>
 
 #include <asm/octeon/octeon.h>
 #include <asm/octeon/cvmx-uctlx-defs.h>
@@ -17,13 +19,16 @@ static DEFINE_MUTEX(octeon2_usb_clocks_mutex);
 
 static int octeon2_usb_clock_start_cnt;
 
-void octeon2_usb_clocks_start(void)
+void octeon2_usb_clocks_start(struct device *dev)
 {
 	u64 div;
 	union cvmx_uctlx_if_ena if_ena;
 	union cvmx_uctlx_clk_rst_ctl clk_rst_ctl;
 	union cvmx_uctlx_uphy_ctl_status uphy_ctl_status;
 	union cvmx_uctlx_uphy_portx_ctl_status port_ctl_status;
+	struct device_node *uctl_node;
+	u32 clock_rate = 12000000;
+	bool is_crystal_clock = false;
 	int i;
 	unsigned long io_clk_64_to_ns;
 
@@ -35,6 +40,26 @@ void octeon2_usb_clocks_start(void)
 		goto exit;
 
 	io_clk_64_to_ns = 64000000000ull / octeon_get_io_clock_rate();
+	if (dev->of_node) {
+		const char *clock_type;
+
+		uctl_node = of_get_parent(dev->of_node);
+		if (!uctl_node) {
+			pr_err("No UCTL device node\n");
+			goto exit;
+		}
+		i = of_property_read_u32(uctl_node,
+						"refclk-frequency", &clock_rate);
+		if (i) {
+			pr_err("No UCTL \"refclk-frequency\"\n");
+			goto exit;
+		}
+		i = of_property_read_string(uctl_node,
+						"refclk-type", &clock_type);
+
+		if (!i && strcmp("crystal", clock_type) == 0)
+			is_crystal_clock = true;
+	}
 
 	/*
 	 * Step 1: Wait for voltages stable.  That surely happened
@@ -67,8 +92,22 @@ void octeon2_usb_clocks_start(void)
 
 	/* 3b */
 	/* 12MHz crystal. */
-	clk_rst_ctl.s.p_refclk_sel = 0;
-	clk_rst_ctl.s.p_refclk_div = 0;
+	clk_rst_ctl.s.p_refclk_sel = is_crystal_clock ? 0 : 1;
+	switch (clock_rate) {
+	default:
+		pr_err("Invalid UCTL clock rate of %u, using 12000000 instead\n",
+			clock_rate);
+		/* Fall through */
+	case 12000000:
+		clk_rst_ctl.s.p_refclk_div = 0;
+		break;
+	case 24000000:
+		clk_rst_ctl.s.p_refclk_div = 1;
+		break;
+	case 48000000:
+		clk_rst_ctl.s.p_refclk_div = 2;
+		break;
+	}
 	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
 
 	/* 3c */

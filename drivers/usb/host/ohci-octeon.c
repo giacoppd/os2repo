@@ -7,7 +7,7 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 2010 Cavium Networks
+ * Copyright (C) 2010 - 2012 Cavium, Inc.
  *
  */
 
@@ -19,14 +19,14 @@
 #define OCTEON_OHCI_HCD_NAME "octeon-ohci"
 
 /* Common clock init code.  */
-void octeon2_usb_clocks_start(void);
+void octeon2_usb_clocks_start(struct device *dev);
 void octeon2_usb_clocks_stop(void);
 
-static void ohci_octeon_hw_start(void)
+static void ohci_octeon_hw_start(struct device *dev)
 {
 	union cvmx_uctlx_ohci_ctl ohci_ctl;
 
-	octeon2_usb_clocks_start();
+	octeon2_usb_clocks_start(dev);
 
 	ohci_ctl.u64 = cvmx_read_csr(CVMX_UCTLX_OHCI_CTL(0));
 	ohci_ctl.s.l2c_addr_msb = 0;
@@ -144,7 +144,7 @@ static int ohci_octeon_drv_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-	ohci_octeon_hw_start();
+	ohci_octeon_hw_start(&pdev->dev);
 
 	hcd->regs = reg_base;
 
@@ -189,6 +189,14 @@ static int ohci_octeon_drv_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static struct of_device_id ohci_octeon_match[] = {
+	{
+		.compatible = "cavium,octeon-6335-ohci",
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, ohci_octeon_match);
+
 static struct platform_driver ohci_octeon_driver = {
 	.probe		= ohci_octeon_drv_probe,
 	.remove		= ohci_octeon_drv_remove,
@@ -196,6 +204,7 @@ static struct platform_driver ohci_octeon_driver = {
 	.driver = {
 		.name	= OCTEON_OHCI_HCD_NAME,
 		.owner	= THIS_MODULE,
+		.of_match_table = ohci_octeon_match,
 	}
 };
 
