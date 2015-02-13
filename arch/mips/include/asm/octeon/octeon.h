@@ -268,6 +268,8 @@ void octeon_irq_set_ip4_handler(octeon_irq_ip4_handler_t);
 
 extern void octeon_fixup_irqs(void);
 
+int octeon_i2c_cvmx2i2c(unsigned int cvmx_twsi_bus_num);
+
 int register_co_cache_error_notifier(struct notifier_block *nb);
 int unregister_co_cache_error_notifier(struct notifier_block *nb);
 #define CO_CACHE_ERROR_RECOVERABLE 0

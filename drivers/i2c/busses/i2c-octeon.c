@@ -80,6 +80,7 @@ struct octeon_i2c {
 	struct device *dev;
 	int broken_irq_mode;
 	bool octeon_i2c_hlc_enabled;
+	int cvmx_channel;
 };
 
 /**
@@ -903,6 +904,17 @@ static int octeon_i2c_initlowlevel(struct octeon_i2c *i2c)
 	return 0;
 }
 
+static int octeon_i2c_cvmx_map[2] = {-ENODEV, -ENODEV};
+
+int octeon_i2c_cvmx2i2c(unsigned int cvmx_twsi_bus_num)
+{
+	if (cvmx_twsi_bus_num < ARRAY_SIZE(octeon_i2c_cvmx_map))
+		return octeon_i2c_cvmx_map[cvmx_twsi_bus_num];
+	else
+		return -ENODEV;
+}
+EXPORT_SYMBOL(octeon_i2c_cvmx2i2c);
+
 static int octeon_i2c_probe(struct platform_device *pdev)
 {
 	int irq, result = 0;
@@ -920,6 +932,7 @@ static int octeon_i2c_probe(struct platform_device *pdev)
 		result = -ENOMEM;
 		goto out;
 	}
+	i2c->cvmx_channel = -1;
 	i2c->dev = &pdev->dev;
 
 	res_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -946,6 +959,17 @@ static int octeon_i2c_probe(struct platform_device *pdev)
 	}
 
 	i2c->sys_freq = octeon_get_io_clock_rate();
+
+	switch (res_mem->start) {
+	case 0x1180000001000:
+		i2c->cvmx_channel = 0;
+		break;
+	case 0x1180000001200:
+		i2c->cvmx_channel = 1;
+		break;
+	default:
+		break;
+	}
 
 	if (!devm_request_mem_region(&pdev->dev, res_mem->start, resource_size(res_mem),
 				     res_mem->name)) {
@@ -990,6 +1014,8 @@ static int octeon_i2c_probe(struct platform_device *pdev)
 		goto out;
 	}
 	dev_info(i2c->dev, "version %s\n", DRV_VERSION);
+	if (i2c->cvmx_channel >= 0)
+		octeon_i2c_cvmx_map[i2c->cvmx_channel] = i2c->adap.nr;
 
 	return 0;
 
@@ -1001,6 +1027,8 @@ static int octeon_i2c_remove(struct platform_device *pdev)
 {
 	struct octeon_i2c *i2c = platform_get_drvdata(pdev);
 
+	if (i2c->cvmx_channel >= 0)
+		octeon_i2c_cvmx_map[i2c->cvmx_channel] = -ENODEV;
 	i2c_del_adapter(&i2c->adap);
 	return 0;
 };
