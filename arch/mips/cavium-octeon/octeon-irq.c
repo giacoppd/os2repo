@@ -1216,7 +1216,7 @@ static void __init octeon_irq_init_ciu(void)
 	if (OCTEON_IS_MODEL(OCTEON_CN58XX_PASS2_X) ||
 	    OCTEON_IS_MODEL(OCTEON_CN56XX_PASS2_X) ||
 	    OCTEON_IS_MODEL(OCTEON_CN52XX_PASS2_X) ||
-	    OCTEON_IS_MODEL(OCTEON_CN6XXX)) {
+	    OCTEON_IS_OCTEON2() || OCTEON_IS_OCTEON3()) {
 		chip = &octeon_irq_chip_ciu_v2;
 		chip_edge = &octeon_irq_chip_ciu_v2_edge;
 		chip_mbox = &octeon_irq_chip_ciu_mbox_v2;
@@ -1280,8 +1280,12 @@ static void __init octeon_irq_init_ciu(void)
 	/* CIU_1 */
 	for (i = 0; i < 16; i++)
 		octeon_irq_set_ciu_mapping(i + OCTEON_IRQ_WDOG0, 1, i + 0, 0, chip_wd, handle_level_irq);
-
-	octeon_irq_force_ciu_mapping(ciu_domain, OCTEON_IRQ_USB1, 1, 17);
+	if (octeon_has_feature(OCTEON_FEATURE_SRIO)) {
+		octeon_irq_set_ciu_mapping(OCTEON_IRQ_SRIO0, 1, 50, 0, chip, handle_level_irq);
+		octeon_irq_set_ciu_mapping(OCTEON_IRQ_SRIO1, 1, 51, 0, chip, handle_level_irq);
+		octeon_irq_set_ciu_mapping(OCTEON_IRQ_SRIO2, 1, 60, 0, chip, handle_level_irq);
+		octeon_irq_set_ciu_mapping(OCTEON_IRQ_SRIO3, 1, 61, 0, chip, handle_level_irq);
+	}
 
 	/* Enable the CIU lines */
 	set_c0_status(STATUSF_IP3 | STATUSF_IP2);
