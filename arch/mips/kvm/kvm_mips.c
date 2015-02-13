@@ -587,7 +587,7 @@ static int kvm_mips_get_reg(struct kvm_vcpu *vcpu,
 		v = (long)vcpu->arch.lo;
 		break;
 	case KVM_REG_MIPS_PC:
-		v = (long)vcpu->arch.pc;
+		v = (long)vcpu->arch.epc;
 		break;
 
 	case KVM_REG_MIPS_CP0_INDEX:
@@ -683,7 +683,7 @@ static int kvm_mips_set_reg(struct kvm_vcpu *vcpu,
 		vcpu->arch.lo = v;
 		break;
 	case KVM_REG_MIPS_PC:
-		vcpu->arch.pc = v;
+		vcpu->arch.epc = v;
 		break;
 
 	case KVM_REG_MIPS_CP0_INDEX:
@@ -915,7 +915,7 @@ int kvm_arch_vcpu_dump_regs(struct kvm_vcpu *vcpu)
 		return -1;
 
 	printk("VCPU Register Dump:\n");
-	printk("\tpc = 0x%08lx\n", vcpu->arch.pc);;
+	printk("\tepc = 0x%08lx\n", vcpu->arch.pc);
 	printk("\texceptions: %08lx\n", vcpu->arch.pending_exceptions);
 
 	for (i = 0; i < 32; i += 4) {
@@ -945,7 +945,7 @@ int kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	vcpu->arch.gprs[0] = 0; /* zero is special, and cannot be set. */
 	vcpu->arch.hi = regs->hi;
 	vcpu->arch.lo = regs->lo;
-	vcpu->arch.pc = regs->pc;
+	vcpu->arch.pc = regs->epc;
 
 	return 0;
 }
@@ -959,7 +959,7 @@ int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 
 	regs->hi = vcpu->arch.hi;
 	regs->lo = vcpu->arch.lo;
-	regs->pc = vcpu->arch.pc;
+	regs->pc = vcpu->arch.epc;
 
 	return 0;
 }
@@ -1038,7 +1038,7 @@ int kvm_mips_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu)
 {
 	uint32_t cause = vcpu->arch.host_cp0_cause;
 	uint32_t exccode = (cause >> CAUSEB_EXCCODE) & 0x1f;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long badvaddr = vcpu->arch.host_cp0_badvaddr;
 	enum emulation_result er = EMULATE_DONE;
 	int ret = RESUME_GUEST;

@@ -43,7 +43,7 @@ static gpa_t kvm_trap_emul_gva_to_gpa_cb(gva_t gva)
 static int kvm_trap_emul_handle_cop_unusable(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
 	int ret = RESUME_GUEST;
@@ -77,7 +77,7 @@ static int kvm_trap_emul_handle_cop_unusable(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_tlb_mod(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long badvaddr = vcpu->arch.host_cp0_badvaddr;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
@@ -124,7 +124,7 @@ static int kvm_trap_emul_handle_tlb_mod(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_tlb_st_miss(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long badvaddr = vcpu->arch.host_cp0_badvaddr;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
@@ -174,7 +174,7 @@ static int kvm_trap_emul_handle_tlb_st_miss(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_tlb_ld_miss(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long badvaddr = vcpu->arch.host_cp0_badvaddr;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
@@ -190,7 +190,7 @@ static int kvm_trap_emul_handle_tlb_ld_miss(struct kvm_vcpu *vcpu)
 		   || KVM_GUEST_KSEGX(badvaddr) == KVM_GUEST_KSEG23) {
 #ifdef DEBUG
 		kvm_debug("USER ADDR TLB ST fault: PC: %#lx, BadVaddr: %#lx\n",
-			  vcpu->arch.pc, badvaddr);
+			  vcpu->arch.epc, badvaddr);
 #endif
 
 		/* User Address (UA) fault, this could happen if
@@ -228,7 +228,7 @@ static int kvm_trap_emul_handle_tlb_ld_miss(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_addr_err_st(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long badvaddr = vcpu->arch.host_cp0_badvaddr;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
@@ -261,7 +261,7 @@ static int kvm_trap_emul_handle_addr_err_st(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_addr_err_ld(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long badvaddr = vcpu->arch.host_cp0_badvaddr;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
@@ -294,7 +294,7 @@ static int kvm_trap_emul_handle_addr_err_ld(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_syscall(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
 	int ret = RESUME_GUEST;
@@ -312,7 +312,7 @@ static int kvm_trap_emul_handle_syscall(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_res_inst(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
 	int ret = RESUME_GUEST;
@@ -330,7 +330,7 @@ static int kvm_trap_emul_handle_res_inst(struct kvm_vcpu *vcpu)
 static int kvm_trap_emul_handle_break(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.pc;
+	uint32_t __user *opc = (uint32_t __user *) vcpu->arch.epc;
 	unsigned long cause = vcpu->arch.host_cp0_cause;
 	enum emulation_result er = EMULATE_DONE;
 	int ret = RESUME_GUEST;
