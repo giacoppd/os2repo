@@ -46,6 +46,10 @@ struct pt_regs {
 	unsigned long long mpl[6];	  /* MTM{0-5} */
 	unsigned long long mtp[6];	  /* MTP{0-5} */
 #endif
+#ifdef CONFIG_KVM_MIPS_VZ
+	unsigned int cp0_badinstr;      /* Only populated on do_page_fault_{0,1} */
+	unsigned int cp0_badinstrp;     /* Only populated on do_page_fault_{0,1} */
+#endif
 } __aligned(8);
 
 struct task_struct;

@@ -70,6 +70,10 @@ void output_ptreg_defines(void)
 	OFFSET(PT_MPL, pt_regs, mpl);
 	OFFSET(PT_MTP, pt_regs, mtp);
 #endif /* CONFIG_CPU_CAVIUM_OCTEON */
+#ifdef CONFIG_KVM_MIPS_VZ
+	OFFSET(PT_BADINSTR, pt_regs, cp0_badinstr);
+	OFFSET(PT_BADINSTRP, pt_regs, cp0_badinstrp);
+#endif
 	DEFINE(PT_SIZE, sizeof(struct pt_regs));
 	BLANK();
 }
