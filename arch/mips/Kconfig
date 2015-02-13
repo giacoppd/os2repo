@@ -709,6 +709,7 @@ config CAVIUM_OCTEON_SOC
 	select SYS_SUPPORTS_64BIT_KERNEL
 	select SYS_SUPPORTS_BIG_ENDIAN
 	select EDAC_SUPPORT
+	select SYS_SUPPORTS_LITTLE_ENDIAN
 	select SYS_SUPPORTS_HOTPLUG_CPU
 	select SYS_HAS_EARLY_PRINTK
 	select SYS_HAS_CPU_CAVIUM_OCTEON
@@ -716,10 +717,10 @@ config CAVIUM_OCTEON_SOC
 	select HW_HAS_PCI
 	select ZONE_DMA32
 	select HOLES_IN_ZONE
-	select MIPS_NR_CPU_NR_MAP_1024
 	select ARCH_REQUIRE_GPIOLIB
 	select NR_CPUS_DEFAULT_64
 	select MIPS_NR_CPU_NR_MAP_1024
+	select SYS_SUPPORTS_NUMA
 	help
 	  This option supports all of the Octeon reference boards from Cavium
 	  Networks. It builds a kernel that dynamically determines the Octeon
@@ -2156,6 +2157,7 @@ config SYS_SUPPORTS_NUMA
 
 config NODES_SHIFT
 	int
+	default "1" if CAVIUM_OCTEON_SOC
 	default "6"
 	depends on NEED_MULTIPLE_NODES
 
