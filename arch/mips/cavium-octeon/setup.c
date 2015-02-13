@@ -49,6 +49,7 @@
 #include <asm/octeon/cvmx-mio-defs.h>
 #include <asm/octeon/cvmx-rst-defs.h>
 #include <asm/octeon/cvmx-sso-defs.h>
+#include <asm/octeon/cvmx-debug.h>
 
 #define SDK_VERSION "3.1.1"
 
@@ -819,17 +820,6 @@ void __init prom_init(void)
 	octeon_write_lcd("LinuxSMP");
 #else
 	octeon_write_lcd("Linux");
-#endif
-
-#ifdef CONFIG_CAVIUM_GDB
-	/*
-	 * When debugging the linux kernel, force the cores to enter
-	 * the debug exception handler to break in.
-	 */
-	if (octeon_get_boot_debug_flag()) {
-		cvmx_write_csr(CVMX_CIU_DINT, 1 << cvmx_get_core_num());
-		cvmx_read_csr(CVMX_CIU_DINT);
-	}
 #endif
 
 	octeon_setup_delays();
