@@ -102,7 +102,7 @@ get_new_asid(unsigned long cpu)
 
 	if (! ((asid += ASID_INC) & ASID_MASK) ) {
 		if (cpu_has_vtag_icache)
-			flush_icache_all();
+			local_flush_icache_all();
 #if IS_ENABLED(CONFIG_KVM_MIPS_TE)
 		kvm_local_flush_tlb_all();      /* start new asid cycle */
 #else
