@@ -27,7 +27,10 @@
 	ori     k0, k0, 0x1c0 | 54
 	/* Store the CVMMEMCTL value */
 	dmtc0   k0, $11, 7
-	/* Restore K0 from the debug scratch register */
+	/*
+	 * Restore K0 from the debug scratch register, it was saved in
+	 * the boot-vector code.
+	 */
 	dmfc0   k0, $31
 
 	/*
