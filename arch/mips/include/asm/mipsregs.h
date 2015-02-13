@@ -669,6 +669,21 @@
 #define MIPS_FPIR_F64		(_ULCAST_(1) << 22)
 
 /*
+ * These defines are used on Octeon to implement fast access to the
+ * thread pointer from userspace. Octeon uses a 64bit location in
+ * CVMSEG to store the thread pointer for quick access.
+ *
+ * We use the second CVMSEG line.  TLB refill uses location -16 (and
+ * below), fast access is -8 (both from the top of the area).
+ */
+#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+#define FAST_ACCESS_THREAD_OFFSET (2 * 128 - 8 - 32768)
+#define FAST_ACCESS_THREAD_REGISTER                     \
+	(*(unsigned long *)(FAST_ACCESS_THREAD_OFFSET))
+#endif
+#define CAVIUM_OCTEON_SCRATCH_OFFSET (2 * 128 - 16 - 32768)
+
+/*
  * Bits in the MIPS32 Memory Segmentation registers.
  */
 #define MIPS_SEGCFG_PA_SHIFT	9
