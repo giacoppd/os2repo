@@ -18,6 +18,7 @@
 #include <asm/processor.h>
 
 #include <linux/kvm_host.h>
+#include <asm/kvm_mips_vz.h>
 
 void output_ptreg_defines(void)
 {
@@ -134,6 +135,12 @@ void output_thread_defines(void)
 	       thread.cp0_baduaddr);
 	OFFSET(THREAD_ECODE, task_struct, \
 	       thread.error_code);
+#ifdef CONFIG_KVM_MIPS_VZ
+	OFFSET(THREAD_VCPU, task_struct, thread.vcpu);
+	OFFSET(THREAD_MM_ASID, task_struct, thread.mm_asid);
+	OFFSET(THREAD_GUEST_ASID, task_struct, thread.guest_asid);
+#endif
+
 	BLANK();
 }
 
@@ -342,6 +349,8 @@ void output_pbe_defines(void)
 void output_kvm_defines(void)
 {
 	COMMENT(" KVM/MIPS Specfic offsets. ");
+	/*OFFSET(KVM_ARCH_IMPL, kvm, arch.impl);*/
+	OFFSET(KVM_VCPU_KVM, kvm_vcpu, kvm);
 	DEFINE(VCPU_ARCH_SIZE, sizeof(struct kvm_vcpu_arch));
 	OFFSET(VCPU_RUN, kvm_vcpu, run);
 	OFFSET(VCPU_HOST_ARCH, kvm_vcpu, arch);
@@ -398,7 +407,13 @@ void output_kvm_defines(void)
 	OFFSET(VCPU_GUEST_KERNEL_ASID, kvm_vcpu_arch, guest_kernel_asid);
 	OFFSET(VCPU_GUEST_USER_ASID, kvm_vcpu_arch, guest_user_asid);
 
+	OFFSET(KVM_MIPS_VCPU_VZ_INJECTED_IPX, kvm_mips_vcpu_vz, injected_ipx);
+
 	OFFSET(COP0_TLB_HI, mips_coproc, reg[MIPS_CP0_TLB_HI][0]);
 	OFFSET(COP0_STATUS, mips_coproc, reg[MIPS_CP0_STATUS][0]);
+	BLANK();
+
+	COMMENT(" Linux struct kvm mipsvz offsets. ");
+	OFFSET(KVM_MIPS_VZ_PGD, kvm_mips_vz, pgd);
 	BLANK();
 }
