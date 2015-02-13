@@ -261,5 +261,4 @@ config OCTEON_ERROR_INJECTOR
 # To be enabled later
 # source "arch/mips/cavium-octeon/executive/Kconfig"
 
-endif # CPU_CAVIUM_OCTEON
-
+endif #CAVIUM_OCTEON_SOC
