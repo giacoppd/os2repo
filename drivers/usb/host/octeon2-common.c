@@ -163,6 +163,20 @@ void octeon2_usb_clocks_start(void)
 	clk_rst_ctl.s.p_prst = 1;
 	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
 
+	/* Step 11b */
+	udelay(1);
+
+	/* Step 11c */
+	clk_rst_ctl.s.p_prst = 0;
+	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
+
+	/* Step 11d */
+	mdelay(1);
+
+	/* Step 11e */
+	clk_rst_ctl.s.p_prst = 1;
+	cvmx_write_csr(CVMX_UCTLX_CLK_RST_CTL(0), clk_rst_ctl.u64);
+
 	/* Step 12: Wait 1 uS. */
 	udelay(1);
 
