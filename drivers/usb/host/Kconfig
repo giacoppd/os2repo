@@ -30,6 +30,11 @@ config USB_XHCI_HCD_OCTEON
 	depends on USB_XHCI_HCD && CAVIUM_OCTEON_SOC
 	default y
 
+config USB_XHCI_HCD_OCTEON
+	tristate
+	depends on USB_XHCI_HCD && CAVIUM_OCTEON_SOC
+	default y
+
 if USB_XHCI_HCD
 
 config USB_XHCI_PLATFORM
