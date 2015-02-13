@@ -426,20 +426,27 @@ int __init octeon_prune_device_tree(void)
 	else
 		max_port = 1;
 
-	for (i = 0; i < 2; i++) {
-		int i2c;
+	/*
+	 * Landbird NIC card does not have PHY. Probing MDIO is putting
+	 * XAUI in interface 0 in bad state.
+	 */
+	if (octeon_bootinfo->board_type == CVMX_BOARD_TYPE_NIC_XLE_10G)
+		max_port = 0;
+
+	for (i = 0; i < 4; i++) {
+		int smi;
 		snprintf(name_buffer, sizeof(name_buffer),
 			 "twsi%d", i);
 		alias_prop = fdt_getprop(initial_boot_params, aliases,
 					name_buffer, NULL);
 
 		if (alias_prop) {
-			i2c = fdt_path_offset(initial_boot_params, alias_prop);
-			if (i2c < 0)
+			smi = fdt_path_offset(initial_boot_params, alias_prop);
+			if (smi < 0)
 				continue;
 			if (i >= max_port) {
 				pr_debug("Deleting twsi%d\n", i);
-				fdt_nop_node(initial_boot_params, i2c);
+				fdt_nop_node(initial_boot_params, smi);
 				fdt_nop_property(initial_boot_params, aliases,
 						 name_buffer);
 			}
