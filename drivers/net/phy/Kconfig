@@ -54,6 +54,13 @@ config VITESSE_PHY
         ---help---
           Currently supports the vsc8244
 
+config VSC848X_PHY
+	tristate "Drivers for the Vitesse 10G PHYs"
+	depends on OF_MEMORY_ACCESSOR
+	help
+	  Driver for Vitesse vsc848x single, dual and quad 10G PHY devices.
+	  Currently supports the vsc8488, vsc8486 and vsc8484 chips
+
 config SMSC_PHY
 	tristate "Drivers for SMSC PHYs"
 	---help---
