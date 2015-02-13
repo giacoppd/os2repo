@@ -22,6 +22,7 @@ obj-$(CONFIG_MTD)		      += flash_setup.o
 obj-$(CONFIG_SMP)		      += smp.o
 obj-$(CONFIG_OCTEON_ILM)	      += oct_ilm.o
 obj-$(CONFIG_SYSFS)                   += octeon-power-throttle.o
+obj-$(CONFIG_SYSFS)                   += cacheinfo.o
 obj-$(CONFIG_CAVIUM_OCTEON_ERROR_TREE) += octeon-error-tree.o octeon-78xx-errors.o
 obj-$(CONFIG_OCTEON_ERROR_INJECTOR)    += octeon-error-injector.o
 obj-$(CONFIG_CAVIUM_OCTEON_RAPIDIO)     += octeon-rapidio.o
