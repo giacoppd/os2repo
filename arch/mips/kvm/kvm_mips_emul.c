@@ -892,7 +892,7 @@ int kvm_mips_sync_icache(unsigned long va, struct kvm_vcpu *vcpu)
 	pfn = kvm->arch.guest_pmap[gfn];
 	pa = (pfn << PAGE_SHIFT) | offset;
 
-	printk("%s: va: %#lx, unmapped: %#x\n", __func__, va, CKSEG0ADDR(pa));
+	printk("%s: va: %#lx, unmapped: %#lx\n", __func__, va, CKSEG0ADDR(pa));
 
 	mips32_SyncICache(CKSEG0ADDR(pa), 32);
 	return 0;
@@ -916,8 +916,6 @@ kvm_mips_emulate_cache(uint32_t inst, uint32_t *opc, uint32_t cause,
 		       struct kvm_run *run, struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
-	extern void (*r4k_blast_dcache) (void);
-	extern void (*r4k_blast_icache) (void);
 	enum emulation_result er = EMULATE_DONE;
 	int32_t offset, cache, op_inst, op, base;
 	struct kvm_vcpu_arch *arch = &vcpu->arch;
@@ -954,9 +952,9 @@ kvm_mips_emulate_cache(uint32_t inst, uint32_t *opc, uint32_t cause,
 		     arch->gprs[base], offset);
 
 		if (cache == MIPS_CACHE_DCACHE)
-			r4k_blast_dcache();
+			__flush_cache_all();
 		else if (cache == MIPS_CACHE_ICACHE)
-			r4k_blast_icache();
+			__flush_cache_all();
 		else {
 			printk("%s: unsupported CACHE INDEX operation\n",
 			       __func__);
