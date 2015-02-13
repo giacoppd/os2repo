@@ -395,9 +395,11 @@ void octeon_check_cpu_bist(void)
 	if (bist_val & mask)
 		pr_err("Core%d BIST Failure: COP0_CVM_MEM_CTL = 0x%llx\n",
 		       coreid, bist_val);
-	if (current_cpu_type() == CPU_CAVIUM_OCTEON3)
-		write_octeon_c0_errctl(1);
-	else
+	if (current_cpu_type() == CPU_CAVIUM_OCTEON3) {
+		bist_val = read_octeon_c0_errctl();
+		bist_val |= 1;
+		write_octeon_c0_errctl(bist_val);
+	} else
 		write_octeon_c0_dcacheerr(0);
 }
 
