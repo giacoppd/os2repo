@@ -76,6 +76,12 @@ config BCM87XX_PHY
 	help
 	  Currently supports the BCM8706 and BCM8727 10G Ethernet PHYs.
 
+config CS4318_PHY
+	tristate "Driver for Cortina cs4318 quad-10G Ethernet PHY"
+	help
+	  Currently supports only the Cortina cs4318 PHY.  This may be
+	  configured as either a quad-RXAUI or dual-XAUI device.
+
 config ICPLUS_PHY
 	tristate "Drivers for ICPlus PHYs"
 	---help---
