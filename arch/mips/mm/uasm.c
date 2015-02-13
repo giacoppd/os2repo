@@ -54,7 +54,7 @@ enum opcode {
 	insn_or, insn_ori, insn_pref, insn_rfe, insn_rotr, insn_sc, insn_scd,
 	insn_sd, insn_sll, insn_sra, insn_srl, insn_subu, insn_sw,
 	insn_syscall, insn_tlbp, insn_tlbr, insn_tlbwi, insn_tlbwr, insn_xor,
-	insn_xori,
+	insn_xori, insn_zcb, insn_zcbt
 };
 
 struct insn {
@@ -283,6 +283,8 @@ I_u1u2s3(_bbit0);
 I_u1u2s3(_bbit1);
 I_u3u1u2(_lwx)
 I_u3u1u2(_ldx)
+I_u1(_zcb);
+I_u1(_zcbt);
 
 #ifdef CONFIG_CPU_CAVIUM_OCTEON
 #include <asm/octeon/octeon.h>
