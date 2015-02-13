@@ -121,7 +121,7 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
 		if (!present)
 			return -ENXIO;
 
-		cfg0.u64 = cvmx_read_csr(CVMX_LMCX_MEM_CFG0(0));
+		cfg0.u64 = cvmx_read_csr(CVMX_LMCX_MEM_CFG0(mc));
 		if (!cfg0.s.ecc_ena) {
 			dev_info(&pdev->dev, "Disabled (ECC not enabled)\n");
 			return 0;
