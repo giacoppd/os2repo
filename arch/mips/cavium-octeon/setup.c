@@ -1394,6 +1394,7 @@ void __init device_tree_init(void)
 
 	if (octeon_bootinfo->minor_version >= 3 && octeon_bootinfo->fdt_addr) {
 		fdt = phys_to_virt(octeon_bootinfo->fdt_addr);
+		pr_info("Using passed Device Tree <%p>.\n", fdt);
 		if (fdt_check_header(fdt))
 			panic("Corrupt Device Tree passed to kernel.");
 		dt_size = be32_to_cpu(fdt->totalsize);
@@ -1417,8 +1418,6 @@ void __init device_tree_init(void)
 	if (do_prune) {
 		octeon_prune_device_tree();
 		pr_info("Using internal Device Tree.\n");
-	} else {
-		pr_info("Using passed Device Tree.\n");
 	}
 	unflatten_device_tree();
 }
