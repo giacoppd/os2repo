@@ -1549,7 +1549,14 @@ sigill:
 	    ("Unhandled kernel unaligned access or invalid instruction", regs);
 	force_sig(SIGILL, current);
 }
-
+#ifdef CONFIG_CPU_CAVIUM_OCTEON
+#include <asm/octeon/octeon.h>
+/*
+ * modified in kernel-entry-init.h, must have an initial value to keep
+ * it from being clobbered when bss is zeroed.
+ */
+u32 octeon_cvmseg_lines = 2;
+#endif
 asmlinkage void do_ade(struct pt_regs *regs)
 {
 	enum ctx_state prev_state;

@@ -40,9 +40,13 @@
 #include <asm/perf_event.h>
 
 #include <asm/octeon/octeon.h>
+#include <asm/octeon/octeon-boot-info.h>
 #include <asm/octeon/pci-octeon.h>
 #include <asm/octeon/cvmx-mio-defs.h>
 #include <asm/octeon/cvmx-rst-defs.h>
+#include <asm/octeon/cvmx-sso-defs.h>
+
+#define SDK_VERSION "3.1.1"
 
 extern struct plat_smp_ops octeon_smp_ops;
 
@@ -59,6 +63,11 @@ struct cvmx_bootinfo *octeon_bootinfo;
 EXPORT_SYMBOL(octeon_bootinfo);
 
 static unsigned long long RESERVE_LOW_MEM = 0ull;
+
+const char octeon_not_compatible[] =
+	"ERROR: CONFIG_CAVIUM_OCTEON2 not compatible with this processor\r\n"
+	"You must rebuild the kernel to be able to use it on this system.\r\n";
+
 #ifdef CONFIG_KEXEC
 #ifdef CONFIG_SMP
 /*
@@ -496,7 +505,6 @@ const char *get_system_type(void)
 void octeon_user_io_init(void)
 {
 	union octeon_cvmemctl cvmmemctl;
-	union cvmx_pow_nw_tim nm_tim;
 
 	/* Get the current settings for CP0_CVMMEMCTL_REG */
 	cvmmemctl.u64 = read_c0_cvmmemctl();
@@ -614,10 +622,20 @@ void octeon_user_io_init(void)
 		fau_timeout.s.tout_enb = 0;
 		cvmx_write_csr(CVMX_IOB_FAU_TIMEOUT, fau_timeout.u64);
 	}
-	nm_tim.u64 = 0;
-	/* 4096 cycles */
-	nm_tim.s.nw_tim = 3;
-	cvmx_write_csr(CVMX_POW_NW_TIM, nm_tim.u64);
+
+	if (OCTEON_IS_MODEL(OCTEON_CN68XX)) {
+		union cvmx_sso_nw_tim nm_tim;
+		nm_tim.u64 = 0;
+		/* 4096 cycles */
+		nm_tim.s.nw_tim = 3;
+		cvmx_write_csr(CVMX_SSO_NW_TIM, nm_tim.u64);
+	} else if (!OCTEON_IS_MODEL(OCTEON_CN78XX)) {
+		union cvmx_pow_nw_tim nm_tim;
+		nm_tim.u64 = 0;
+		/* 4096 cycles */
+		nm_tim.s.nw_tim = 3;
+		cvmx_write_csr(CVMX_POW_NW_TIM, nm_tim.u64);
+	}
 
 	write_octeon_c0_icacheerr(0);
 	write_c0_derraddr1(0);
@@ -855,7 +873,7 @@ void __init prom_init(void)
 	if (OCTEON_IS_MODEL(OCTEON_CN38XX_PASS2) ||
 	    OCTEON_IS_MODEL(OCTEON_CN31XX))
 		cvmx_write_csr(CVMX_CIU_SOFT_BIST, 0);
-	else
+	else if (!OCTEON_IS_MODEL(OCTEON_CN78XX))
 		cvmx_write_csr(CVMX_CIU_SOFT_BIST, 1);
 
 	/* Default to 64MB in the simulator to speed things up */
@@ -944,6 +962,11 @@ void __init prom_init(void)
 
 	octeon_user_io_init();
 	octeon_setup_smp();
+
+#ifdef CONFIG_CAVIUM_GDB
+	cvmx_debug_init();
+#endif
+	pr_info("Cavium Inc. SDK-" SDK_VERSION "\n");
 }
 
 #ifdef CONFIG_HW_PERF_EVENTS

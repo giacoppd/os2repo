@@ -718,6 +718,8 @@ config CAVIUM_OCTEON_SOC
 	select HOLES_IN_ZONE
 	select MIPS_NR_CPU_NR_MAP_1024
 	select ARCH_REQUIRE_GPIOLIB
+	select NR_CPUS_DEFAULT_64
+	select MIPS_NR_CPU_NR_MAP_1024
 	help
 	  This option supports all of the Octeon reference boards from Cavium
 	  Networks. It builds a kernel that dynamically determines the Octeon
