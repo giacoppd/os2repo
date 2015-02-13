@@ -109,6 +109,13 @@ config CAVIUM_OCTEON_LOCK_L2_MEMCPY
 	help
 	  Lock the kernel's implementation of memcpy() into L2.
 
+config CAVIUM_OCTEON_PERF
+	bool "OCTEON-specific hardware performance counters"
+	default y
+	depends on PERF_EVENTS
+	help
+	  support extra performance counters, including L2 cache & DRAM controller
+
 config IOMMU_HELPER
 	bool
 

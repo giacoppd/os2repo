@@ -28,6 +28,7 @@ obj-$(CONFIG_CAVIUM_OCTEON_NAND)       += octeon-nand.o
 obj-$(CONFIG_CAVIUM_OCTEON_ERROR_TREE) += octeon-error-tree.o octeon-78xx-errors.o
 obj-$(CONFIG_OCTEON_ERROR_INJECTOR)    += octeon-error-injector.o
 obj-$(CONFIG_CAVIUM_OCTEON_RAPIDIO)     += octeon-rapidio.o
+obj-$(CONFIG_CAVIUM_OCTEON_PERF)       += perf_uncore.o
 
 DTS_FILES = octeon_3xxx.dts octeon_68xx.dts
 DTB_FILES = $(patsubst %.dts, %.dtb, $(DTS_FILES))
