@@ -270,6 +270,12 @@ extern void octeon_fixup_irqs(void);
 
 int octeon_i2c_cvmx2i2c(unsigned int cvmx_twsi_bus_num);
 
+#ifdef CONFIG_SMP
+void octeon_setup_smp(void);
+#else
+static inline void octeon_setup_smp(void) {}
+#endif
+
 extern struct semaphore octeon_bootbus_sem;
 
 extern void (*octeon_scache_init)(void);

@@ -414,3 +414,9 @@ struct plat_smp_ops octeon_smp_ops = {
 	.cpu_die		= octeon_cpu_die,
 #endif
 };
+
+void __init octeon_setup_smp(void)
+{
+	register_smp_ops(&octeon_smp_ops);
+}
+
