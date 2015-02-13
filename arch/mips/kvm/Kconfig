@@ -16,7 +16,7 @@ if VIRTUALIZATION
 
 config KVM
 	tristate "Kernel-based Virtual Machine (KVM) support"
-	depends on HAVE_KVM
+	depends on HAVE_KVM && 32BIT
 	select PREEMPT_NOTIFIERS
 	select ANON_INODES
 	select KVM_MMIO
@@ -42,6 +42,14 @@ config KVM_MIPS_DEBUG_COP0_COUNTERS
 	  shutdown.
 
 	  If unsure, say N.
+config KVM_MIPS_VZ
+	bool "Kernel-based Virtual Machine (KVM) using hardware MIPS-VZ support"
+	depends on HAVE_KVM && !FAST_ACCESS_TO_THREAD_POINTER
+	select KVM
+	select EXPORT_UASM
+	---help---
+	 Support for hosting Guest kernels on hardware with the
+	 MIPS-VZ hardware module.
 
 source drivers/vhost/Kconfig
 

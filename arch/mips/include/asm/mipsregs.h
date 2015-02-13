@@ -58,6 +58,7 @@
 #define CP0_CAUSE $13
 #define CP0_EPC $14
 #define CP0_PRID $15
+#define CP0_EBASE ($15, 1)
 #define CP0_CONFIG $16
 #define CP0_LLADDR $17
 #define CP0_WATCHLO $18
@@ -75,6 +76,8 @@
 #define CP0_TAGHI $29
 #define CP0_ERROREPC $30
 #define CP0_DESAVE $31
+#define CP0_KSCRATCH1 ($31, 2)
+#define CP0_KSCRATCH2 ($31, 3)
 
 /*
  * R4640/R4650 cp0 register names.  These registers are listed

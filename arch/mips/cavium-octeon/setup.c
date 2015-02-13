@@ -585,13 +585,6 @@ void octeon_user_io_init(void)
 		cvmmemctl.s.wbthresh = 10;
 
 	/* R/W If set, CVMSEG is available for loads/stores in
-	 * kernel/debug mode. */
-#if CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0
-	cvmmemctl.s.cvmsegenak = 1;
-#else
-	cvmmemctl.s.cvmsegenak = 0;
-#endif
-	/* R/W If set, CVMSEG is available for loads/stores in
 	 * supervisor mode. */
 	cvmmemctl.s.cvmsegenas = 0;
 	/* R/W If set, CVMSEG is available for loads/stores in user
@@ -609,8 +602,8 @@ void octeon_user_io_init(void)
 	/* Setup of CVMSEG is done in kernel-entry-init.h */
 	if (smp_processor_id() == 0)
 		pr_notice("CVMSEG size: %d cache lines (%d bytes)\n",
-			  CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE,
-			  CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE * 128);
+			  octeon_cvmseg_lines,
+			  octeon_cvmseg_lines * 128);
 
 	if (current_cpu_type() != CPU_CAVIUM_OCTEON3 ||
 		OCTEON_IS_MODEL(OCTEON_CN70XX)) {

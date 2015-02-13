@@ -11,3 +11,4 @@ kvm-objs := $(common-objs) kvm_mips.o kvm_mips_emul.o kvm_locore.o \
 
 obj-$(CONFIG_KVM)	+= kvm.o
 obj-y			+= kvm_cb.o kvm_tlb.o
+obj-$(CONFIG_KVM_MIPS_VZ)       += kvm_mipsvz.o kvm_mipsvz_guest.o

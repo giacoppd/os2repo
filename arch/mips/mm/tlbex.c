@@ -102,20 +102,14 @@ static int use_lwx_insns(void)
 		return 0;
 	}
 }
-#if defined(CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE) && \
-    CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0
+#ifdef CONFIG_CPU_CAVIUM_OCTEON
 static bool scratchpad_available(void)
 {
 	return true;
 }
 static int scratchpad_offset(int i)
 {
-	/*
-	 * CVMSEG starts at address -32768 and extends for
-	 * CAVIUM_OCTEON_CVMSEG_SIZE 128 byte cache lines.
-	 */
-	i += 1; /* Kernel use starts at the top and works down. */
-	return CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE * 128 - (8 * i) - 32768;
+	return CAVIUM_OCTEON_SCRATCH_OFFSET - (8 * i);
 }
 #else
 static bool scratchpad_available(void)
@@ -375,11 +369,19 @@ static void build_restore_work_registers(u32 **p)
 {
 	if (scratch_reg >= 0) {
 		UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
+#ifdef CONFIG_KVM_MIPS_VZ
+		UASM_i_MFC0(p, K0, 31, 2);
+		UASM_i_MFC0(p, K1, 31, 3);
+#endif
 		return;
 	}
 	/* K0 already points to save area, restore $1 and $2  */
 	UASM_i_LW(p, 1, offsetof(struct tlb_reg_save, a), K0);
 	UASM_i_LW(p, 2, offsetof(struct tlb_reg_save, b), K0);
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MFC0(p, K0, 31, 2);
+	UASM_i_MFC0(p, K1, 31, 3);
+#endif
 }
 
 #ifndef CONFIG_MIPS_PGD_C0_CONTEXT
@@ -1070,7 +1072,10 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 	unsigned int even, odd;
 	int vmalloc_branch_delay_filled = 0;
 	const int scratch = 1; /* Our extra working register */
-
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MTC0(p, K0, 31, 2);
+	UASM_i_MTC0(p, K1, 31, 3);
+#endif
 	rv.huge_pte = scratch;
 	rv.restore_scratch = 0;
 	rv.need_reload_pte = false;
@@ -1235,7 +1240,10 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 #endif
 		rv.restore_scratch = 1;
 	}
-
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MFC0(p, K0, 31, 2);
+	UASM_i_MFC0(p, K1, 31, 3);
+#endif
 	uasm_i_eret(p); /* return from trap */
 
 	return rv;
@@ -1273,6 +1281,10 @@ static void build_r4000_tlb_refill_handler(void)
 							  scratch_reg);
 		vmalloc_mode = refill_scratch;
 	} else {
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MTC0(&p, K0, 31, 2);
+	UASM_i_MTC0(&p, K1, 31, 3);
+#endif
 		htlb_info.huge_pte = K0;
 		htlb_info.restore_scratch = 0;
 		htlb_info.need_reload_pte = true;
@@ -1895,7 +1907,10 @@ build_r4000_tlbchange_handler_tail(u32 **p, struct uasm_label **l,
 	build_tlb_write_entry(p, l, r, tlb_indexed);
 	uasm_l_leave(l, *p);
 	build_restore_work_registers(p);
-#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MFC0(&p, K0, 31, 2);
+	UASM_i_MFC0(&p, K1, 31, 3);
+#elif defined(CONFIG_FAST_ACCESS_TO_THREAD_POINTER)
 	UASM_i_LW(p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread ptr */
 #endif
 	uasm_i_eret(p); /* return from trap */
