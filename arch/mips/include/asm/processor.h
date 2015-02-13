@@ -54,9 +54,7 @@ extern unsigned int vced_count, vcei_count;
 #define TASK_SIZE	0x7fff8000UL
 #endif
 
-#ifdef __KERNEL__
 #define STACK_TOP_MAX	TASK_SIZE
-#endif
 
 #define TASK_IS_32BIT_ADDR 1
 
@@ -73,20 +71,32 @@ extern unsigned int vced_count, vcei_count;
 #define TASK_SIZE32	0x7fff8000UL
 #define TASK_SIZE64	0x10000000000UL
 #define TASK_SIZE (test_thread_flag(TIF_32BIT_ADDR) ? TASK_SIZE32 : TASK_SIZE64)
-
-#ifdef __KERNEL__
 #define STACK_TOP_MAX	TASK_SIZE64
-#endif
-
 
 #define TASK_SIZE_OF(tsk)						\
 	(test_tsk_thread_flag(tsk, TIF_32BIT_ADDR) ? TASK_SIZE32 : TASK_SIZE64)
 
 #define TASK_IS_32BIT_ADDR test_thread_flag(TIF_32BIT_ADDR)
 
+# ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
+/*
+ * Align the STACK_TOP on a HPAGE_SIZE boundry so the stack may be
+ * remapped to a huge page.
+ */
+# define SPECIAL_PAGES_BASE ((TASK_SIZE & PAGE_MASK) - SPECIAL_PAGES_SIZE)
+# define STACK_TOP (SPECIAL_PAGES_BASE & HPAGE_MASK)
+
+# endif /* CONFIG_MIPS_HUGE_TLB_SUPPORT */
+#endif /* CONFIG_64BIT */
+
+#ifndef STACK_TOP
+# define STACK_TOP	((TASK_SIZE & PAGE_MASK) - SPECIAL_PAGES_SIZE)
 #endif
 
-#define STACK_TOP	((TASK_SIZE & PAGE_MASK) - SPECIAL_PAGES_SIZE)
+#ifndef SPECIAL_PAGES_BASE
+# define SPECIAL_PAGES_BASE STACK_TOP
+#endif
+
 
 /*
  * This decides where the kernel will search for a free chunk of vm
@@ -182,8 +192,7 @@ struct octeon_cop2_state {
 	/* DMFC2 rt, 0x025A; DMFC2 rt, 0x025B - Pass2 */
 	unsigned long	cop2_gfm_result[2];
 	/* DMFC2 rt, 0x24F, DMFC2 rt, 0x50, OCTEON III */
-	unsigned long   cop2_sha3[2];
-
+	unsigned long	cop2_sha3[2];
 };
 #define COP2_INIT						\
 	.cp2			= {0,},
@@ -214,6 +223,7 @@ typedef struct {
 #define ARCH_MIN_TASKALIGN	8
 
 struct mips_abi;
+struct kvm_vcpu;
 
 /*
  * If you change thread_struct remember to change the #defines below too!
@@ -246,9 +256,14 @@ struct thread_struct {
 	unsigned long cp0_badvaddr;	/* Last user fault */
 	unsigned long cp0_baduaddr;	/* Last kernel fault accessing USEG */
 	unsigned long error_code;
+#if IS_ENABLED(CONFIG_KVM_MIPS_VZ)
+	struct kvm_vcpu *vcpu;
+	unsigned int mm_asid;
+	unsigned int guest_asid;
+#endif
 #ifdef CONFIG_CPU_CAVIUM_OCTEON
-	struct octeon_cop2_state cp2 __attribute__ ((__aligned__(128)));
-	struct octeon_cvmseg_state cvmseg __attribute__ ((__aligned__(128)));
+	struct octeon_cop2_state cp2;
+	struct octeon_cvmseg_state cvmseg;
 #endif
 #ifdef CONFIG_CPU_XLP
 	struct nlm_cop2_state cp2;

@@ -51,14 +51,18 @@
 #define CP0_WIRED $6
 #define CP0_INFO $7
 #define CP0_BADVADDR $8
+#define CP0_BADINSTR $8, 1
+#define CP0_BADINSTRP $8, 2
 #define CP0_COUNT $9
 #define CP0_ENTRYHI $10
+#define CP0_GUESTCTL2 $10, 5
 #define CP0_COMPARE $11
 #define CP0_STATUS $12
+#define CP0_GUESTCTL0 $12, 6
 #define CP0_CAUSE $13
 #define CP0_EPC $14
 #define CP0_PRID $15
-#define CP0_EBASE ($15, 1)
+#define CP0_EBASE $15, 1
 #define CP0_CONFIG $16
 #define CP0_LLADDR $17
 #define CP0_WATCHLO $18
@@ -76,8 +80,8 @@
 #define CP0_TAGHI $29
 #define CP0_ERROREPC $30
 #define CP0_DESAVE $31
-#define CP0_KSCRATCH1 ($31, 2)
-#define CP0_KSCRATCH2 ($31, 3)
+#define CP0_KSCRATCH1 $31, 2
+#define CP0_KSCRATCH2 $31, 3
 
 /*
  * R4640/R4650 cp0 register names.  These registers are listed
@@ -671,6 +675,10 @@
 #define MIPS_FPIR_L		(_ULCAST_(1) << 21)
 #define MIPS_FPIR_F64		(_ULCAST_(1) << 22)
 
+/* Bits in the MIPS VZ GuestCtl0 Register */
+#define MIPS_GUESTCTL0B_GM	31
+#define MIPS_GUESTCTL0F_GM	(_ULCAST_(1) << MIPS_GUESTCTL0B_GM)
+
 /*
  * These defines are used on Octeon to implement fast access to the
  * thread pointer from userspace. Octeon uses a 64bit location in
@@ -681,7 +689,7 @@
  */
 #ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
 #define FAST_ACCESS_THREAD_OFFSET (2 * 128 - 8 - 32768)
-#define FAST_ACCESS_THREAD_REGISTER                     \
+#define FAST_ACCESS_THREAD_REGISTER			\
 	(*(unsigned long *)(FAST_ACCESS_THREAD_OFFSET))
 #endif
 #define CAVIUM_OCTEON_SCRATCH_OFFSET (2 * 128 - 16 - 32768)
@@ -947,6 +955,144 @@ do {									\
 	local_irq_restore(__flags);					\
 } while (0)
 
+/*
+ * Macros to access the VZ Guest system control coprocessor
+ */
+
+#define __read_32bit_gc0_register(source, sel)				\
+	({ int __res;							\
+		__asm__ __volatile__(					\
+		".set mips64r2\n\t"					\
+		".set\tvirt\n\t"					\
+		".ifeq 0-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 0\n\t"				\
+		".endif\n\t"						\
+		".ifeq 1-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 1\n\t"				\
+		".endif\n\t"						\
+		".ifeq 2-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 2\n\t"				\
+		".endif\n\t"						\
+		".ifeq 3-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 3\n\t"				\
+		".endif\n\t"						\
+		".ifeq 4-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 4\n\t"				\
+		".endif\n\t"						\
+		".ifeq 5-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 5\n\t"				\
+		".endif\n\t"						\
+		".ifeq 6-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 6\n\t"				\
+		".endif\n\t"						\
+		".ifeq 7-" #sel "\n\t"					\
+		"mfgc0\t%0, " #source ", 7\n\t"				\
+		".endif\n\t"						\
+		".set\tmips0"						\
+		: "=r" (__res));					\
+	__res;								\
+})
+
+#define __read_64bit_gc0_register(source, sel)				\
+	({ unsigned long long __res;					\
+		__asm__ __volatile__(					\
+		".set mips64r2\n\t"					\
+		".set\tvirt\n\t"					\
+		".ifeq 0-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 0\n\t"			\
+		".endif\n\t"						\
+		".ifeq 1-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 1\n\t"			\
+		".endif\n\t"						\
+		".ifeq 2-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 2\n\t"			\
+		".endif\n\t"						\
+		".ifeq 3-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 3\n\t"			\
+		".endif\n\t"						\
+		".ifeq 4-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 4\n\t"			\
+		".endif\n\t"						\
+		".ifeq 5-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 5\n\t"			\
+		".endif\n\t"						\
+		".ifeq 6-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 6\n\t"			\
+		".endif\n\t"						\
+		".ifeq 7-" #sel "\n\t"					\
+		"dmfgc0\t%0, " #source ", 7\n\t"			\
+		".endif\n\t"						\
+		".set\tmips0"						\
+		: "=r" (__res));					\
+	__res;								\
+})
+
+#define __write_32bit_gc0_register(source, sel, value)			\
+do {									\
+	__asm__ __volatile__(						\
+		".set mips64r2\n\t"					\
+		".set\tvirt\n\t"					\
+		".ifeq 0-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 0\n\t"			\
+		".endif\n\t"						\
+		".ifeq 1-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 1\n\t"			\
+		".endif\n\t"						\
+		".ifeq 2-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 2\n\t"			\
+		".endif\n\t"						\
+		".ifeq 3-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 3\n\t"			\
+		".endif\n\t"						\
+		".ifeq 4-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 4\n\t"			\
+		".endif\n\t"						\
+		".ifeq 5-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 5\n\t"			\
+		".endif\n\t"						\
+		".ifeq 6-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 6\n\t"			\
+		".endif\n\t"						\
+		".ifeq 7-" #sel "\n\t"					\
+		"mtgc0\t%z0, " #source ", 7\n\t"			\
+		".endif\n\t"						\
+		".set\tmips0"						\
+		: : "Jr" ((unsigned int)(value)));			\
+} while (0)
+
+#define __write_64bit_gc0_register(source, sel, value)			\
+do {									\
+	__asm__ __volatile__(						\
+		".set mips64r2\n\t"					\
+		".set\tvirt\n\t"					\
+		".ifeq 0-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 0\n\t"			\
+		".endif\n\t"						\
+		".ifeq 1-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 1\n\t"			\
+		".endif\n\t"						\
+		".ifeq 2-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 2\n\t"			\
+		".endif\n\t"						\
+		".ifeq 3-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 3\n\t"			\
+		".endif\n\t"						\
+		".ifeq 4-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 4\n\t"			\
+		".endif\n\t"						\
+		".ifeq 5-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 5\n\t"			\
+		".endif\n\t"						\
+		".ifeq 6-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 6\n\t"			\
+		".endif\n\t"						\
+		".ifeq 7-" #sel "\n\t"					\
+		"dmtgc0\t%z0, " #source ", 7\n\t"			\
+		".endif\n\t"						\
+		".set\tmips0"						\
+		: : "Jr" (value));					\
+} while (0)
+
 #define read_c0_index()		__read_32bit_c0_register($0, 0)
 #define write_c0_index(val)	__write_32bit_c0_register($0, 0, val)
 
@@ -984,6 +1130,12 @@ do {									\
 
 #define read_c0_badvaddr()	__read_ulong_c0_register($8, 0)
 #define write_c0_badvaddr(val)	__write_ulong_c0_register($8, 0, val)
+
+#define read_c0_badinstr()	__read_32bit_c0_register($8, 1)
+#define write_c0_badinstr(val)	__write_32bit_c0_register($8, 1, val)
+
+#define read_c0_badinstrp()	__read_32bit_c0_register($8, 2)
+#define write_c0_badinstrp(val)	__write_32bit_c0_register($8, 2, val)
 
 #define read_c0_count()		__read_32bit_c0_register($9, 0)
 #define write_c0_count(val)	__write_32bit_c0_register($9, 0, val)
@@ -1222,8 +1374,8 @@ do {									\
 #define read_octeon_c0_dcacheerr()	__read_64bit_c0_register($27, 1)
 #define write_octeon_c0_dcacheerr(val)	__write_64bit_c0_register($27, 1, val)
 
-#define read_octeon_c0_errctl()                __read_64bit_c0_register($26, 0)
-#define write_octeon_c0_errctl(val)    __write_64bit_c0_register($26, 0, val)
+#define read_octeon_c0_errctl()		__read_64bit_c0_register($26, 0)
+#define write_octeon_c0_errctl(val)	__write_64bit_c0_register($26, 0, val)
 
 /* BMIPS3300 */
 #define read_c0_brcm_config_0()		__read_32bit_c0_register($22, 0)
@@ -1269,6 +1421,99 @@ do {									\
 
 #define read_c0_brcm_sleepcount()	__read_32bit_c0_register($22, 7)
 #define write_c0_brcm_sleepcount(val)	__write_32bit_c0_register($22, 7, val)
+
+/* MIPS VZ */
+#define read_c0_guestctl0()		__read_32bit_c0_register($12, 6)
+#define write_c0_guestctl0(val)		__write_32bit_c0_register($12, 6, val)
+
+#define read_c0_guestctl1()		__read_32bit_c0_register($10, 4)
+#define write_c0_guestctl1(val)		__write_32bit_c0_register($10, 4, val)
+
+#define read_c0_guestctl2()		__read_32bit_c0_register($10, 5)
+#define write_c0_guestctl2(val)		__write_32bit_c0_register($10, 5, val)
+
+#define read_c0_guestctl3()		__read_32bit_c0_register($10, 6)
+#define write_c0_guestctl3(val)		__write_32bit_c0_register($10, 6, val)
+
+#define read_c0_gtoffset()		__read_32bit_c0_register($12, 7)
+#define write_c0_gtoffset(val)		__write_32bit_c0_register($12, 7, val)
+
+#define read_gc0_index()		__read_32bit_gc0_register($0, 0)
+#define write_gc0_index(val)		__write_32bit_gc0_register($0, 0, val)
+
+#define read_gc0_entrylo0()		__read_64bit_gc0_register($2, 0)
+#define write_gc0_entrylo0(val)		__write_64bit_gc0_register($2, 0, val)
+
+#define read_gc0_entrylo1()		__read_64bit_gc0_register($3, 0)
+#define write_gc0_entrylo1(val)		__write_64bit_gc0_register($3, 0, val)
+
+#define read_gc0_context()		__read_64bit_gc0_register($4, 0)
+#define write_gc0_context(val)		__write_64bit_gc0_register($4, 0, val)
+
+#define read_gc0_userlocal()		__read_64bit_gc0_register($4, 2)
+#define write_gc0_userlocal(val)	__write_64bit_gc0_register($4, 2, val)
+
+#define read_gc0_pagemask()		__read_32bit_gc0_register($5, 0)
+#define write_gc0_pagemask(val)		__write_32bit_gc0_register($5, 0, val)
+
+#define read_gc0_pagegrain()		__read_32bit_gc0_register($5, 1)
+#define write_gc0_pagegrain(val)	__write_32bit_gc0_register($5, 1, val)
+
+#define read_gc0_wired()		__read_32bit_gc0_register($6, 0)
+#define write_gc0_wired(val)		__write_32bit_gc0_register($6, 0, val)
+
+#define read_gc0_hwrena()		__read_32bit_gc0_register($7, 0)
+#define write_gc0_hwrena(val)		__write_32bit_gc0_register($7, 0, val)
+
+#define read_gc0_badvaddr()		__read_64bit_gc0_register($8, 0)
+#define write_gc0_badvaddr(val)		__write_64bit_gc0_register($8, 0, val)
+
+#define read_gc0_count()		__read_32bit_gc0_register($9, 0)
+/* Not possible to write gc0_count. */
+
+#define read_gc0_entryhi()		__read_64bit_gc0_register($10, 0)
+#define write_gc0_entryhi(val)		__write_64bit_gc0_register($10, 0, val)
+
+#define read_gc0_compare()		__read_32bit_gc0_register($11, 0)
+#define write_gc0_compare(val)		__write_32bit_gc0_register($11, 0, val)
+
+#define read_gc0_status()		__read_32bit_gc0_register($12, 0)
+#define write_gc0_status(val)		__write_32bit_gc0_register($12, 0, val)
+
+#define read_gc0_cause()		__read_32bit_gc0_register($13, 0)
+#define write_gc0_cause(val)		__write_32bit_gc0_register($13, 0, val)
+
+#define read_gc0_epc()			__read_64bit_gc0_register($14, 0)
+#define write_gc0_epc(val)		__write_64bit_gc0_register($14, 0, val)
+
+#define read_gc0_ebase()		__read_64bit_gc0_register($15, 1)
+#define write_gc0_ebase(val)		__write_64bit_gc0_register($15, 1, val)
+
+#define read_gc0_config()		__read_32bit_gc0_register($16, 0)
+#define read_gc0_config1()		__read_32bit_gc0_register($16, 1)
+#define read_gc0_config2()		__read_32bit_gc0_register($16, 2)
+#define read_gc0_config3()		__read_32bit_gc0_register($16, 3)
+#define read_gc0_config4()		__read_32bit_gc0_register($16, 4)
+#define read_gc0_config5()		__read_32bit_gc0_register($16, 5)
+#define read_gc0_config6()		__read_32bit_gc0_register($16, 6)
+#define read_gc0_config7()		__read_32bit_gc0_register($16, 7)
+#define write_gc0_config(val)		__write_32bit_gc0_register($16, 0, val)
+#define write_gc0_config1(val)		__write_32bit_gc0_register($16, 1, val)
+#define write_gc0_config2(val)		__write_32bit_gc0_register($16, 2, val)
+#define write_gc0_config3(val)		__write_32bit_gc0_register($16, 3, val)
+#define write_gc0_config4(val)		__write_32bit_gc0_register($16, 4, val)
+#define write_gc0_config5(val)		__write_32bit_gc0_register($16, 5, val)
+#define write_gc0_config6(val)		__write_32bit_gc0_register($16, 6, val)
+#define write_gc0_config7(val)		__write_32bit_gc0_register($16, 7, val)
+
+#define read_gc0_xcontext()		__read_64bit_gc0_register($20, 0)
+#define write_gc0_xcontext(val)		__write_64bit_gc0_register($20, 0, val)
+
+#define read_gc0_errorepc()		__read_64bit_gc0_register($30, 0)
+#define write_gc0_errorepc(val)		__write_64bit_gc0_register($30, 0, val)
+
+#define read_gc0_kscratch(idx)		__read_64bit_gc0_register($31, (idx))
+#define write_gc0_kscratch(idx, val)	__write_64bit_gc0_register($31, (idx), val)
 
 /*
  * Macros to access the floating point coprocessor control registers
@@ -1741,6 +1986,28 @@ static inline void tlb_write_random(void)
 		".set reorder");
 }
 
+static inline void guest_tlb_write_indexed(void)
+{
+	__asm__ __volatile__(
+		".set push\n\t"
+		".set mips64r2\n\t"
+		".set virt\n\t"
+		".set noreorder\n\t"
+		"tlbgwi\n\t"
+		".set pop");
+}
+
+static inline void guest_tlb_read(void)
+{
+	__asm__ __volatile__(
+		".set push\n\t"
+		".set mips64r2\n\t"
+		".set virt\n\t"
+		".set noreorder\n\t"
+		"tlbgr\n\t"
+		".set pop");
+}
+
 /*
  * Manipulate bits in a c0 register.
  */
@@ -1916,14 +2183,13 @@ __BUILD_SET_C0(brcm_cmt_ctrl)
 __BUILD_SET_C0(brcm_config)
 __BUILD_SET_C0(brcm_mode)
 
-/*
- * Return low 10 bits of ebase.
- * Note that under KVM (MIPSVZ) this returns vcpu id.
- */
+int allocate_kscratch(void);
+
 static inline unsigned int get_ebase_cpunum(void)
 {
-	return read_c0_ebase() & 0x3ff;
+	return read_c0_ebase() & 0x3ff; /* Low 10 bits of ebase. */
 }
+
 #endif /* !__ASSEMBLY__ */
 
 #endif /* _ASM_MIPSREGS_H */

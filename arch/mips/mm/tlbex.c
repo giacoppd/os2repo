@@ -29,6 +29,7 @@
 #include <linux/cache.h>
 
 #include <asm/cacheflush.h>
+#include <asm/mipsregs.h>
 #include <asm/cpu-type.h>
 #include <asm/pgtable.h>
 #include <asm/war.h>
@@ -55,7 +56,9 @@ struct tlb_reg_save {
 	unsigned long b;
 } ____cacheline_aligned_in_smp;
 
+#ifndef TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET
 static struct tlb_reg_save handler_reg_save[NR_CPUS];
+#endif
 
 static inline int r45k_bvahwbug(void)
 {
@@ -295,8 +298,6 @@ static struct uasm_reloc relocs[128];
 
 static int check_for_high_segbits;
 
-static unsigned int kscratch_used_mask;
-
 static inline int __maybe_unused c0_kscratch(void)
 {
 	switch (current_cpu_type()) {
@@ -306,23 +307,6 @@ static inline int __maybe_unused c0_kscratch(void)
 	default:
 		return 31;
 	}
-}
-
-static int allocate_kscratch(void)
-{
-	int r;
-	unsigned int a = cpu_data[0].kscratch_mask & ~kscratch_used_mask;
-
-	r = ffs(a);
-
-	if (r == 0)
-		return -1;
-
-	r--; /* make it zero based */
-
-	kscratch_used_mask |= (1 << r);
-
-	return r;
 }
 
 static int scratch_reg;
@@ -342,6 +326,13 @@ static struct work_registers build_get_work_registers(u32 **p)
 		return r;
 	}
 
+#ifdef TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET
+	UASM_i_SW(p, 1, TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET(0), 0);
+	r.r1 = K0;
+	r.r2 = K1;
+	r.r3 = 1;
+	return r;
+#else
 	if (num_possible_cpus() > 1) {
 		/* Get smp_processor_id */
 		UASM_i_CPUID_MFC0(p, K0, SMP_CPUID_REG);
@@ -363,6 +354,7 @@ static struct work_registers build_get_work_registers(u32 **p)
 	r.r2 = 1;
 	r.r3 = 2;
 	return r;
+#endif /* TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET */
 }
 
 static void build_restore_work_registers(u32 **p)
@@ -375,9 +367,15 @@ static void build_restore_work_registers(u32 **p)
 #endif
 		return;
 	}
+
+#ifdef TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET
+	UASM_i_LW(p, 1, TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET(0), 0);
+#else
 	/* K0 already points to save area, restore $1 and $2  */
 	UASM_i_LW(p, 1, offsetof(struct tlb_reg_save, a), K0);
 	UASM_i_LW(p, 2, offsetof(struct tlb_reg_save, b), K0);
+#endif /* TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET */
+
 #ifdef CONFIG_KVM_MIPS_VZ
 	UASM_i_MFC0(p, K0, 31, 2);
 	UASM_i_MFC0(p, K1, 31, 3);
@@ -516,7 +514,8 @@ static void build_tlb_write_entry(u32 **p, struct uasm_label **l,
 			break;
 
 		default:
-			uasm_i_ehb(p);
+			if (cpu_has_mips_r2_exec_hazard)
+				uasm_i_ehb(p);
 			break;
 		}
 		tlbw(p);
@@ -901,17 +900,21 @@ build_get_pgd_vmalloc64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 		 * to mimic that here by taking a load/istream page
 		 * fault.
 		 */
-		UASM_i_LA(p, ptr, (unsigned long)tlb_do_page_fault_0);
-		uasm_i_jr(p, ptr);
+		UASM_i_MTC0(p, 0, C0_ENTRYLO0); /* Invalid */
+		UASM_i_MTC0(p, 0, C0_ENTRYLO1); /* Invalid */
+		build_tlb_write_entry(p, l, r, tlb_random);
 
 		if (mode == refill_scratch) {
 			if (scratch_reg >= 0)
 				UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
 			else
 				UASM_i_LW(p, 1, scratchpad_offset(0), 0);
-		} else {
-			uasm_i_nop(p);
 		}
+#ifdef CONFIG_KVM_MIPS_VZ
+		UASM_i_MFC0(p, K0, 31, 2);
+		UASM_i_MFC0(p, K1, 31, 3);
+#endif
+		uasm_i_eret(p); /* return from trap */
 	}
 }
 
@@ -1266,17 +1269,14 @@ static void build_r4000_tlb_refill_handler(void)
 	unsigned int final_len;
 	struct mips_huge_tlb_info htlb_info __maybe_unused;
 	enum vmalloc64_mode vmalloc_mode __maybe_unused;
-#ifdef CONFIG_64BIT
-	bool is64bit = true;
-#else
-	bool is64bit = false;
-#endif
+	
 	memset(tlb_handler, 0, sizeof(tlb_handler));
 	memset(labels, 0, sizeof(labels));
 	memset(relocs, 0, sizeof(relocs));
 	memset(final_handler, 0, sizeof(final_handler));
 
-	if (is64bit && (scratch_reg >= 0 || scratchpad_available()) && use_bbit_insns()) {
+	if (IS_ENABLED(CONFIG_64BIT) &&
+		(scratch_reg > 0 || scratchpad_available()) && use_bbit_insns()) {
 		htlb_info = build_fast_tlb_refill_handler(&p, &l, &r, K0, K1,
 							  scratch_reg);
 		vmalloc_mode = refill_scratch;
@@ -1320,6 +1320,12 @@ static void build_r4000_tlb_refill_handler(void)
 		build_update_entries(&p, K0, K1);
 		build_tlb_write_entry(&p, &l, &r, tlb_random);
 		uasm_l_leave(&l, p);
+#ifdef CONFIG_KVM_MIPS_VZ
+		UASM_i_MFC0(&p, K0, 31, 2);
+		UASM_i_MFC0(&p, K1, 31, 3);
+#elif defined(CONFIG_FAST_ACCESS_TO_THREAD_POINTER)
+		UASM_i_LW(&p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread ptr */
+#endif
 		uasm_i_eret(&p); /* return from trap */
 	}
 #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
@@ -1920,10 +1926,7 @@ build_r4000_tlbchange_handler_tail(u32 **p, struct uasm_label **l,
 	build_tlb_write_entry(p, l, r, tlb_indexed);
 	uasm_l_leave(l, *p);
 	build_restore_work_registers(p);
-#ifdef CONFIG_KVM_MIPS_VZ
-	UASM_i_MFC0(&p, K0, 31, 2);
-	UASM_i_MFC0(&p, K1, 31, 3);
-#elif defined(CONFIG_FAST_ACCESS_TO_THREAD_POINTER)
+#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
 	UASM_i_LW(p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread ptr */
 #endif
 	uasm_i_eret(p); /* return from trap */
