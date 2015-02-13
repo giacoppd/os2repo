@@ -397,11 +397,8 @@ void __noreturn die(const char *str, struct pt_regs *regs)
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 
-	if (panic_on_oops) {
-		printk(KERN_EMERG "Fatal exception: panic in 5 seconds");
-		ssleep(5);
+	if (panic_on_oops)
 		panic("Fatal exception");
-	}
 
 	if (regs && kexec_should_crash(current))
 		crash_kexec(regs);
@@ -1086,6 +1083,7 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 	unsigned long __maybe_unused flags;
 
 	prev_state = exception_enter();
+
 	cpid = (regs->cp0_cause >> CAUSEB_CE) & 3;
 
 	if (cpid != 2)
@@ -1566,7 +1564,7 @@ unsigned long ebase;
 unsigned long exception_handlers[32];
 unsigned long vi_handlers[64];
 
-void __init *set_except_vector(int n, void *addr)
+void *set_except_vector(int n, void *addr)
 {
 	unsigned long handler = (unsigned long) addr;
 	unsigned long old_handler;
