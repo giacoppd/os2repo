@@ -61,6 +61,11 @@ config VSC848X_PHY
 	  Driver for Vitesse vsc848x single, dual and quad 10G PHY devices.
 	  Currently supports the vsc8488, vsc8486 and vsc8484 chips
 
+config TLK10232_PHY
+	tristate "Drivers for the TI tlk10232 dual 10G PHY"
+	help
+	  Driver for TI tlk10232 dual 10G PHY device.
+
 config SMSC_PHY
 	tristate "Drivers for SMSC PHYs"
 	---help---
