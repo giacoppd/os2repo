@@ -41,6 +41,8 @@ endif
 endif
 endif
 
+obj-$(CONFIG_PERF_EVENTS)              += perf_counters.o
+
 DTS_FILES = octeon_3xxx.dts octeon_68xx.dts
 DTB_FILES = $(patsubst %.dts, %.dtb, $(DTS_FILES))
 
