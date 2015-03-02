@@ -17,6 +17,7 @@
 #include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/of_mdio.h>
+#include <linux/of_platform.h>
 #include <linux/module.h>
 
 MODULE_AUTHOR("Grant Likely <grant.likely@secretlab.ca>");
@@ -140,6 +141,11 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 		if (addr >= PHY_MAX_ADDR) {
 			dev_err(&mdio->dev, "%s PHY address %i is too large\n",
 				child->full_name, addr);
+			continue;
+		}
+
+		if (of_device_is_compatible(child, "ethernet-phy-nexus")) {
+			of_platform_device_create(child, NULL, &mdio->dev);
 			continue;
 		}
 
