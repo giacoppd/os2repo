@@ -195,17 +195,18 @@ int __MIPS16e_compute_return_epc(struct pt_regs *regs)
 }
 
 /**
- * __compute_return_epc_for_insn - Computes the return address and do emulate
+ * __compute_return_epc_for_insn0 - Computes the return address and do emulate
  *				    branch simulation, if required.
  *
  * @regs:	Pointer to pt_regs
  * @insn:	branch instruction to decode
- * @returns:	-EFAULT on error and forces SIGBUS, and on success
+ * @returns:	-EFAULT on error, and on success
  *		returns 0 or BRANCH_LIKELY_TAKEN as appropriate after
  *		evaluating the branch.
  */
-int __compute_return_epc_for_insn(struct pt_regs *regs,
-				   union mips_instruction insn)
+int __compute_return_epc_for_insn0(struct pt_regs *regs,
+				   union mips_instruction insn,
+				   unsigned int (*get_fcr31)(void))
 {
 	unsigned int bit, fcr31, dspcontrol;
 	long epc = regs->cp0_epc;
@@ -281,7 +282,7 @@ int __compute_return_epc_for_insn(struct pt_regs *regs,
 
 		case bposge32_op:
 			if (!cpu_has_dsp)
-				goto sigill;
+				return -EFAULT;
 
 			dspcontrol = rddsp(0x01);
 
@@ -364,17 +365,7 @@ int __compute_return_epc_for_insn(struct pt_regs *regs,
 	 * And now the FPA/cp1 branch instructions.
 	 */
 	case cop1_op:
-		preempt_disable();
-		if (is_fpu_owner())
-			asm volatile(
-				".set push\n"
-				"\t.set mips1\n"
-				"\tcfc1\t%0,$31\n"
-				"\t.set pop" : "=r" (fcr31));
-		else
-			fcr31 = current->thread.fpu.fcr31;
-		preempt_enable();
-
+		fcr31 = get_fcr31();
 		bit = (insn.i_format.rt >> 2);
 		bit += (bit != 0);
 		bit += 23;
@@ -438,11 +429,47 @@ int __compute_return_epc_for_insn(struct pt_regs *regs,
 	}
 
 	return ret;
+}
+EXPORT_SYMBOL_GPL(__compute_return_epc_for_insn0);
 
-sigill:
-	printk("%s: DSP branch but not DSP ASE - sending SIGBUS.\n", current->comm);
-	force_sig(SIGBUS, current);
-	return -EFAULT;
+static unsigned int __get_fcr31(void)
+{
+	unsigned int fcr31;
+
+	preempt_disable();
+	if (is_fpu_owner())
+		asm volatile(
+			".set push\n"
+			"\t.set mips1\n"
+			"\tcfc1\t%0,$31\n"
+			"\t.set pop" : "=r" (fcr31));
+	else
+		fcr31 = current->thread.fpu.fcr31;
+	preempt_enable();
+	return fcr31;
+}
+
+/**
+ * __compute_return_epc_for_insn - Computes the return address and do emulate
+ *				    branch simulation, if required.
+ *
+ * @regs:	Pointer to pt_regs
+ * @insn:	branch instruction to decode
+ * @returns:	-EFAULT on error and forces SIGBUS, and on success
+ *		returns 0 or BRANCH_LIKELY_TAKEN as appropriate after
+ *		evaluating the branch.
+ */
+int __compute_return_epc_for_insn(struct pt_regs *regs,
+				   union mips_instruction insn)
+{
+	int r =  __compute_return_epc_for_insn0(regs, insn, __get_fcr31);
+
+	if (r < 0) {
+		printk("%s: DSP branch but not DSP ASE - sending SIGBUS.\n", current->comm);
+		force_sig(SIGBUS, current);
+	}
+
+	return r;
 }
 EXPORT_SYMBOL_GPL(__compute_return_epc_for_insn);
 

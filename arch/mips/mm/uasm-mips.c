@@ -113,6 +113,8 @@ static struct insn insn_table[] = {
 	{ insn_tlbwr,  M(cop0_op, cop_op, 0, 0, 0, tlbwr_op),  0 },
 	{ insn_xori,  M(xori_op, 0, 0, 0, 0, 0),  RS | RT | UIMM },
 	{ insn_xor,  M(spec_op, 0, 0, 0, 0, xor_op),  RS | RT | RD },
+	{ insn_zcb,  M(spec2_op, 0, 0, 0, zcb_op, cvm_op),  RS },
+	{ insn_zcbt,  M(spec2_op, 0, 0, 0, zcbt_op, cvm_op),  RS },
 	{ insn_invalid, 0, 0 }
 };
 
