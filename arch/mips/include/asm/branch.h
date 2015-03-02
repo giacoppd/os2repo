@@ -37,6 +37,13 @@ static inline unsigned long exception_epc(struct pt_regs *regs)
 
 #define BRANCH_LIKELY_TAKEN 0x0001
 
+extern int __compute_return_epc(struct pt_regs *regs);
+extern int __compute_return_epc_for_insn(struct pt_regs *regs,
+					union mips_instruction insn);
+extern int __compute_return_epc_for_insn0(struct pt_regs *regs,
+					union mips_instruction insn,
+					unsigned int (*get_fcr31)(void));
+
 static inline int compute_return_epc(struct pt_regs *regs)
 {
 	if (get_isa16_mode(regs->cp0_epc)) {

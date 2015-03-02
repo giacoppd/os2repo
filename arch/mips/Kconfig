@@ -8,6 +8,8 @@ config MIPS
 	select HAVE_IDE
 	select HAVE_OPROFILE
 	select HAVE_PERF_EVENTS
+	select HAVE_PERF_REGS
+	select HAVE_PERF_USER_STACK_DUMP
 	select PERF_USE_VMALLOC
 	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_TRACEHOOK
@@ -709,6 +711,7 @@ config CAVIUM_OCTEON_SOC
 	select SYS_SUPPORTS_64BIT_KERNEL
 	select SYS_SUPPORTS_BIG_ENDIAN
 	select EDAC_SUPPORT
+	select SYS_SUPPORTS_LITTLE_ENDIAN
 	select SYS_SUPPORTS_HOTPLUG_CPU
 	select SYS_HAS_EARLY_PRINTK
 	select SYS_HAS_CPU_CAVIUM_OCTEON
@@ -717,17 +720,26 @@ config CAVIUM_OCTEON_SOC
 	select ZONE_DMA32
 	select HOLES_IN_ZONE
 	select ARCH_REQUIRE_GPIOLIB
+	select MTD_COMPLEX_MAPPINGS
+	select LIBFDT
+	select USE_OF
+	select USB_EHCI_BIG_ENDIAN_MMIO
+	select HAVE_KVM
+	select ARCH_SPARSEMEM_ENABLE
+	select SYS_SUPPORTS_SMP
+	select NR_CPUS_DEFAULT_64
+	select MIPS_NR_CPU_NR_MAP_1024
+	select SYS_SUPPORTS_NUMA
 	help
-	  This option supports all of the Octeon reference boards from Cavium
-	  Networks. It builds a kernel that dynamically determines the Octeon
-	  CPU type and supports all known board reference implementations.
-	  Some of the supported boards are:
-		EBT3000
-		EBH3000
-		EBH3100
-		Thunder
-		Kodama
-		Hikari
+	  This option supports all of the Octeon SoCs and reference
+	  boards from Cavium, Inc. The Cavium Octeon processor is a
+	  highly integrated chip containing many Ethernet hardware
+	  widgets for networking tasks. The processor can have up to
+	  many Mips64v2 cores (32+) and many integrated 10M - 10G
+	  Ethernet ports.  It builds a kernel that dynamically
+	  determines the Octeon CPU type and supports all known board
+	  reference implementations.
+
 	  Say Y here for most Octeon reference boards.
 
 config NLM_XLR_BOARD
@@ -785,6 +797,25 @@ config NLM_XLP_BOARD
 	help
 	  This board is based on Netlogic XLP Processor.
 	  Say Y here if you have a XLP based board.
+
+config MIPS_PARAVIRT
+	bool "Para-Virtualized guest system"
+	select CEVT_R4K
+	select CSRC_R4K
+	select DMA_COHERENT
+	select SYS_SUPPORTS_64BIT_KERNEL
+	select SYS_SUPPORTS_32BIT_KERNEL
+	select SYS_SUPPORTS_BIG_ENDIAN
+	select SYS_SUPPORTS_SMP
+	select NR_CPUS_DEFAULT_4
+	select SYS_HAS_EARLY_PRINTK
+	select SYS_HAS_CPU_MIPS32_R2
+	select SYS_HAS_CPU_MIPS64_R2
+	select SYS_HAS_CPU_CAVIUM_OCTEON
+	select HW_HAS_PCI
+	select SWAP_IO_SPACE
+	help
+	 This option supports guest running under ????
 
 endchoice
 
@@ -1378,24 +1409,14 @@ config CPU_SB1
 config CPU_CAVIUM_OCTEON
 	bool "Cavium Octeon processor"
 	depends on SYS_HAS_CPU_CAVIUM_OCTEON
-	select ARCH_SPARSEMEM_ENABLE
 	select CPU_HAS_PREFETCH
 	select CPU_SUPPORTS_64BIT_KERNEL
-	select SYS_SUPPORTS_SMP
-	select NR_CPUS_DEFAULT_16
 	select WEAK_ORDERING
-	select CPU_SUPPORTS_HIGHMEM
 	select CPU_SUPPORTS_HUGEPAGES
-	select LIBFDT
-	select USE_OF
-	select USB_EHCI_BIG_ENDIAN_MMIO
 	select SYS_HAS_DMA_OPS
 	select MIPS_L1_CACHE_SHIFT_7
 	help
-	  The Cavium Octeon processor is a highly integrated chip containing
-	  many ethernet hardware widgets for networking tasks. The processor
-	  can have up to 16 Mips64v2 cores and 8 integrated gigabit ethernets.
-	  Full details can be found at http://www.caviumnetworks.com.
+	  The Cavium Octeon processor is Mips64v2 + extensions.
 
 config CPU_BMIPS
 	bool "Broadcom BMIPS"
@@ -1800,6 +1821,24 @@ config CEVT_GIC
 	  detecting a GIC, it will fall back to the R4K timer for the
 	  generation of clock events.
 
+config MAPPED_KERNEL
+	bool "Mapped kernel"
+	depends on CPU_CAVIUM_OCTEON
+	help
+	  Select this option if you want the kernel's code and data to
+	  be in mapped memory.  The kernel will be mapped using a
+	  single wired TLB entry, thus reducing the number of
+	  available TLB entries by one.  Kernel modules will be able
+	  to use a more efficient calling convention.
+
+config PHYS_LOAD_ADDRESS
+	hex "Physical load address"
+	depends on MAPPED_KERNEL
+	default 0xffffffff81000000
+	help
+	  The physical load address reflected as the program header
+	  physical address in the kernel ELF image.
+
 config BOARD_SCACHE
 	bool
 
@@ -2133,6 +2172,7 @@ config SYS_SUPPORTS_NUMA
 
 config NODES_SHIFT
 	int
+	default "1" if CAVIUM_OCTEON_SOC
 	default "6"
 	depends on NEED_MULTIPLE_NODES
 
@@ -2215,6 +2255,14 @@ config NR_CPUS
 
 config MIPS_PERF_SHARED_TC_COUNTERS
 	bool
+
+config  MIPS_NR_CPU_NR_MAP_1024
+        bool
+
+config MIPS_NR_CPU_NR_MAP
+        int
+        default 1024 if MIPS_NR_CPU_NR_MAP_1024
+        default NR_CPUS if !MIPS_NR_CPU_NR_MAP_1024
 
 #
 # Timer Interrupt Frequency Configuration
@@ -2547,7 +2595,7 @@ config ARCH_HIBERNATION_POSSIBLE
 
 config ARCH_SUSPEND_POSSIBLE
 	def_bool y
-	depends on SYS_SUPPORTS_HOTPLUG_CPU || !SMP
+	depends on (SYS_SUPPORTS_HOTPLUG_CPU || !SMP) && !CPU_CAVIUM_OCTEON
 
 source "kernel/power/Kconfig"
 

@@ -483,6 +483,51 @@ void rio_unmap_inb_region(struct rio_mport *mport, dma_addr_t lstart)
 EXPORT_SYMBOL_GPL(rio_unmap_inb_region);
 
 /**
+ * rio_map_memory - Map a RIO memory address to a kernel pointer.
+ * @rdev: RapidIO device the map is for
+ * @offset: RapidIO memory address offset into the device
+ * @length: Length of the mapped range
+ *
+ * Returns a kernel pointer to a memory mapped interface for a remote RapidIO
+ * device.
+ */
+void *rio_map_memory(struct rio_dev *rdev,
+		     u64 offset, u64 length)
+{
+	phys_t physical;
+	struct rio_mport *mport = rdev->net->hport;
+
+	if (!mport->ops->map)
+		return NULL;
+	physical = mport->ops->map(mport, rdev, offset, length);
+	if (physical)
+		return phys_to_virt(physical);
+	else
+		return NULL;
+}
+EXPORT_SYMBOL_GPL(rio_map_memory);
+
+/**
+ * rio_unmap_memory - Unmap a RIO device mapped using rio_map_memory().
+ * @rdev: RapidIO device the resource is for
+ * @offset: RapidIO memory address offset of the map
+ * @length: Length of the mapped range
+ * @map: Kernel virtual address the resource was mapped at
+ */
+void rio_unmap_memory(struct rio_dev *rdev,
+		      u64 offset, u64 length, void *map)
+{
+	phys_t physical;
+	struct rio_mport *mport = rdev->net->hport;
+
+	if (!mport->ops->map)
+		return;
+	physical = virt_to_phys(map);
+	mport->ops->unmap(mport, rdev, offset, length, physical);
+}
+EXPORT_SYMBOL_GPL(rio_unmap_memory);
+
+/**
  * rio_mport_get_physefb - Helper function that returns register offset
  *                      for Physical Layer Extended Features Block.
  * @port: Master port to issue transaction

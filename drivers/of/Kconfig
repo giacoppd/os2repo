@@ -75,4 +75,11 @@ config OF_MTD
 	depends on MTD
 	def_bool y
 
+config OF_MEMORY_ACCESSOR
+	def_bool y
+	depends on OF_I2C || OF_SPI
+	help
+	OpenFirmware memory accessor support for accessing devices like
+	i2c and SPI eeproms.
+
 endmenu # OF

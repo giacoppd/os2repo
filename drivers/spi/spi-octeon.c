@@ -25,6 +25,7 @@
 #define OCTEON_SPI_MAX_BYTES 9
 
 #define OCTEON_SPI_MAX_CLOCK_HZ 16000000
+#define OCTEON_SPI_MAX_CLOCK_HZ_7XXX    25000000        /** Max clock for O3 */
 
 struct octeon_spi {
 	u64 register_base;
@@ -76,6 +77,14 @@ static int octeon_spi_do_transfer(struct octeon_spi *p,
 
 	if (xfer->speed_hz)
 		speed_hz = xfer->speed_hz;
+
+	if (OCTEON_IS_OCTEON3()) {
+		if (speed_hz > OCTEON_SPI_MAX_CLOCK_HZ_7XXX)
+			speed_hz = OCTEON_SPI_MAX_CLOCK_HZ_7XXX;
+	} else {
+		if (speed_hz > OCTEON_SPI_MAX_CLOCK_HZ)
+			speed_hz = OCTEON_SPI_MAX_CLOCK_HZ;
+	}
 
 	if (speed_hz > OCTEON_SPI_MAX_CLOCK_HZ)
 		speed_hz = OCTEON_SPI_MAX_CLOCK_HZ;
