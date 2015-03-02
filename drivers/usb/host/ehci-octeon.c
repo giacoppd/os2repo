@@ -19,21 +19,27 @@
 #define OCTEON_EHCI_HCD_NAME "octeon-ehci"
 
 /* Common clock init code.  */
-void octeon2_usb_clocks_start(void);
+void octeon2_usb_clocks_start(struct device *dev);
 void octeon2_usb_clocks_stop(void);
 
-static void ehci_octeon_start(void)
+static void ehci_octeon_start(struct device *dev)
 {
 	union cvmx_uctlx_ehci_ctl ehci_ctl;
 
-	octeon2_usb_clocks_start();
+	octeon2_usb_clocks_start(dev);
 
 	ehci_ctl.u64 = cvmx_read_csr(CVMX_UCTLX_EHCI_CTL(0));
 	/* Use 64-bit addressing. */
 	ehci_ctl.s.ehci_64b_addr_en = 1;
 	ehci_ctl.s.l2c_addr_msb = 0;
+#ifdef __BIG_ENDIAN
 	ehci_ctl.s.l2c_buff_emod = 1; /* Byte swapped. */
 	ehci_ctl.s.l2c_desc_emod = 1; /* Byte swapped. */
+#else
+	ehci_ctl.s.l2c_buff_emod = 0; /* not swapped. */
+	ehci_ctl.s.l2c_desc_emod = 0; /* not swapped. */
+	ehci_ctl.s.inv_reg_a2 = 1;
+#endif
 	cvmx_write_csr(CVMX_UCTLX_EHCI_CTL(0), ehci_ctl.u64);
 }
 
@@ -134,7 +140,7 @@ static int ehci_octeon_drv_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-	ehci_octeon_start();
+	ehci_octeon_start(&pdev->dev);
 
 	ehci = hcd_to_ehci(hcd);
 
@@ -175,6 +181,14 @@ static int ehci_octeon_drv_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static struct of_device_id ehci_octeon_match[] = {
+	{
+		.compatible = "cavium,octeon-6335-ehci",
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, ehci_octeon_match);
+
 static struct platform_driver ehci_octeon_driver = {
 	.probe		= ehci_octeon_drv_probe,
 	.remove		= ehci_octeon_drv_remove,
@@ -182,6 +196,7 @@ static struct platform_driver ehci_octeon_driver = {
 	.driver = {
 		.name	= OCTEON_EHCI_HCD_NAME,
 		.owner	= THIS_MODULE,
+		.of_match_table = ehci_octeon_match,
 	}
 };
 

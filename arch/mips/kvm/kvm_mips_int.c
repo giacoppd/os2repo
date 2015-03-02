@@ -167,7 +167,7 @@ kvm_mips_irq_deliver_cb(struct kvm_vcpu *vcpu, unsigned int priority,
 
 		if ((kvm_read_c0_guest_status(cop0) & ST0_EXL) == 0) {
 			/* save old pc */
-			kvm_write_c0_guest_epc(cop0, arch->pc);
+			kvm_write_c0_guest_epc(cop0, arch->epc);
 			kvm_set_c0_guest_status(cop0, ST0_EXL);
 
 			if (cause & CAUSEF_BD)
@@ -175,7 +175,7 @@ kvm_mips_irq_deliver_cb(struct kvm_vcpu *vcpu, unsigned int priority,
 			else
 				kvm_clear_c0_guest_cause(cop0, CAUSEF_BD);
 
-			kvm_debug("Delivering INT @ pc %#lx\n", arch->pc);
+			kvm_debug("Delivering INT @ pc %#lx\n", arch->epc);
 
 		} else
 			kvm_err("Trying to deliver interrupt when EXL is already set\n");
@@ -185,9 +185,9 @@ kvm_mips_irq_deliver_cb(struct kvm_vcpu *vcpu, unsigned int priority,
 
 		/* XXXSL Set PC to the interrupt exception entry point */
 		if (kvm_read_c0_guest_cause(cop0) & CAUSEF_IV)
-			arch->pc = KVM_GUEST_KSEG0 + 0x200;
+			arch->epc = KVM_GUEST_KSEG0 + 0x200;
 		else
-			arch->pc = KVM_GUEST_KSEG0 + 0x180;
+			arch->epc = KVM_GUEST_KSEG0 + 0x180;
 
 		clear_bit(priority, &vcpu->arch.pending_exceptions);
 	}

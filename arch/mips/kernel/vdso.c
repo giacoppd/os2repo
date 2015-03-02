@@ -67,8 +67,9 @@ subsys_initcall(init_vdso);
 
 static unsigned long vdso_addr(unsigned long start)
 {
-	return STACK_TOP;
+	return SPECIAL_PAGES_BASE;
 }
+
 
 int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
