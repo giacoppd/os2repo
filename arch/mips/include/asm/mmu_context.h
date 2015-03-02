@@ -94,16 +94,16 @@ static inline void enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
 
 #ifndef CONFIG_MIPS_MT_SMTC
 /* Normal, classic MIPS get_new_mmu_context */
-static inline void
-get_new_mmu_context(struct mm_struct *mm, unsigned long cpu)
+static inline unsigned long
+get_new_asid(unsigned long cpu)
 {
 	extern void kvm_local_flush_tlb_all(void);
 	unsigned long asid = asid_cache(cpu);
 
 	if (! ((asid += ASID_INC) & ASID_MASK) ) {
 		if (cpu_has_vtag_icache)
-			flush_icache_all();
-#ifdef CONFIG_KVM
+			local_flush_icache_all();
+#if IS_ENABLED(CONFIG_KVM_MIPS_TE)
 		kvm_local_flush_tlb_all();      /* start new asid cycle */
 #else
 		local_flush_tlb_all();	/* start new asid cycle */
@@ -111,8 +111,15 @@ get_new_mmu_context(struct mm_struct *mm, unsigned long cpu)
 		if (!asid)		/* fix version if needed */
 			asid = ASID_FIRST_VERSION;
 	}
+	asid_cache(cpu) = asid;
+	return asid;
+}
 
-	cpu_context(cpu, mm) = asid_cache(cpu) = asid;
+static inline void
+get_new_mmu_context(struct mm_struct *mm, unsigned long cpu)
+{
+	unsigned long asid = get_new_asid(cpu);
+	cpu_context(cpu, mm) = asid;
 }
 
 #else /* CONFIG_MIPS_MT_SMTC */

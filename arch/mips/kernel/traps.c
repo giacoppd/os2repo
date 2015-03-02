@@ -88,6 +88,7 @@ extern asmlinkage void handle_reserved(void);
 
 void (*board_be_init)(void);
 int (*board_be_handler)(struct pt_regs *regs, int is_fixup);
+int (*board_mcheck_handler)(struct pt_regs *regs);
 void (*board_nmi_handler_setup)(void);
 void (*board_ejtag_handler_setup)(void);
 void (*board_bind_eic_interrupt)(int irq, int regset);
@@ -396,11 +397,8 @@ void __noreturn die(const char *str, struct pt_regs *regs)
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 
-	if (panic_on_oops) {
-		printk(KERN_EMERG "Fatal exception: panic in 5 seconds");
-		ssleep(5);
+	if (panic_on_oops)
 		panic("Fatal exception");
-	}
 
 	if (regs && kexec_should_crash(current))
 		crash_kexec(regs);
@@ -1085,6 +1083,7 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 	unsigned long __maybe_unused flags;
 
 	prev_state = exception_enter();
+
 	cpid = (regs->cp0_cause >> CAUSEB_CE) & 3;
 
 	if (cpid != 2)
@@ -1232,7 +1231,15 @@ asmlinkage void do_mcheck(struct pt_regs *regs)
 	enum ctx_state prev_state;
 
 	prev_state = exception_enter();
-	show_regs(regs);
+	if (board_mcheck_handler) {
+		int resp = board_mcheck_handler(regs);
+		if (resp == MIPS_MC_DISCARD)
+			return;
+		if (resp == MIPS_MC_FATAL)
+			multi_match = 0;
+	}
+
+	show_registers(regs);
 
 	if (multi_match) {
 		printk("Index	: %0x\n", read_c0_index());
@@ -1557,7 +1564,7 @@ unsigned long ebase;
 unsigned long exception_handlers[32];
 unsigned long vi_handlers[64];
 
-void __init *set_except_vector(int n, void *addr)
+void *set_except_vector(int n, void *addr)
 {
 	unsigned long handler = (unsigned long) addr;
 	unsigned long old_handler;

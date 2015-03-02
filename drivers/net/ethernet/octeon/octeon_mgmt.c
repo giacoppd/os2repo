@@ -8,13 +8,11 @@
 
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
-#include <linux/etherdevice.h>
 #include <linux/capability.h>
 #include <linux/net_tstamp.h>
 #include <linux/interrupt.h>
 #include <linux/netdevice.h>
 #include <linux/spinlock.h>
-#include <linux/if_vlan.h>
 #include <linux/of_mdio.h>
 #include <linux/module.h>
 #include <linux/of_net.h>
@@ -26,6 +24,7 @@
 #include <asm/octeon/octeon.h>
 #include <asm/octeon/cvmx-mixx-defs.h>
 #include <asm/octeon/cvmx-agl-defs.h>
+#include "octeon_common.h"
 
 #define DRV_NAME "octeon_mgmt"
 #define DRV_VERSION "2.0"
@@ -39,9 +38,6 @@
  */
 #define OCTEON_MGMT_RX_RING_SIZE 512
 #define OCTEON_MGMT_TX_RING_SIZE 128
-
-/* Allow 8 bytes for vlan and FCS. */
-#define OCTEON_MGMT_RX_HEADROOM (ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN)
 
 union mgmt_port_ring_entry {
 	u64 d64;
@@ -84,22 +80,11 @@ union mgmt_port_ring_entry {
 
 #define AGL_GMX_PRT_CFG			0x10
 #define AGL_GMX_RX_FRM_CTL		0x18
-#define AGL_GMX_RX_FRM_MAX		0x30
-#define AGL_GMX_RX_JABBER		0x38
 #define AGL_GMX_RX_STATS_CTL		0x50
 
 #define AGL_GMX_RX_STATS_PKTS_DRP	0xb0
 #define AGL_GMX_RX_STATS_OCTS_DRP	0xb8
 #define AGL_GMX_RX_STATS_PKTS_BAD	0xc0
-
-#define AGL_GMX_RX_ADR_CTL		0x100
-#define AGL_GMX_RX_ADR_CAM_EN		0x108
-#define AGL_GMX_RX_ADR_CAM0		0x180
-#define AGL_GMX_RX_ADR_CAM1		0x188
-#define AGL_GMX_RX_ADR_CAM2		0x190
-#define AGL_GMX_RX_ADR_CAM3		0x198
-#define AGL_GMX_RX_ADR_CAM4		0x1a0
-#define AGL_GMX_RX_ADR_CAM5		0x1a8
 
 #define AGL_GMX_TX_CLK			0x208
 #define AGL_GMX_TX_STATS_CTL		0x268
@@ -220,7 +205,7 @@ static void octeon_mgmt_rx_fill_ring(struct net_device *netdev)
 		struct sk_buff *skb;
 
 		/* CN56XX pass 1 needs 8 bytes of padding.  */
-		size = netdev->mtu + OCTEON_MGMT_RX_HEADROOM + 8 + NET_IP_ALIGN;
+		size = netdev->mtu + OCTEON_FRAME_HEADER_LEN + 8 + NET_IP_ALIGN;
 
 		skb = netdev_alloc_skb(netdev, size);
 		if (!skb)
@@ -398,7 +383,7 @@ static u64 octeon_mgmt_dequeue_rx_buffer(struct octeon_mgmt *p,
 	*pskb = __skb_dequeue(&p->rx_list);
 
 	dma_unmap_single(p->dev, re.s.addr,
-			 ETH_FRAME_LEN + OCTEON_MGMT_RX_HEADROOM,
+			 ETH_FRAME_LEN + OCTEON_FRAME_HEADER_LEN,
 			 DMA_FROM_DEVICE);
 
 	return re.d64;
@@ -559,105 +544,18 @@ static void octeon_mgmt_reset_hw(struct octeon_mgmt *p)
 			 (unsigned long long)agl_gmx_bist.u64);
 }
 
-struct octeon_mgmt_cam_state {
-	u64 cam[6];
-	u64 cam_mask;
-	int cam_index;
-};
-
-static void octeon_mgmt_cam_state_add(struct octeon_mgmt_cam_state *cs,
-				      unsigned char *addr)
-{
-	int i;
-
-	for (i = 0; i < 6; i++)
-		cs->cam[i] |= (u64)addr[i] << (8 * (cs->cam_index));
-	cs->cam_mask |= (1ULL << cs->cam_index);
-	cs->cam_index++;
-}
-
 static void octeon_mgmt_set_rx_filtering(struct net_device *netdev)
 {
 	struct octeon_mgmt *p = netdev_priv(netdev);
-	union cvmx_agl_gmx_rxx_adr_ctl adr_ctl;
-	union cvmx_agl_gmx_prtx_cfg agl_gmx_prtx;
-	unsigned long flags;
-	unsigned int prev_packet_enable;
-	unsigned int cam_mode = 1; /* 1 - Accept on CAM match */
-	unsigned int multicast_mode = 1; /* 1 - Reject all multicast.  */
-	struct octeon_mgmt_cam_state cam_state;
-	struct netdev_hw_addr *ha;
-	int available_cam_entries;
 
-	memset(&cam_state, 0, sizeof(cam_state));
-
-	if ((netdev->flags & IFF_PROMISC) || netdev->uc.count > 7) {
-		cam_mode = 0;
-		available_cam_entries = 8;
-	} else {
-		/* One CAM entry for the primary address, leaves seven
-		 * for the secondary addresses.
-		 */
-		available_cam_entries = 7 - netdev->uc.count;
-	}
-
-	if (netdev->flags & IFF_MULTICAST) {
-		if (cam_mode == 0 || (netdev->flags & IFF_ALLMULTI) ||
-		    netdev_mc_count(netdev) > available_cam_entries)
-			multicast_mode = 2; /* 2 - Accept all multicast.  */
-		else
-			multicast_mode = 0; /* 0 - Use CAM.  */
-	}
-
-	if (cam_mode == 1) {
-		/* Add primary address. */
-		octeon_mgmt_cam_state_add(&cam_state, netdev->dev_addr);
-		netdev_for_each_uc_addr(ha, netdev)
-			octeon_mgmt_cam_state_add(&cam_state, ha->addr);
-	}
-	if (multicast_mode == 0) {
-		netdev_for_each_mc_addr(ha, netdev)
-			octeon_mgmt_cam_state_add(&cam_state, ha->addr);
-	}
-
-	spin_lock_irqsave(&p->lock, flags);
-
-	/* Disable packet I/O. */
-	agl_gmx_prtx.u64 = cvmx_read_csr(p->agl + AGL_GMX_PRT_CFG);
-	prev_packet_enable = agl_gmx_prtx.s.en;
-	agl_gmx_prtx.s.en = 0;
-	cvmx_write_csr(p->agl + AGL_GMX_PRT_CFG, agl_gmx_prtx.u64);
-
-	adr_ctl.u64 = 0;
-	adr_ctl.s.cam_mode = cam_mode;
-	adr_ctl.s.mcst = multicast_mode;
-	adr_ctl.s.bcst = 1;     /* Allow broadcast */
-
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CTL, adr_ctl.u64);
-
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM0, cam_state.cam[0]);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM1, cam_state.cam[1]);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM2, cam_state.cam[2]);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM3, cam_state.cam[3]);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM4, cam_state.cam[4]);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM5, cam_state.cam[5]);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_ADR_CAM_EN, cam_state.cam_mask);
-
-	/* Restore packet I/O. */
-	agl_gmx_prtx.s.en = prev_packet_enable;
-	cvmx_write_csr(p->agl + AGL_GMX_PRT_CFG, agl_gmx_prtx.u64);
-
-	spin_unlock_irqrestore(&p->lock, flags);
+	cvm_oct_common_set_rx_filtering(netdev, p->agl, &p->lock);
 }
 
 static int octeon_mgmt_set_mac_address(struct net_device *netdev, void *addr)
 {
-	int r = eth_mac_addr(netdev, addr);
+	struct octeon_mgmt *p = netdev_priv(netdev);
 
-	if (r)
-		return r;
-
-	octeon_mgmt_set_rx_filtering(netdev);
+	cvm_oct_common_set_mac_address(netdev, addr, p->agl, &p->lock);
 
 	return 0;
 }
@@ -665,23 +563,14 @@ static int octeon_mgmt_set_mac_address(struct net_device *netdev, void *addr)
 static int octeon_mgmt_change_mtu(struct net_device *netdev, int new_mtu)
 {
 	struct octeon_mgmt *p = netdev_priv(netdev);
-	int size_without_fcs = new_mtu + OCTEON_MGMT_RX_HEADROOM;
 
 	/* Limit the MTU to make sure the ethernet packets are between
 	 * 64 bytes and 16383 bytes.
 	 */
-	if (size_without_fcs < 64 || size_without_fcs > 16383) {
-		dev_warn(p->dev, "MTU must be between %d and %d.\n",
-			 64 - OCTEON_MGMT_RX_HEADROOM,
-			 16383 - OCTEON_MGMT_RX_HEADROOM);
-		return -EINVAL;
-	}
+	int ret = cvm_oct_common_change_mtu(netdev, new_mtu, p->agl, 0, 16383);
 
-	netdev->mtu = new_mtu;
-
-	cvmx_write_csr(p->agl + AGL_GMX_RX_FRM_MAX, size_without_fcs);
-	cvmx_write_csr(p->agl + AGL_GMX_RX_JABBER,
-		       (size_without_fcs + 7) & 0xfff8);
+	if (ret)
+		return ret;
 
 	return 0;
 }
@@ -861,6 +750,9 @@ static void octeon_mgmt_update_link(struct octeon_mgmt *p)
 
 	prtx_cfg.u64 = cvmx_read_csr(p->agl + AGL_GMX_PRT_CFG);
 
+	if (!p->phydev)
+		return;
+
 	if (!p->phydev->link)
 		prtx_cfg.s.duplex = 1;
 	else
@@ -987,6 +879,45 @@ static int octeon_mgmt_init_phy(struct net_device *netdev)
 	return 0;
 }
 
+static int octeon_mgmt_stop(struct net_device *netdev)
+{
+	struct octeon_mgmt *p = netdev_priv(netdev);
+
+	napi_disable(&p->napi);
+	netif_stop_queue(netdev);
+
+	if (p->phydev)
+		phy_disconnect(p->phydev);
+	p->phydev = NULL;
+
+	netif_carrier_off(netdev);
+
+	octeon_mgmt_reset_hw(p);
+
+	if (p->irq)
+		free_irq(p->irq, netdev);
+
+	/* dma_unmap is a nop on Octeon, so just free everything.  */
+	skb_queue_purge(&p->tx_list);
+	skb_queue_purge(&p->rx_list);
+
+	if (p->rx_ring_handle)
+		dma_unmap_single(p->dev, p->rx_ring_handle,
+				 ring_size_to_bytes(OCTEON_MGMT_RX_RING_SIZE),
+				 DMA_BIDIRECTIONAL);
+	if (p->rx_ring)
+		kfree(p->rx_ring);
+
+	if (p->tx_ring_handle)
+		dma_unmap_single(p->dev, p->tx_ring_handle,
+				 ring_size_to_bytes(OCTEON_MGMT_TX_RING_SIZE),
+				 DMA_BIDIRECTIONAL);
+	if (p->tx_ring)
+		kfree(p->tx_ring);
+
+	return 0;
+}
+
 static int octeon_mgmt_open(struct net_device *netdev)
 {
 	struct octeon_mgmt *p = netdev_priv(netdev);
@@ -1066,13 +997,13 @@ static int octeon_mgmt_open(struct net_device *netdev)
 	}
 
 	oring1.u64 = 0;
-	oring1.s.obase = p->tx_ring_handle >> 3;
-	oring1.s.osize = OCTEON_MGMT_TX_RING_SIZE;
+	oring1.cn63xx.obase = p->tx_ring_handle >> 3;
+	oring1.cn63xx.osize = OCTEON_MGMT_TX_RING_SIZE;
 	cvmx_write_csr(p->mix + MIX_ORING1, oring1.u64);
 
 	iring1.u64 = 0;
-	iring1.s.ibase = p->rx_ring_handle >> 3;
-	iring1.s.isize = OCTEON_MGMT_RX_RING_SIZE;
+	iring1.cn63xx.ibase = p->rx_ring_handle >> 3;
+	iring1.cn63xx.isize = OCTEON_MGMT_RX_RING_SIZE;
 	cvmx_write_csr(p->mix + MIX_IRING1, iring1.u64);
 
 	memcpy(sa.sa_data, netdev->dev_addr, ETH_ALEN);
@@ -1244,52 +1175,11 @@ static int octeon_mgmt_open(struct net_device *netdev)
 	napi_enable(&p->napi);
 
 	return 0;
+
 err_noirq:
-	octeon_mgmt_reset_hw(p);
-	dma_unmap_single(p->dev, p->rx_ring_handle,
-			 ring_size_to_bytes(OCTEON_MGMT_RX_RING_SIZE),
-			 DMA_BIDIRECTIONAL);
-	kfree(p->rx_ring);
 err_nomem:
-	dma_unmap_single(p->dev, p->tx_ring_handle,
-			 ring_size_to_bytes(OCTEON_MGMT_TX_RING_SIZE),
-			 DMA_BIDIRECTIONAL);
-	kfree(p->tx_ring);
+	octeon_mgmt_stop(netdev);
 	return -ENOMEM;
-}
-
-static int octeon_mgmt_stop(struct net_device *netdev)
-{
-	struct octeon_mgmt *p = netdev_priv(netdev);
-
-	napi_disable(&p->napi);
-	netif_stop_queue(netdev);
-
-	if (p->phydev)
-		phy_disconnect(p->phydev);
-	p->phydev = NULL;
-
-	netif_carrier_off(netdev);
-
-	octeon_mgmt_reset_hw(p);
-
-	free_irq(p->irq, netdev);
-
-	/* dma_unmap is a nop on Octeon, so just free everything.  */
-	skb_queue_purge(&p->tx_list);
-	skb_queue_purge(&p->rx_list);
-
-	dma_unmap_single(p->dev, p->rx_ring_handle,
-			 ring_size_to_bytes(OCTEON_MGMT_RX_RING_SIZE),
-			 DMA_BIDIRECTIONAL);
-	kfree(p->rx_ring);
-
-	dma_unmap_single(p->dev, p->tx_ring_handle,
-			 ring_size_to_bytes(OCTEON_MGMT_TX_RING_SIZE),
-			 DMA_BIDIRECTIONAL);
-	kfree(p->tx_ring);
-
-	return 0;
 }
 
 static int octeon_mgmt_xmit(struct sk_buff *skb, struct net_device *netdev)
@@ -1430,6 +1320,37 @@ static const struct net_device_ops octeon_mgmt_ops = {
 #endif
 };
 
+static int octeon_mgmt_remove(struct platform_device *pdev)
+{
+	struct net_device *netdev = dev_get_drvdata(&pdev->dev);
+	struct octeon_mgmt *p = netdev_priv(netdev);
+
+	if (p->napi.dev)
+		netif_napi_del(&p->napi);
+	tasklet_kill(&p->tx_clean_tasklet);
+	unregister_netdev(netdev);
+	dev_set_drvdata(&pdev->dev, NULL);
+	free_netdev(netdev);
+
+	if (p->agl_prt_ctl)
+		devm_iounmap(&pdev->dev,
+			(void __iomem *)p->agl_prt_ctl);
+	if (p->agl_prt_ctl_phys)
+		devm_release_region(&pdev->dev,
+			p->agl_prt_ctl_phys, p->agl_prt_ctl_size);
+	if (p->agl)
+		devm_iounmap(&pdev->dev,
+			(void __iomem *)p->agl);
+	if (p->agl_phys)
+		devm_release_region(&pdev->dev, p->agl_phys, p->agl_size);
+	if (p->mix)
+		devm_iounmap(&pdev->dev,
+			(void __iomem *)p->mix);
+	if (p->mix_phys)
+		devm_release_region(&pdev->dev, p->mix_phys, p->mix_size);
+	return 0;
+}
+
 static int octeon_mgmt_probe(struct platform_device *pdev)
 {
 	struct net_device *netdev;
@@ -1473,55 +1394,54 @@ static int octeon_mgmt_probe(struct platform_device *pdev)
 		goto err;
 
 	p->irq = result;
+	result = -ENXIO; /* default err from here down */
 
 	res_mix = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res_mix == NULL) {
 		dev_err(&pdev->dev, "no 'reg' resource\n");
-		result = -ENXIO;
 		goto err;
 	}
 
 	res_agl = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (res_agl == NULL) {
 		dev_err(&pdev->dev, "no 'reg' resource\n");
-		result = -ENXIO;
 		goto err;
 	}
 
 	res_agl_prt_ctl = platform_get_resource(pdev, IORESOURCE_MEM, 3);
 	if (res_agl_prt_ctl == NULL) {
 		dev_err(&pdev->dev, "no 'reg' resource\n");
-		result = -ENXIO;
 		goto err;
 	}
 
 	p->mix_phys = res_mix->start;
 	p->mix_size = resource_size(res_mix);
-	p->agl_phys = res_agl->start;
-	p->agl_size = resource_size(res_agl);
-	p->agl_prt_ctl_phys = res_agl_prt_ctl->start;
-	p->agl_prt_ctl_size = resource_size(res_agl_prt_ctl);
-
 
 	if (!devm_request_mem_region(&pdev->dev, p->mix_phys, p->mix_size,
 				     res_mix->name)) {
+		p->mix_phys = 0;
 		dev_err(&pdev->dev, "request_mem_region (%s) failed\n",
 			res_mix->name);
-		result = -ENXIO;
 		goto err;
 	}
 
+	p->agl_phys = res_agl->start;
+	p->agl_size = resource_size(res_agl);
+
 	if (!devm_request_mem_region(&pdev->dev, p->agl_phys, p->agl_size,
 				     res_agl->name)) {
-		result = -ENXIO;
+		p->agl_phys = 0;
 		dev_err(&pdev->dev, "request_mem_region (%s) failed\n",
 			res_agl->name);
 		goto err;
 	}
 
+	p->agl_prt_ctl_phys = res_agl_prt_ctl->start;
+	p->agl_prt_ctl_size = resource_size(res_agl_prt_ctl);
+
 	if (!devm_request_mem_region(&pdev->dev, p->agl_prt_ctl_phys,
 				     p->agl_prt_ctl_size, res_agl_prt_ctl->name)) {
-		result = -ENXIO;
+		p->agl_prt_ctl_phys = 0;
 		dev_err(&pdev->dev, "request_mem_region (%s) failed\n",
 			res_agl_prt_ctl->name);
 		goto err;
@@ -1565,17 +1485,8 @@ static int octeon_mgmt_probe(struct platform_device *pdev)
 	return 0;
 
 err:
-	free_netdev(netdev);
+	octeon_mgmt_remove(pdev);
 	return result;
-}
-
-static int octeon_mgmt_remove(struct platform_device *pdev)
-{
-	struct net_device *netdev = platform_get_drvdata(pdev);
-
-	unregister_netdev(netdev);
-	free_netdev(netdev);
-	return 0;
 }
 
 static struct of_device_id octeon_mgmt_match[] = {
