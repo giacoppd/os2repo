@@ -191,6 +191,7 @@ struct rio_dev {
 	struct device dev;	/* LDM device structure */
 	struct resource riores[RIO_MAX_DEV_RESOURCES];
 	int (*pwcback) (struct rio_dev *rdev, union rio_pw_msg *msg, int step);
+	struct bin_attribute memory;    /* Sysfs file for memory access */
 	u16 destid;
 	u8 hopcount;
 	struct rio_dev *prev;
@@ -330,6 +331,8 @@ struct rio_net {
  * @get_inb_message: Callback to get a message from an inbound mailbox queue.
  * @map_inb: Callback to map RapidIO address region into local memory space.
  * @unmap_inb: Callback to unmap RapidIO address region mapped with map_inb().
+ * @map: Callback to map a remote device's memory range to the local system.
+ * @unmap: Callback to unmap a previously mapped range.
  */
 struct rio_ops {
 	int (*lcread) (struct rio_mport *mport, int index, u32 offset, int len,
@@ -355,6 +358,10 @@ struct rio_ops {
 	int (*map_inb)(struct rio_mport *mport, dma_addr_t lstart,
 			u64 rstart, u32 size, u32 flags);
 	void (*unmap_inb)(struct rio_mport *mport, dma_addr_t lstart);
+	phys_t (*map)(struct rio_mport *mport, struct rio_dev *rdev,
+			u64 offset, u64 length);
+	void (*unmap)(struct rio_mport *mport, struct rio_dev *rdev,
+			u64 offset, u64 length, phys_t map);
 };
 
 #define RIO_RESOURCE_MEM	0x00000100

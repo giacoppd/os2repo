@@ -89,7 +89,7 @@ typedef enum {
 	CVMX_PKO_NO_MEMORY,
 	CVMX_PKO_PORT_ALREADY_SETUP,
 	CVMX_PKO_CMD_QUEUE_INIT_ERROR
-} cvmx_pko_status_t;
+} cvmx_pko_return_value_t;
 
 /**
  * This enumeration represents the differnet locking modes supported by PKO.
