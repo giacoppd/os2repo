@@ -275,6 +275,12 @@ static int ksz8873mll_config_aneg(struct phy_device *phydev)
 	return 0;
 }
 
+static struct of_device_id micrel9031_match[] = {
+	{
+		.compatible = "micrel,ksz9031",
+	}
+};
+
 static struct phy_driver ksphy_driver[] = {
 {
 	.phy_id		= PHY_ID_KS8737,
@@ -435,7 +441,10 @@ static struct phy_driver ksphy_driver[] = {
 	.config_intr	= ksz9021_config_intr,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
-	.driver		= { .owner = THIS_MODULE, },
+	.driver		= {
+				.owner = THIS_MODULE,
+				.of_match_table = micrel9031_match,
+			  },
 }, {
 	.phy_id		= PHY_ID_KSZ8873MLL,
 	.phy_id_mask	= 0x00fffff0,

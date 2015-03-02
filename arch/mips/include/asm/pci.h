@@ -159,4 +159,9 @@ static inline void pci_load_of_ranges(struct pci_controller *hose,
 				      struct device_node *node) {}
 #endif
 
+#ifdef CONFIG_CAVIUM_OCTEON_SOC
+/* MSI arch hook */
+#define arch_setup_msi_irqs arch_setup_msi_irqs
+#endif
+
 #endif /* _ASM_PCI_H */

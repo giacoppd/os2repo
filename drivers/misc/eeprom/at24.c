@@ -23,6 +23,7 @@
 #include <linux/of.h>
 #include <linux/i2c.h>
 #include <linux/platform_data/at24.h>
+#include <linux/of_memory_accessor.h>
 
 /*
  * I2C EEPROMs from most vendors are inexpensive and mostly interchangeable.
@@ -637,6 +638,9 @@ static int at24_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	if (chip.setup)
 		chip.setup(&at24->macc, chip.context);
 
+	if (client->dev.of_node)
+		of_memory_accessor_register(&client->dev, &at24->macc);
+
 	return 0;
 
 err_clients:
@@ -654,6 +658,9 @@ static int at24_remove(struct i2c_client *client)
 
 	at24 = i2c_get_clientdata(client);
 	sysfs_remove_bin_file(&client->dev.kobj, &at24->bin);
+
+	if (client->dev.of_node)
+		of_memory_accessor_remove(&client->dev);
 
 	for (i = 1; i < at24->num_addresses; i++)
 		i2c_unregister_device(at24->client[i]);

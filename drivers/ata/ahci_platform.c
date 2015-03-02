@@ -26,6 +26,7 @@
 #include "ahci.h"
 
 static void ahci_host_stop(struct ata_host *host);
+extern void ahci_octeon_config(struct platform_device *pdev);
 
 enum ahci_type {
 	AHCI,		/* standard platform ahci */
@@ -102,6 +103,9 @@ static int ahci_probe(struct platform_device *pdev)
 	int i;
 	int rc;
 
+#if IS_ENABLED(CONFIG_SATA_OCTEON)
+	ahci_octeon_config(pdev);
+#endif
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem) {
 		dev_err(dev, "no mmio space\n");
@@ -330,6 +334,7 @@ static const struct of_device_id ahci_of_match[] = {
 	{ .compatible = "snps,spear-ahci", },
 	{ .compatible = "snps,exynos5440-ahci", },
 	{ .compatible = "ibm,476gtr-ahci", },
+	{ .compatible = "cavium,octeon-7130-ahci", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ahci_of_match);

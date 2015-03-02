@@ -326,7 +326,7 @@ int kvm_mips_handle_commpage_tlb_fault(unsigned long badvaddr,
 	unsigned long entrylo0 = 0, entrylo1 = 0;
 
 
-	pfn0 = CPHYSADDR(vcpu->arch.kseg0_commpage) >> PAGE_SHIFT;
+	pfn0 = CPHYSADDR((unsigned long)vcpu->arch.kseg0_commpage) >> PAGE_SHIFT;
 	pfn1 = 0;
 	entrylo0 = mips3_paddr_to_tlbpfn(pfn0 << PAGE_SHIFT) | (0x3 << 3) | (1 << 2) |
 			(0x1 << 1);
@@ -787,7 +787,7 @@ uint32_t kvm_get_inst(uint32_t *opc, struct kvm_vcpu *vcpu)
 			inst = *(opc);
 		}
 		local_irq_restore(flags);
-	} else if (KVM_GUEST_KSEGX(opc) == KVM_GUEST_KSEG0) {
+	} else if (KVM_GUEST_KSEGX((unsigned long)opc) == KVM_GUEST_KSEG0) {
 		paddr =
 		    kvm_mips_translate_guest_kseg0_to_hpa(vcpu,
 							 (unsigned long) opc);

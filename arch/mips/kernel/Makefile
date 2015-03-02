@@ -43,6 +43,7 @@ obj-$(CONFIG_CPU_R3000)		+= r2300_fpu.o r2300_switch.o
 obj-$(CONFIG_CPU_R6000)		+= r6000_fpu.o r4k_switch.o
 obj-$(CONFIG_CPU_TX39XX)	+= r2300_fpu.o r2300_switch.o
 obj-$(CONFIG_CPU_CAVIUM_OCTEON) += r4k_fpu.o octeon_switch.o
+obj-$(CONFIG_CPU_CAVIUM_OCTEON) += octeon-cpu.o
 
 obj-$(CONFIG_SMP)		+= smp.o
 obj-$(CONFIG_SMP_UP)		+= smp-up.o
@@ -97,7 +98,7 @@ CFLAGS_cpu-bugs64.o	= $(shell if $(CC) $(KBUILD_CFLAGS) -Wa,-mdaddi -c -o /dev/n
 
 obj-$(CONFIG_HAVE_STD_PC_SERIAL_PORT)	+= 8250-platform.o
 
-obj-$(CONFIG_PERF_EVENTS)	+= perf_event.o
+obj-$(CONFIG_PERF_EVENTS)	+= perf_event.o perf_regs.o
 obj-$(CONFIG_HW_PERF_EVENTS)	+= perf_event_mipsxx.o
 
 obj-$(CONFIG_JUMP_LABEL)	+= jump_label.o
@@ -120,4 +121,8 @@ CFLAGS_branch.o			= $(CFLAGS_DSP)
 CFLAGS_ptrace.o			= $(CFLAGS_DSP)
 endif
 
-CPPFLAGS_vmlinux.lds		:= $(KBUILD_CFLAGS)
+ifdef CONFIG_MAPPED_KERNEL
+  PHYS_LOAD_ADDRESS = -D"PHYSADDR=$(CONFIG_PHYS_LOAD_ADDRESS)"
+endif
+
+CPPFLAGS_vmlinux.lds           := $(KBUILD_CFLAGS) $(PHYS_LOAD_ADDRESS)
