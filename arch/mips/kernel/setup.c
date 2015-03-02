@@ -24,6 +24,7 @@
 #include <linux/debugfs.h>
 #include <linux/kexec.h>
 #include <linux/sizes.h>
+#include <linux/sort.h>
 
 #include <asm/addrspace.h>
 #include <asm/bootinfo.h>
@@ -34,6 +35,8 @@
 #include <asm/setup.h>
 #include <asm/smp-ops.h>
 #include <asm/prom.h>
+
+#include <mach_bootmem.h>
 
 struct cpuinfo_mips cpu_data[NR_CPUS] __read_mostly;
 
@@ -60,6 +63,7 @@ unsigned long mips_machtype __read_mostly = MACH_UNKNOWN;
 EXPORT_SYMBOL(mips_machtype);
 
 struct boot_mem_map boot_mem_map;
+bool initrd_in_reserved;
 
 static char __initdata command_line[COMMAND_LINE_SIZE];
 char __initdata arcs_cmdline[COMMAND_LINE_SIZE];
@@ -160,6 +164,9 @@ static void __init print_memory_map(void)
 			break;
 		case BOOT_MEM_INIT_RAM:
 			printk(KERN_CONT "(usable after init)\n");
+			break;
+		case BOOT_MEM_KERNEL:
+			printk(KERN_CONT "(kernel data and code)\n");
 			break;
 		case BOOT_MEM_ROM_DATA:
 			printk(KERN_CONT "(ROM data)\n");
@@ -282,11 +289,16 @@ static unsigned long __init init_initrd(void)
  * Initialize the bootmem allocator. It also setup initrd related data
  * if needed.
  */
-#ifdef CONFIG_SGI_IP27
+#if defined(CONFIG_SGI_IP27) || defined(mach_bootmem_init)
+
+#ifndef mach_bootmem_init
+static void mach_bootmem_init(void) {}
+#endif
 
 static void __init bootmem_init(void)
 {
 	init_initrd();
+	mach_bootmem_init();
 	finalize_initrd();
 }
 
@@ -305,8 +317,13 @@ static void __init bootmem_init(void)
 	 * as our memory range starting point. Once bootmem is inited we
 	 * will reserve the area used for the initrd.
 	 */
-	init_initrd();
-	reserved_end = (unsigned long) PFN_UP(__pa_symbol(&_end));
+	if (initrd_in_reserved) {
+		init_initrd();
+		reserved_end = PFN_UP(__pa_symbol(&_end));
+	} else {
+		reserved_end = max_t(unsigned long, init_initrd(),
+				     PFN_UP(__pa_symbol(&_end)));
+	}
 
 	/*
 	 * max_low_pfn is not a number of pages. The number of pages
@@ -321,8 +338,14 @@ static void __init bootmem_init(void)
 	for (i = 0; i < boot_mem_map.nr_map; i++) {
 		unsigned long start, end;
 
-		if (boot_mem_map.map[i].type != BOOT_MEM_RAM)
+		switch (boot_mem_map.map[i].type) {
+		case BOOT_MEM_RAM:
+		case BOOT_MEM_INIT_RAM:
+			break;
+		default:
+			/* Not usable memory */
 			continue;
+		}
 
 		start = PFN_UP(boot_mem_map.map[i].addr);
 		end = PFN_DOWN(boot_mem_map.map[i].addr
@@ -598,18 +621,28 @@ static void __init request_crashkernel(struct resource *res)
 			(unsigned long)(crashk_res.start  >> 20));
 }
 #else /* !defined(CONFIG_KEXEC)		*/
-static void __init mips_parse_crashkernel(void)
-{
-}
-
 static void __init request_crashkernel(struct resource *res)
 {
 }
 #endif /* !defined(CONFIG_KEXEC)  */
 
+static int __init mem_map_entry_cmp(const void *a, const void *b)
+{
+	const struct boot_mem_map_entry *ea = a;
+	const struct boot_mem_map_entry *eb = b;
+
+	if (ea->addr < eb->addr)
+		return -1;
+	else if (ea->addr > eb->addr)
+		return 1;
+	else
+		return 0;
+}
+
 static void __init arch_mem_init(char **cmdline_p)
 {
 	extern void plat_mem_setup(void);
+	phys_t kernel_begin, init_begin, init_end, kernel_end;
 
 	/* call board setup routine */
 	plat_mem_setup();
@@ -620,12 +653,16 @@ static void __init arch_mem_init(char **cmdline_p)
 	 * into another memory section you don't want that to be
 	 * freed when the initdata is freed.
 	 */
-	arch_mem_addpart(PFN_DOWN(__pa_symbol(&_text)) << PAGE_SHIFT,
-			 PFN_UP(__pa_symbol(&_edata)) << PAGE_SHIFT,
-			 BOOT_MEM_RAM);
-	arch_mem_addpart(PFN_UP(__pa_symbol(&__init_begin)) << PAGE_SHIFT,
-			 PFN_DOWN(__pa_symbol(&__init_end)) << PAGE_SHIFT,
-			 BOOT_MEM_INIT_RAM);
+	kernel_begin = PFN_DOWN(__pa_symbol(&_text)) << PAGE_SHIFT;
+	kernel_end = PFN_UP(__pa_symbol(&_end)) << PAGE_SHIFT;
+	init_begin = PFN_UP(__pa_symbol(&__init_begin)) << PAGE_SHIFT;
+	init_end = PFN_DOWN(__pa_symbol(&__init_end)) << PAGE_SHIFT;
+	arch_mem_addpart(kernel_begin, init_begin, BOOT_MEM_KERNEL);
+	arch_mem_addpart(init_end, kernel_end, BOOT_MEM_KERNEL);
+	arch_mem_addpart(init_begin, init_end, BOOT_MEM_INIT_RAM);
+
+	sort(boot_mem_map.map, boot_mem_map.nr_map,
+	     sizeof(struct boot_mem_map_entry), mem_map_entry_cmp, NULL);
 
 	pr_info("Determined physical RAM map:\n");
 	print_memory_map();
@@ -663,9 +700,9 @@ static void __init arch_mem_init(char **cmdline_p)
 				BOOTMEM_DEFAULT);
 	}
 #endif
-
-	mips_parse_crashkernel();
 #ifdef CONFIG_KEXEC
+	mips_parse_crashkernel();
+
 	if (crashk_res.start != crashk_res.end)
 		reserve_bootmem(crashk_res.start,
 				crashk_res.end - crashk_res.start + 1,
@@ -705,6 +742,25 @@ static void __init resource_init(void)
 		case BOOT_MEM_RAM:
 		case BOOT_MEM_INIT_RAM:
 		case BOOT_MEM_ROM_DATA:
+		case BOOT_MEM_KERNEL:
+			/* Try to merge on next piece, they are sorted. */
+			while (i + 1 < boot_mem_map.nr_map &&
+			    boot_mem_map.map[i + 1].addr == end + 1) {
+				switch (boot_mem_map.map[i + 1].type) {
+				case BOOT_MEM_RAM:
+				case BOOT_MEM_INIT_RAM:
+				case BOOT_MEM_ROM_DATA:
+				case BOOT_MEM_KERNEL:
+					i++;
+					end = boot_mem_map.map[i].addr + boot_mem_map.map[i].size - 1;
+					if (end >= HIGHMEM_START)
+						end = HIGHMEM_START - 1;
+					break;
+				default:
+					goto no_merge;
+				}
+			}
+no_merge:
 			res->name = "System RAM";
 			break;
 		case BOOT_MEM_RESERVED:

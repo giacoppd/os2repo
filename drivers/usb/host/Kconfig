@@ -24,6 +24,17 @@ config USB_XHCI_HCD
 	  To compile this driver as a module, choose M here: the
 	  module will be called xhci-hcd.
 
+
+config USB_XHCI_HCD_OCTEON
+	tristate
+	depends on USB_XHCI_HCD && CAVIUM_OCTEON_SOC
+	default y
+
+config USB_XHCI_HCD_OCTEON
+	tristate
+	depends on USB_XHCI_HCD && CAVIUM_OCTEON_SOC
+	default y
+
 if USB_XHCI_HCD
 
 config USB_XHCI_PLATFORM
@@ -277,6 +288,14 @@ config USB_EHCI_HCD_PLATFORM
 	  provides a memory space and an irq.
 
 	  If unsure, say N.
+
+config USB_OCTEON_HCD
+	tristate "Octeon usb host driver"
+	depends on CAVIUM_OCTEON_SOC
+	default n
+	 help
+	  The Octeon DWC_OTG USB host controller.  All CN3XXX and
+	  CN5XXX based chips with USB are supported.
 
 config USB_OCTEON_EHCI
 	bool "Octeon on-chip EHCI support"

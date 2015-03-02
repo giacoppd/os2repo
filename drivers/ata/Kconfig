@@ -155,6 +155,11 @@ config ATA_SFF
 
 	  If unsure, say Y.
 
+config SATA_OCTEON
+	tristate
+	depends on SATA_AHCI_PLATFORM && CAVIUM_OCTEON_SOC
+	default y
+
 if ATA_SFF
 
 comment "SFF controllers with custom DMA interface"

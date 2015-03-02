@@ -857,7 +857,8 @@ static int mmc_select_hs200(struct mmc_card *card)
 	/* switch to HS200 mode if bus width set successfully */
 	if (!err)
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				 EXT_CSD_HS_TIMING, 2, 0);
+				 EXT_CSD_HS_TIMING, 2,
+				 card->ext_csd.generic_cmd6_time);
 err:
 	return err;
 }
