@@ -3569,6 +3569,18 @@ ident_done:
 			break;
 	}
 
+#ifdef CONFIG_CAVIUM_OCTEON_NAND
+	/*
+	 * For Octeon, we treat all parts as 8 bit.  Force chip options
+	 * to 8 bit when called with 8 bit busw
+	 * XXX- there must be a cleaner way to do this XXX
+	 */
+	chip->options &= ~(NAND_BUSWIDTH_16 |
+			NAND_BUSWIDTH_AUTO | NAND_SUBPAGE_READ);
+	busw = 0;
+#endif
+
+
 	if (chip->options & NAND_BUSWIDTH_AUTO) {
 		WARN_ON(chip->options & NAND_BUSWIDTH_16);
 		chip->options |= busw;

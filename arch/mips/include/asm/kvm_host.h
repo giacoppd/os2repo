@@ -20,13 +20,14 @@
 #include <linux/spinlock.h>
 
 
-#define KVM_MAX_VCPUS		1
+#define KVM_MAX_VCPUS		8
 #define KVM_USER_MEM_SLOTS	8
 /* memory slots that does not exposed to userspace */
 #define KVM_PRIVATE_MEM_SLOTS 	0
 
+#ifdef CONFIG_KVM_MIPS_TE
 #define KVM_COALESCED_MMIO_PAGE_OFFSET 1
-
+#endif
 
 
 /* Special address that contains the comm page, used for reducing # of traps */
@@ -356,7 +357,7 @@ struct kvm_vcpu_arch {
 	unsigned long gprs[32];
 	unsigned long hi;
 	unsigned long lo;
-	unsigned long pc;
+	unsigned long epc;
 
 	/* FPU State */
 	struct mips_fpu_struct fpu;

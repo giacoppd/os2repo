@@ -29,6 +29,7 @@
 #include <linux/cache.h>
 
 #include <asm/cacheflush.h>
+#include <asm/mipsregs.h>
 #include <asm/cpu-type.h>
 #include <asm/pgtable.h>
 #include <asm/war.h>
@@ -55,7 +56,9 @@ struct tlb_reg_save {
 	unsigned long b;
 } ____cacheline_aligned_in_smp;
 
+#ifndef TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET
 static struct tlb_reg_save handler_reg_save[NR_CPUS];
+#endif
 
 static inline int r45k_bvahwbug(void)
 {
@@ -102,20 +105,14 @@ static int use_lwx_insns(void)
 		return 0;
 	}
 }
-#if defined(CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE) && \
-    CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0
+#ifdef CONFIG_CPU_CAVIUM_OCTEON
 static bool scratchpad_available(void)
 {
 	return true;
 }
 static int scratchpad_offset(int i)
 {
-	/*
-	 * CVMSEG starts at address -32768 and extends for
-	 * CAVIUM_OCTEON_CVMSEG_SIZE 128 byte cache lines.
-	 */
-	i += 1; /* Kernel use starts at the top and works down. */
-	return CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE * 128 - (8 * i) - 32768;
+	return CAVIUM_OCTEON_SCRATCH_OFFSET - (8 * i);
 }
 #else
 static bool scratchpad_available(void)
@@ -301,8 +298,6 @@ static struct uasm_reloc relocs[128];
 
 static int check_for_high_segbits;
 
-static unsigned int kscratch_used_mask;
-
 static inline int __maybe_unused c0_kscratch(void)
 {
 	switch (current_cpu_type()) {
@@ -312,23 +307,6 @@ static inline int __maybe_unused c0_kscratch(void)
 	default:
 		return 31;
 	}
-}
-
-static int allocate_kscratch(void)
-{
-	int r;
-	unsigned int a = cpu_data[0].kscratch_mask & ~kscratch_used_mask;
-
-	r = ffs(a);
-
-	if (r == 0)
-		return -1;
-
-	r--; /* make it zero based */
-
-	kscratch_used_mask |= (1 << r);
-
-	return r;
 }
 
 static int scratch_reg;
@@ -348,6 +326,13 @@ static struct work_registers build_get_work_registers(u32 **p)
 		return r;
 	}
 
+#ifdef TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET
+	UASM_i_SW(p, 1, TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET(0), 0);
+	r.r1 = K0;
+	r.r2 = K1;
+	r.r3 = 1;
+	return r;
+#else
 	if (num_possible_cpus() > 1) {
 		/* Get smp_processor_id */
 		UASM_i_CPUID_MFC0(p, K0, SMP_CPUID_REG);
@@ -369,17 +354,32 @@ static struct work_registers build_get_work_registers(u32 **p)
 	r.r2 = 1;
 	r.r3 = 2;
 	return r;
+#endif /* TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET */
 }
 
 static void build_restore_work_registers(u32 **p)
 {
 	if (scratch_reg >= 0) {
 		UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
+#ifdef CONFIG_KVM_MIPS_VZ
+		UASM_i_MFC0(p, K0, 31, 2);
+		UASM_i_MFC0(p, K1, 31, 3);
+#endif
 		return;
 	}
+
+#ifdef TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET
+	UASM_i_LW(p, 1, TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET(0), 0);
+#else
 	/* K0 already points to save area, restore $1 and $2  */
 	UASM_i_LW(p, 1, offsetof(struct tlb_reg_save, a), K0);
 	UASM_i_LW(p, 2, offsetof(struct tlb_reg_save, b), K0);
+#endif /* TEMPORARY_SCRATCHPAD_FOR_KERNEL_OFFSET */
+
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MFC0(p, K0, 31, 2);
+	UASM_i_MFC0(p, K1, 31, 3);
+#endif
 }
 
 #ifndef CONFIG_MIPS_PGD_C0_CONTEXT
@@ -514,7 +514,8 @@ static void build_tlb_write_entry(u32 **p, struct uasm_label **l,
 			break;
 
 		default:
-			uasm_i_ehb(p);
+			if (cpu_has_mips_r2_exec_hazard)
+				uasm_i_ehb(p);
 			break;
 		}
 		tlbw(p);
@@ -899,17 +900,21 @@ build_get_pgd_vmalloc64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 		 * to mimic that here by taking a load/istream page
 		 * fault.
 		 */
-		UASM_i_LA(p, ptr, (unsigned long)tlb_do_page_fault_0);
-		uasm_i_jr(p, ptr);
+		UASM_i_MTC0(p, 0, C0_ENTRYLO0); /* Invalid */
+		UASM_i_MTC0(p, 0, C0_ENTRYLO1); /* Invalid */
+		build_tlb_write_entry(p, l, r, tlb_random);
 
 		if (mode == refill_scratch) {
 			if (scratch_reg >= 0)
 				UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
 			else
 				UASM_i_LW(p, 1, scratchpad_offset(0), 0);
-		} else {
-			uasm_i_nop(p);
 		}
+#ifdef CONFIG_KVM_MIPS_VZ
+		UASM_i_MFC0(p, K0, 31, 2);
+		UASM_i_MFC0(p, K1, 31, 3);
+#endif
+		uasm_i_eret(p); /* return from trap */
 	}
 }
 
@@ -1070,7 +1075,10 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 	unsigned int even, odd;
 	int vmalloc_branch_delay_filled = 0;
 	const int scratch = 1; /* Our extra working register */
-
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MTC0(p, K0, 31, 2);
+	UASM_i_MTC0(p, K1, 31, 3);
+#endif
 	rv.huge_pte = scratch;
 	rv.restore_scratch = 0;
 	rv.need_reload_pte = false;
@@ -1215,18 +1223,30 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 		UASM_i_MFC0(p, scratch, c0_kscratch(), c0_scratch_reg);
 		build_tlb_write_entry(p, l, r, tlb_random);
 		uasm_l_leave(l, *p);
+#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+		UASM_i_MFC0(p, K0, 4, 2);
+#endif
 		rv.restore_scratch = 1;
 	} else if (PAGE_SHIFT == 14 || PAGE_SHIFT == 13)  {
 		build_tlb_write_entry(p, l, r, tlb_random);
 		uasm_l_leave(l, *p);
 		UASM_i_LW(p, scratch, scratchpad_offset(0), 0);
+#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+		UASM_i_LW(p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread pointer */
+#endif
 	} else {
 		UASM_i_LW(p, scratch, scratchpad_offset(0), 0);
 		build_tlb_write_entry(p, l, r, tlb_random);
 		uasm_l_leave(l, *p);
+#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+		UASM_i_LW(p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread pointer */
+#endif
 		rv.restore_scratch = 1;
 	}
-
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MFC0(p, K0, 31, 2);
+	UASM_i_MFC0(p, K1, 31, 3);
+#endif
 	uasm_i_eret(p); /* return from trap */
 
 	return rv;
@@ -1249,21 +1269,22 @@ static void build_r4000_tlb_refill_handler(void)
 	unsigned int final_len;
 	struct mips_huge_tlb_info htlb_info __maybe_unused;
 	enum vmalloc64_mode vmalloc_mode __maybe_unused;
-#ifdef CONFIG_64BIT
-	bool is64bit = true;
-#else
-	bool is64bit = false;
-#endif
+	
 	memset(tlb_handler, 0, sizeof(tlb_handler));
 	memset(labels, 0, sizeof(labels));
 	memset(relocs, 0, sizeof(relocs));
 	memset(final_handler, 0, sizeof(final_handler));
 
-	if (is64bit && (scratch_reg >= 0 || scratchpad_available()) && use_bbit_insns()) {
+	if (IS_ENABLED(CONFIG_64BIT) &&
+		(scratch_reg > 0 || scratchpad_available()) && use_bbit_insns()) {
 		htlb_info = build_fast_tlb_refill_handler(&p, &l, &r, K0, K1,
 							  scratch_reg);
 		vmalloc_mode = refill_scratch;
 	} else {
+#ifdef CONFIG_KVM_MIPS_VZ
+	UASM_i_MTC0(&p, K0, 31, 2);
+	UASM_i_MTC0(&p, K1, 31, 3);
+#endif
 		htlb_info.huge_pte = K0;
 		htlb_info.restore_scratch = 0;
 		htlb_info.need_reload_pte = true;
@@ -1299,6 +1320,12 @@ static void build_r4000_tlb_refill_handler(void)
 		build_update_entries(&p, K0, K1);
 		build_tlb_write_entry(&p, &l, &r, tlb_random);
 		uasm_l_leave(&l, p);
+#ifdef CONFIG_KVM_MIPS_VZ
+		UASM_i_MFC0(&p, K0, 31, 2);
+		UASM_i_MFC0(&p, K1, 31, 3);
+#elif defined(CONFIG_FAST_ACCESS_TO_THREAD_POINTER)
+		UASM_i_LW(&p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread ptr */
+#endif
 		uasm_i_eret(&p); /* return from trap */
 	}
 #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
@@ -1453,6 +1480,18 @@ static void build_setup_pgd(void)
 		struct uasm_reloc *r = relocs;
 
 		/* PGD << 11 in c0_Context */
+#ifdef CONFIG_MAPPED_KERNEL
+		/*
+		 * if (&swapper_pg_dir == pgd)
+		 *     pgd = pgd - phys_to_kernel_offset;
+		 */
+		UASM_i_LA(&p, a1, (long)&swapper_pg_dir);
+		uasm_il_bne(&p, &r, a0, a1, label_tlbl_goaround1);
+		UASM_i_LA_mostly(&p, a1, (long)&phys_to_kernel_offset);
+		UASM_i_LW(&p, a1, uasm_rel_lo((long)&phys_to_kernel_offset), a1);
+		UASM_i_SUBU(&p, a0, a0, a1);
+		/* Fall through to tlbl_goaround1. */
+#else
 		/*
 		 * If it is a ckseg0 address, convert to a physical
 		 * address.  Shifting right by 29 and adding 4 will
@@ -1464,6 +1503,7 @@ static void build_setup_pgd(void)
 		uasm_il_bnez(&p, &r, a1, label_tlbl_goaround1);
 		uasm_i_nop(&p);
 		uasm_i_dinsm(&p, a0, 0, 29, 64 - 29);
+#endif /* CONFIG_MAPPED_KERNEL */
 		uasm_l_tlbl_goaround1(&l, p);
 		UASM_i_SLL(&p, a0, a0, 11);
 		uasm_i_jr(&p, 31);
@@ -1886,6 +1926,9 @@ build_r4000_tlbchange_handler_tail(u32 **p, struct uasm_label **l,
 	build_tlb_write_entry(p, l, r, tlb_indexed);
 	uasm_l_leave(l, *p);
 	build_restore_work_registers(p);
+#ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+	UASM_i_LW(p, K0, FAST_ACCESS_THREAD_OFFSET, 0);  /* K0 = thread ptr */
+#endif
 	uasm_i_eret(p); /* return from trap */
 
 #ifdef CONFIG_64BIT

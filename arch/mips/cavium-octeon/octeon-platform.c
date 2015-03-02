@@ -66,108 +66,6 @@ out:
 }
 device_initcall(octeon_rng_device_init);
 
-#ifdef CONFIG_USB
-
-static int __init octeon_ehci_device_init(void)
-{
-	struct platform_device *pd;
-	int ret = 0;
-
-	struct resource usb_resources[] = {
-		{
-			.flags	= IORESOURCE_MEM,
-		}, {
-			.flags	= IORESOURCE_IRQ,
-		}
-	};
-
-	/* Only Octeon2 has ehci/ohci */
-	if (!OCTEON_IS_MODEL(OCTEON_CN63XX))
-		return 0;
-
-	if (octeon_is_simulation() || usb_disabled())
-		return 0; /* No USB in the simulator. */
-
-	pd = platform_device_alloc("octeon-ehci", 0);
-	if (!pd) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	usb_resources[0].start = 0x00016F0000000000ULL;
-	usb_resources[0].end = usb_resources[0].start + 0x100;
-
-	usb_resources[1].start = OCTEON_IRQ_USB0;
-	usb_resources[1].end = OCTEON_IRQ_USB0;
-
-	ret = platform_device_add_resources(pd, usb_resources,
-					    ARRAY_SIZE(usb_resources));
-	if (ret)
-		goto fail;
-
-	ret = platform_device_add(pd);
-	if (ret)
-		goto fail;
-
-	return ret;
-fail:
-	platform_device_put(pd);
-out:
-	return ret;
-}
-device_initcall(octeon_ehci_device_init);
-
-static int __init octeon_ohci_device_init(void)
-{
-	struct platform_device *pd;
-	int ret = 0;
-
-	struct resource usb_resources[] = {
-		{
-			.flags	= IORESOURCE_MEM,
-		}, {
-			.flags	= IORESOURCE_IRQ,
-		}
-	};
-
-	/* Only Octeon2 has ehci/ohci */
-	if (!OCTEON_IS_MODEL(OCTEON_CN63XX))
-		return 0;
-
-	if (octeon_is_simulation() || usb_disabled())
-		return 0; /* No USB in the simulator. */
-
-	pd = platform_device_alloc("octeon-ohci", 0);
-	if (!pd) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	usb_resources[0].start = 0x00016F0000000400ULL;
-	usb_resources[0].end = usb_resources[0].start + 0x100;
-
-	usb_resources[1].start = OCTEON_IRQ_USB0;
-	usb_resources[1].end = OCTEON_IRQ_USB0;
-
-	ret = platform_device_add_resources(pd, usb_resources,
-					    ARRAY_SIZE(usb_resources));
-	if (ret)
-		goto fail;
-
-	ret = platform_device_add(pd);
-	if (ret)
-		goto fail;
-
-	return ret;
-fail:
-	platform_device_put(pd);
-out:
-	return ret;
-}
-device_initcall(octeon_ohci_device_init);
-
-#endif /* CONFIG_USB */
-
 static struct of_device_id __initdata octeon_ids[] = {
 	{ .compatible = "simple-bus", },
 	{ .compatible = "cavium,octeon-6335-uctl", },
@@ -175,6 +73,8 @@ static struct of_device_id __initdata octeon_ids[] = {
 	{ .compatible = "cavium,octeon-3860-bootbus", },
 	{ .compatible = "cavium,mdio-mux", },
 	{ .compatible = "gpio-leds", },
+	{ .compatible = "cavium,octeon-7130-usb-uctl", },
+	{ .compatible = "cavium,octeon-7130-sata-uctl", },
 	{},
 };
 
@@ -426,20 +326,27 @@ int __init octeon_prune_device_tree(void)
 	else
 		max_port = 1;
 
-	for (i = 0; i < 2; i++) {
-		int i2c;
+	/*
+	 * Landbird NIC card does not have PHY. Probing MDIO is putting
+	 * XAUI in interface 0 in bad state.
+	 */
+	if (octeon_bootinfo->board_type == CVMX_BOARD_TYPE_NIC_XLE_10G)
+		max_port = 0;
+
+	for (i = 0; i < 4; i++) {
+		int smi;
 		snprintf(name_buffer, sizeof(name_buffer),
 			 "twsi%d", i);
 		alias_prop = fdt_getprop(initial_boot_params, aliases,
 					name_buffer, NULL);
 
 		if (alias_prop) {
-			i2c = fdt_path_offset(initial_boot_params, alias_prop);
-			if (i2c < 0)
+			smi = fdt_path_offset(initial_boot_params, alias_prop);
+			if (smi < 0)
 				continue;
 			if (i >= max_port) {
 				pr_debug("Deleting twsi%d\n", i);
-				fdt_nop_node(initial_boot_params, i2c);
+				fdt_nop_node(initial_boot_params, smi);
 				fdt_nop_property(initial_boot_params, aliases,
 						 name_buffer);
 			}
@@ -687,6 +594,7 @@ end_led:
 	alias_prop = fdt_getprop(initial_boot_params, aliases,
 				 "usbn", NULL);
 	if (alias_prop) {
+
 		int usbn = fdt_path_offset(initial_boot_params, alias_prop);
 
 		if (usbn >= 0 && (current_cpu_type() == CPU_CAVIUM_OCTEON2 ||
@@ -696,7 +604,7 @@ end_led:
 			fdt_nop_property(initial_boot_params, aliases, "usbn");
 		} else  {
 			__be32 new_f[1];
-			enum cvmx_helper_board_usb_clock_types c;
+			cvmx_helper_board_usb_clock_types_t c;
 			c = __cvmx_helper_board_usb_get_clock_type();
 			switch (c) {
 			case USB_CLOCK_TYPE_REF_48:

@@ -18,7 +18,23 @@ static inline unsigned long __xchg_u32(volatile int * m, unsigned int val)
 
 	smp_mb__before_llsc();
 
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_octeon2_isa && kernel_uses_llsc) {
+		if (__builtin_constant_p(val) && val == 0)
+			__asm__ __volatile__("lac\t%0,(%1)\t# xchg_u32"
+					: "=r" (retval)
+					: "r" (m)
+					: "memory");
+		else if (__builtin_constant_p(val) && val == 0xffffffffu)
+			__asm__ __volatile__("las\t%0,(%1)\t# xchg_u32"
+					: "=r" (retval)
+					: "r" (m)
+					: "memory");
+		else
+			__asm__ __volatile__("law\t%0,(%1),%2\t# xchg_u32"
+					: "=r" (retval)
+					: "r" (m), "r" (val)
+					: "memory");
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		unsigned long dummy;
 
 		__asm__ __volatile__(
@@ -70,7 +86,23 @@ static inline __u64 __xchg_u64(volatile __u64 * m, __u64 val)
 
 	smp_mb__before_llsc();
 
-	if (kernel_uses_llsc && R10000_LLSC_WAR) {
+	if (cpu_has_octeon2_isa && kernel_uses_llsc) {
+		if (__builtin_constant_p(val) && val == 0)
+			__asm__ __volatile__("lacd\t%0,(%1)\t# xchg_u64"
+					: "=r" (retval)
+					: "r" (m)
+					: "memory");
+		else if (__builtin_constant_p(val) && val == 0xffffffffffffffffull)
+			__asm__ __volatile__("lasd\t%0,(%1)\t# xchg_u64"
+					: "=r" (retval)
+					: "r" (m)
+					: "memory");
+		else
+			__asm__ __volatile__("lawd\t%0,(%1),%2\t# xchg_u64"
+					: "=r" (retval)
+					: "r" (m), "r" (val)
+					: "memory");
+	} else if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		unsigned long dummy;
 
 		__asm__ __volatile__(

@@ -11,8 +11,12 @@
 
 #include <linux/pci.h>
 
-/* Some PCI cards require delays when accessing config space. */
-#define PCI_CONFIG_SPACE_DELAY 10000
+/*
+ * Some PCI cards require delays when accessing config space. A
+ * Sil3124 behind an Intel bridge will fail with 10ms and succeed with
+ * 11ms. The setting below of 15ms adds some extra.
+ */
+#define PCI_CONFIG_SPACE_DELAY 15000
 
 /*
  * The physical memory base mapped by BAR1.  256MB at the end of the
