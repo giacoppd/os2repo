@@ -26,6 +26,8 @@
 #include <linux/string.h>
 #include <linux/clk.h>
 #include <linux/usb/ulpi.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include "ehci-zynq.h"
 
@@ -152,10 +154,32 @@ static int zynq_dr_of_probe(struct platform_device *ofdev)
 	static unsigned int idx;
 	struct resource *res;
 	int i, phy_init;
+	int reset_gpio;
 	int ret;
 
 	pdata = &data;
 	memset(pdata, 0, sizeof(data));
+
+	reset_gpio = of_get_named_gpio(np, "xlnx,phy-reset-gpio", 0);
+	if (gpio_is_valid(reset_gpio)) {
+		ret = devm_gpio_request_one(&ofdev->dev, reset_gpio,
+				GPIOF_INIT_LOW, "ulpi resetb");
+		if (ret) {
+			dev_err(&ofdev->dev, "Failed to request ULPI reset gpio: %d\n", ret);
+			return ret;
+		}
+		udelay(1); /* ULPI Datasheet specifies a 1us pulse width for reset */
+		if (of_property_read_bool(np, "xlnx,phy-reset-gpio-tristate"))
+			gpio_direction_input(reset_gpio);
+		else
+			gpio_set_value_cansleep(reset_gpio, 1);
+		udelay(1); /* ULPI will assert the DIR line, give it time to do so */
+	} else {
+		/* GPIO controller is not yet available, try again later. */
+		if (reset_gpio == -EPROBE_DEFER) {
+			return -EPROBE_DEFER;
+		}
+	}
 
 	res = platform_get_resource(ofdev, IORESOURCE_IRQ, 0);
 	if (IS_ERR(res)) {
