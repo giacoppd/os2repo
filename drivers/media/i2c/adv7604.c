@@ -2693,7 +2693,7 @@ static int adv7604_parse_dt(struct adv7604_state *state)
 	np = state->i2c_clients[ADV7604_PAGE_IO]->dev.of_node;
 
 	/* Parse the endpoint. */
-	endpoint = v4l2_of_get_next_endpoint(np, NULL);
+	endpoint = of_graph_get_next_endpoint(np, NULL);
 	if (!endpoint)
 		return -EINVAL;
 
