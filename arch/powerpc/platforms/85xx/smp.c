@@ -484,24 +484,26 @@ static int smp_85xx_kick_cpu(int nr)
 		 * Thread 1.
 		 */
 		if (cpu_online(cpu_first_thread_sibling(nr))) {
-
-			local_irq_save(flags);
 #ifdef CONFIG_PPC_E500MC
 			if (system_state == SYSTEM_RUNNING) {
 				/*
 				 * In cpu hotplug case, Thread 1 must start by calling
 				 * fsl_enable_threads() by the thread0 on the same core.
 				 */
-				if (smp_processor_id() == cpu_first_thread_sibling(nr))
+				if (get_cpu() == cpu_first_thread_sibling(nr)) {
 					fsl_enable_threads(NULL);
-				else
+					put_cpu();
+				} else {
+					put_cpu();
 					work_on_cpu(cpu_first_thread_sibling(nr),
 						fsl_enable_threads, NULL);
+				}
 
 				if (qoriq_pm_ops->irq_unmask)
 					qoriq_pm_ops->irq_unmask(nr);
 			}
 #endif
+			local_irq_save(flags);
 			smp_generic_kick_cpu(nr);
 
 			generic_set_cpu_up(nr);
