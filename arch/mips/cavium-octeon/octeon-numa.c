@@ -12,6 +12,7 @@
 #include <linux/nodemask.h>
 #include <linux/bootmem.h>
 #include <linux/swap.h>
+#include <linux/of.h>
 
 #include <asm/sections.h>
 
@@ -100,3 +101,28 @@ void __init mem_init(void)
 	       datasize >> 10,
 	       initsize >> 10);
 }
+
+int of_node_to_nid(struct device_node *np)
+{
+	int ret = 0;
+	struct device_node *node = of_node_get(np);
+
+	do {
+		if (strcmp("soc", node->name) == 0) {
+			int rc;
+			u32 msbits = 0;
+
+			rc = of_property_read_u32_index(node, "ranges", 2, &msbits);
+			if (rc == -EINVAL)
+				WARN_ONCE(true, "Missing ranges property<%s>\n", node->full_name);
+			ret = (msbits >> 4) & 1;
+			break;
+		}
+		node = of_get_next_parent(node);
+	} while (node);
+
+	of_node_put(node);
+	return ret;
+}
+EXPORT_SYMBOL(of_node_to_nid);
+

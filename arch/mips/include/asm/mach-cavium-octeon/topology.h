@@ -30,6 +30,11 @@ static inline struct cpumask *cpumask_of_pcibus(struct pci_bus *bus)
 {
 	return cpumask_of_node(pcibus_to_node(bus));
 }
+
+struct device_node;
+int of_node_to_nid(struct device_node *np);
+#define of_node_to_nid of_node_to_nid
+
 #endif /* CONFIG_NUMA */
 
 static inline int pa_to_nid(u64 pa)
