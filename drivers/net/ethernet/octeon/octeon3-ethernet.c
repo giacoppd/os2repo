@@ -1026,8 +1026,10 @@ static int octeon3_eth_rx_one(struct octeon3_rx *rx, bool is_async,
 			if (segments <= 0)
 				break;
 			packet_ptr.u64 = *(u64 *)(data - 8);
+#ifndef __LITTLE_ENDIAN
 			/* PKI_BUFLINK_S's are endian-swapped */
 			packet_ptr.u64 = swab64(packet_ptr.u64);
+#endif
 			data = phys_to_virt(packet_ptr.addr);
 			skb = octeon3_eth_work_to_skb((void *)round_down((unsigned long)data, 128ul));
 		}
@@ -1061,9 +1063,10 @@ static int octeon3_eth_rx_one(struct octeon3_rx *rx, bool is_async,
 			if (segments == 0)
 				break;
 			packet_ptr.u64 = *(u64 *)(data - 8);
+#ifndef __LITTLE_ENDIAN
 			/* PKI_BUFLINK_S's are endian-swapped */
 			packet_ptr.u64 = swab64(packet_ptr.u64);
-
+#endif
 			data = phys_to_virt(packet_ptr.addr);
 			next_skb = octeon3_eth_work_to_skb((void *)round_down((unsigned long)data, 128ul));
 			if (first_frag) {
