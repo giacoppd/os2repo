@@ -119,6 +119,11 @@ void octeon_irq_free_cd(struct irq_domain *d, unsigned int irq)
 static int octeon_irq_force_ciu_mapping(struct irq_domain *domain,
 					int irq, int line, int bit)
 {
+	int r;
+
+	r = irq_alloc_desc_at(irq, 0);
+	WARN_ON(r < 0);
+
 	return irq_domain_associate(domain, irq, line << 6 | bit);
 }
 
@@ -261,7 +266,11 @@ static int next_cpu_for_irq(struct irq_data *data)
 	if (weight > 1) {
 		cpu = cd->current_cpu;
 		for (;;) {
+#ifdef CONFIG_NUMA
+			cpu = cpumask_next_and(cpu, data->affinity, cpumask_of_node(cd->ciu_node));
+#else
 			cpu = cpumask_next(cpu, data->affinity);
+#endif
 			if (cpu >= nr_cpu_ids) {
 				cpu = -1;
 				continue;
@@ -270,9 +279,19 @@ static int next_cpu_for_irq(struct irq_data *data)
 			}
 		}
 	} else if (weight == 1) {
+#ifdef CONFIG_NUMA
+		cpu = cpumask_first_and(data->affinity, cpumask_of_node(cd->ciu_node));
+		if (cpu >= nr_cpu_ids)
+			cpu = cpumask_first(cpumask_of_node(cd->ciu_node));
+#else
 		cpu = cpumask_first(data->affinity);
+#endif
 	} else {
+#ifdef CONFIG_NUMA
+		cpu = cpumask_first(cpumask_of_node(cd->ciu_node));
+#else
 		cpu = smp_processor_id();
+#endif
 	}
 	cd->current_cpu = cpu;
 	return cpu;
@@ -1446,6 +1465,9 @@ static int __init octeon_irq_init_ciu(struct device_node *ciu_node, struct devic
 			goto err;
 	}
 
+	r = irq_alloc_descs_from(OCTEON_IRQ_MBOX0, 2, 0);
+	WARN_ON(r < 0);
+
 	r = octeon_irq_set_ciu_mapping(OCTEON_IRQ_MBOX0, 0, 32, 0, chip_mbox, handle_percpu_irq);
 	if (r)
 		goto err;
@@ -1475,6 +1497,8 @@ static int __init octeon_irq_init_ciu(struct device_node *ciu_node, struct devic
 	}
 
 	/* CIU_1 */
+	r = irq_alloc_descs_from(OCTEON_IRQ_WDOG0, 16, 0);
+	WARN_ON(r < 0);
 	for (i = 0; i < 16; i++) {
 		r = octeon_irq_set_ciu_mapping(i + OCTEON_IRQ_WDOG0, 1, i + 0, 0, chip_wd, handle_level_irq);
 		if (r)
@@ -1482,6 +1506,8 @@ static int __init octeon_irq_init_ciu(struct device_node *ciu_node, struct devic
 	}
 
 	if (octeon_has_feature(OCTEON_FEATURE_SRIO)) {
+		r = irq_alloc_descs_from(OCTEON_IRQ_SRIO0, 4, 0);
+		WARN_ON(r < 0);
 		r = octeon_irq_set_ciu_mapping(OCTEON_IRQ_SRIO0, 1, 50, 0, chip, handle_level_irq);
 		if (r)
 			goto err;
@@ -1977,6 +2003,9 @@ static int __init octeon_irq_init_ciu2(struct device_node *ciu_node, struct devi
 			goto err;
 	}
 
+	r = irq_alloc_descs_from(OCTEON_IRQ_WDOG0, 32, 0);
+	WARN_ON(r < 0);
+
 	for (i = 0; i < 32; i++) {
 		r = octeon_irq_set_ciu_mapping(i + OCTEON_IRQ_WDOG0, 1, i, 0,
 					       &octeon_irq_chip_ciu2_wd, handle_level_irq);
@@ -2001,6 +2030,9 @@ static int __init octeon_irq_init_ciu2(struct device_node *ciu_node, struct devi
 		if (r)
 			goto err;
 	}
+
+	r = irq_alloc_descs_from(OCTEON_IRQ_MBOX0, 4, 0);
+	WARN_ON(r < 0);
 
 	irq_set_chip_and_handler(OCTEON_IRQ_MBOX0, &octeon_irq_chip_ciu2_mbox, handle_percpu_irq);
 	irq_set_chip_and_handler(OCTEON_IRQ_MBOX1, &octeon_irq_chip_ciu2_mbox, handle_percpu_irq);
@@ -2686,8 +2718,9 @@ static int __init octeon_irq_init_ciu3(struct device_node *ciu_node,
 	u64 base_addr;
 	union cvmx_ciu3_const consts;
 
-	ciu3_info = kzalloc_node(sizeof(*ciu3_info), GFP_KERNEL,
-				 of_node_to_nid(ciu_node));
+	node = of_node_to_nid(ciu_node);
+	ciu3_info = kzalloc_node(sizeof(*ciu3_info), GFP_KERNEL, node);
+
 	if (!ciu3_info)
 		return -ENOMEM;
 
@@ -2697,7 +2730,6 @@ static int __init octeon_irq_init_ciu3(struct device_node *ciu_node,
 
 	base_addr = of_translate_address(ciu_node, zero_addr);
 	base_addr = (u64)phys_to_virt(base_addr);
-	node = (base_addr >> 36) & 3;
 
 	ciu3_info->ciu3_addr = base_addr;
 	ciu3_info->node = node;
@@ -2710,11 +2742,17 @@ static int __init octeon_irq_init_ciu3(struct device_node *ciu_node,
 	octeon_irq_ip3 = octeon_irq_ciu3_mbox;
 	octeon_irq_ip4 = octeon_irq_ciu3_ip4;
 
-	/* Mips internal */
-	octeon_irq_init_core();
+	if (node == cvmx_get_node_num()) {
+		/* Mips internal */
+		octeon_irq_init_core();
 
-	for (i = 0; i < 8; i++)
-		irq_set_chip_and_handler(i + OCTEON_IRQ_MBOX0, &octeon_irq_chip_ciu3_mbox, handle_percpu_irq);
+		/* Only do per CPU things if it is the CIU of the boot node. */
+		i = irq_alloc_descs_from(OCTEON_IRQ_MBOX0, 8, node);
+		WARN_ON(i < 0);
+		for (i = 0; i < 8; i++)
+			irq_set_chip_and_handler(i + OCTEON_IRQ_MBOX0,
+						&octeon_irq_chip_ciu3_mbox, handle_percpu_irq);
+	}
 
 	/*
 	 * Initialize all domains to use the default domain. Specific major
