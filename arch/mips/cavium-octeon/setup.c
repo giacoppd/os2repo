@@ -945,6 +945,15 @@ void __init plat_mem_setup(void)
 	const struct cvmx_bootmem_named_block_desc *named_block;
 	u64 system_limit = cvmx_bootmem_available_mem(mem_alloc_size);
 
+#ifndef CONFIG_NUMA
+	int last_core;
+	struct cvmx_sysinfo *sysinfo = cvmx_sysinfo_get();
+
+	last_core = cvmx_coremask_get_last_core(&sysinfo->core_mask);
+	if (last_core >= CVMX_COREMASK_MAX_CORES_PER_NODE)
+		panic("Must build kernel with CONFIG_NUMA for multi-node system.");
+#endif
+
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (rd_name[0]) {
 		const struct cvmx_bootmem_named_block_desc *initrd_block;
