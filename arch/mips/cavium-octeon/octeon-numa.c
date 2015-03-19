@@ -105,7 +105,12 @@ void __init mem_init(void)
 int of_node_to_nid(struct device_node *np)
 {
 	int ret = 0;
-	struct device_node *node = of_node_get(np);
+	struct device_node *node;
+
+	if (!np)
+		return 0;
+
+	node = of_node_get(np);
 
 	do {
 		if (strcmp("soc", node->name) == 0) {
