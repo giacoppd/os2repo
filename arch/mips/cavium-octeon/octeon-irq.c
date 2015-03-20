@@ -2651,13 +2651,23 @@ int octeon_ciu3_errbits_enable_intsn(int node, int intsn)
 	if (!cfg->irq) {
 		int irq;
 		struct octeon_ciu_chip_data *cd;
-		int core = octeon_irq_get_local_core_num();
+		const struct cpumask *node_cpus;
+		int cpu_for_idt;
+		int core;
+#ifdef CONFIG_NUMA
+		node_cpus = cpu_online_mask;
+#else
+		node_cpus = cpumask_of_node(node);
+#endif
+		cpu_for_idt = cpumask_first(node_cpus);
+		WARN_ON(cpu_for_idt >= nr_cpu_ids);
+		core = octeon_coreid_for_cpu(cpu_for_idt) & 0x3f;
 
 		irq = irq_alloc_descs(-1, 1, 1, node);
 		if (irq < 0)
 			return irq;
 		cfg->irq = irq;
-		cfg->idt = core * 4 + 3; /* FIXME for Multi-node.*/
+		cfg->idt = core * 4 + 3;
 		cfg->node = node;
 		cfg->ciu3_addr = ciu3_addr;
 
