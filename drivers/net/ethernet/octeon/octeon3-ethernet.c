@@ -849,10 +849,11 @@ static struct octeon3_napi_wrapper *octeon3_napi_alloc(struct octeon3_rx *cxt,
 	struct octeon3_ethernet_node	*oen;
 	struct octeon3_ethernet		*priv = cxt->parent;
 	int				node = priv->numa_node;
+	unsigned long			flags;
 	int				i;
 
 	oen = octeon3_eth_node + node;
-	spin_lock(&oen->napi_alloc_lock);
+	spin_lock_irqsave(&oen->napi_alloc_lock, flags);
 
 	/* Find a free napi wrapper */
 	for (i = 0; i < CVMX_MAX_CORES; i++) {
@@ -876,12 +877,12 @@ static struct octeon3_napi_wrapper *octeon3_napi_alloc(struct octeon3_rx *cxt,
 			napi_wrapper[node][i].idx = idx;
 			napi_wrapper[node][i].cpu = cpu;
 			napi_wrapper[node][i].cxt = cxt;
-			spin_unlock(&oen->napi_alloc_lock);
+			spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
 			return &napi_wrapper[node][i];
 		}
 	}
 
-	spin_unlock(&oen->napi_alloc_lock);
+	spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
 	return NULL;
 }
 
@@ -910,24 +911,25 @@ static int octeon3_rm_napi_from_cxt(int				node,
 	struct octeon3_ethernet_node	*oen;
 	struct octeon3_rx		*cxt;
 	int				idx;
+	unsigned long			flags;
 
 	oen = octeon3_eth_node + node;
 	cxt = napiw->cxt;
 	idx = napiw->idx;
 
 	/* Free the napi block */
-	spin_lock(&oen->napi_alloc_lock);
+	spin_lock_irqsave(&oen->napi_alloc_lock, flags);
 	bitmap_clear(oen->napi_cpu_bitmap, napiw->cpu, 1);
 	napiw->available = 1;
 	napiw->idx = -1;
 	napiw->cpu = -1;
 	napiw->cxt = NULL;
-	spin_unlock(&oen->napi_alloc_lock);
+	spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
 
 	/* Free the napi idx */
-	spin_lock(&cxt->napi_idx_lock);
+	spin_lock_irqsave(&cxt->napi_idx_lock, flags);
 	bitmap_clear(cxt->napi_idx_bitmap, idx, 1);
-	spin_unlock(&cxt->napi_idx_lock);
+	spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
 
 	return 0;
 }
@@ -943,24 +945,25 @@ static int octeon3_add_napi_to_cxt(struct octeon3_rx *cxt)
 	struct octeon3_napi_wrapper	*napiw;
 	struct octeon3_ethernet		*priv = cxt->parent;
 	int				idx;
+	unsigned long			flags;
 	int				rc;
 
 	/* Get a free napi idx */
-	spin_lock(&cxt->napi_idx_lock);
+	spin_lock_irqsave(&cxt->napi_idx_lock, flags);
 	idx = find_first_zero_bit(cxt->napi_idx_bitmap, CVMX_MAX_CORES);
 	if (unlikely(idx >= CVMX_MAX_CORES)) {
-		spin_unlock(&cxt->napi_idx_lock);
+		spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
 		return -ENOMEM;
 	}
 	bitmap_set(cxt->napi_idx_bitmap, idx, 1);
-	spin_unlock(&cxt->napi_idx_lock);
+	spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
 
 	/* Get a free napi block */
 	napiw = octeon3_napi_alloc(cxt, idx, -1);
 	if (unlikely(napiw == NULL)) {
-		spin_lock(&cxt->napi_idx_lock);
+		spin_lock_irqsave(&cxt->napi_idx_lock, flags);
 		bitmap_clear(cxt->napi_idx_bitmap, idx, 1);
-		spin_unlock(&cxt->napi_idx_lock);
+		spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
 		return -ENOMEM;
 	}
 
@@ -1219,10 +1222,11 @@ static int octeon3_eth_napi(struct napi_struct *napi, int budget)
 static int octeon3_napi_init_node(int node, struct net_device *netdev)
 {
 	struct octeon3_ethernet_node	*oen;
+	unsigned long			flags;
 	int				i;
 
 	oen = octeon3_eth_node + node;
-	spin_lock(&oen->napi_alloc_lock);
+	spin_lock_irqsave(&oen->napi_alloc_lock, flags);
 
 	if (oen->napi_init_done)
 		goto done;
@@ -1242,7 +1246,7 @@ static int octeon3_napi_init_node(int node, struct net_device *netdev)
 
 	oen->napi_init_done = true;
  done:
-	spin_unlock(&oen->napi_alloc_lock);
+	spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
 	return 0;
 
 }
