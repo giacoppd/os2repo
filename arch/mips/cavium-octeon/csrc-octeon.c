@@ -107,7 +107,7 @@ static cycle_t octeon_cvmcount_read(struct clocksource *cs)
 	return read_c0_cvmcount();
 }
 
-static struct clocksource clocksource_mips = {
+static struct clocksource csrc_octeon = {
 	.name		= "OCTEON_CVMCOUNT",
 	.read		= octeon_cvmcount_read,
 	.mask		= CLOCKSOURCE_MASK(64),
@@ -119,8 +119,8 @@ unsigned long long notrace sched_clock(void)
 	/* 64-bit arithmatic can overflow, so use 128-bit.  */
 	u64 t1, t2, t3;
 	unsigned long long rv;
-	u64 mult = clocksource_mips.mult;
-	u64 shift = clocksource_mips.shift;
+	u64 mult = csrc_octeon.mult;
+	u64 shift = csrc_octeon.shift;
 	u64 cnt = read_c0_cvmcount();
 
 	asm (
@@ -140,8 +140,8 @@ unsigned long long notrace sched_clock(void)
 
 void __init plat_time_init(void)
 {
-	clocksource_mips.rating = 300;
-	clocksource_register_hz(&clocksource_mips, octeon_get_clock_rate());
+	csrc_octeon.rating = 300;
+	clocksource_register_hz(&csrc_octeon, octeon_get_clock_rate());
 }
 
 void __udelay(unsigned long us)
