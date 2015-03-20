@@ -1750,6 +1750,7 @@ static int octeon3_eth_ndo_start_xmit(struct sk_buff *skb, struct net_device *ne
 			break;
 		case __constant_htons(ETH_P_IPV6):
 			l4_hdr = ipv6_hdr(skb)->nexthdr;
+			send_hdr.s.l3ptr = ETH_HLEN;
 			break;
 		default:
 			break;
