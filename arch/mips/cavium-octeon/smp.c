@@ -379,7 +379,7 @@ static int octeon_up_prepare(unsigned int cpu)
 	if (octeon_has_feature(OCTEON_FEATURE_CIU3))
 		cvmx_write_csr_node(node, CVMX_CIU3_NMI, (1ull << coreid));
 	else
-		cvmx_write_csr(CVMX_CIU_NMI, (1 << coreid));
+		cvmx_write_csr(CVMX_CIU_NMI, (1ull << coreid));
 	return 0;
 }
 
