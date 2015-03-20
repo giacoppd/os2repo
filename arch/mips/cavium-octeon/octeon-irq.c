@@ -3135,6 +3135,8 @@ static struct of_device_id __initdata ciu_types[] = {
 	{}
 };
 
+int octeon_msi_initialize(void);
+
 void __init arch_init_irq(void)
 {
 #ifdef CONFIG_SMP
@@ -3145,6 +3147,9 @@ void __init arch_init_irq(void)
 	}
 #endif
 	of_irq_init(ciu_types);
+#ifdef CONFIG_PCI_MSI
+	octeon_msi_initialize();
+#endif
 }
 
 asmlinkage void plat_irq_dispatch(void)
