@@ -7,6 +7,7 @@ static inline int cpu_to_node(int cpu)
 {
 	return (cpu_logical_map(cpu) >> 7) & 7;
 }
+#define cpu_to_node cpu_to_node
 
 static inline struct cpumask *cpumask_of_node(int node)
 {
@@ -14,22 +15,26 @@ static inline struct cpumask *cpumask_of_node(int node)
 		return cpu_all_mask;
 	return &__node_data[node].cpumask_on_node;
 }
+#define cpumask_of_node cpumask_of_node
 
 static inline int parent_node(int node)
 {
 	return node;
 }
+#define parent_node parent_node
 
 struct pci_bus;
 static inline int pcibus_to_node(struct pci_bus *bus)
 {
 	return 0;
 }
+#define pcibus_to_node pcibus_to_node
 
 static inline struct cpumask *cpumask_of_pcibus(struct pci_bus *bus)
 {
 	return cpumask_of_node(pcibus_to_node(bus));
 }
+#define cpumask_of_pcibus cpumask_of_pcibus
 
 struct device_node;
 int of_node_to_nid(struct device_node *np);
