@@ -2161,12 +2161,15 @@ int octeon_irq_ciu3_set_affinity(struct irq_data *data,
 	union cvmx_ciu3_iscx_ctl isc_ctl;
 	union cvmx_ciu3_iscx_w1c isc_w1c;
 	u64 isc_ctl_addr;
-	bool enable_one = !irqd_irq_disabled(data) && !irqd_irq_masked(data);
-	struct octeon_ciu_chip_data *cd;
 	int cpu;
+	bool enable_one = !irqd_irq_disabled(data) && !irqd_irq_masked(data);
+	struct octeon_ciu_chip_data *cd = irq_data_get_irq_chip_data(data);
+
+	if (!cpumask_subset(dest, cpumask_of_node(cd->ciu_node)))
+		return -EINVAL;
 
 	if (!enable_one)
-		return 0;
+		return IRQ_SET_MASK_OK;
 
 	cd = irq_data_get_irq_chip_data(data);
 	cpu = cpumask_first(dest);
@@ -2185,7 +2188,7 @@ int octeon_irq_ciu3_set_affinity(struct irq_data *data,
 	cvmx_write_csr(isc_ctl_addr, isc_ctl.u64);
 	cvmx_read_csr(isc_ctl_addr);
 
-	return 0;
+	return IRQ_SET_MASK_OK;
 }
 #endif
 
@@ -2253,7 +2256,7 @@ int octeon_irq_ciu3_mapx(struct irq_domain *d, unsigned int virq,
 {
 	struct octeon_ciu3_info *ciu3_info = d->host_data;
 	struct octeon_ciu_chip_data *cd = kzalloc_node(sizeof(*cd), GFP_KERNEL,
-						       of_node_to_nid(d->of_node));
+						       ciu3_info->node);
 	if (!cd)
 		return -ENOMEM;
 	cd->intsn = hw;
