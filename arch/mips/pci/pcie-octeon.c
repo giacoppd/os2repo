@@ -610,7 +610,6 @@ static int __init octeon_pcie_setup(void)
 				npei_ctl_status.u64 =
 					cvmx_read_csr(CVMX_PEXP_NPEI_CTL_STATUS);
 				host_mode = npei_ctl_status.s.host_mode;
-				octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_PCIE;
 			}
 		} else {
 			union cvmx_mio_rst_ctlx mio_rst_ctl;
@@ -619,8 +618,6 @@ static int __init octeon_pcie_setup(void)
 			else
 				mio_rst_ctl.u64 = cvmx_read_csr(CVMX_MIO_RST_CTLX(port));
 			host_mode = mio_rst_ctl.s.host_mode;
-			if (port == 0)
-				octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_PCIE2;
 		}
 		if (host_mode) {
 			uint32_t device;
