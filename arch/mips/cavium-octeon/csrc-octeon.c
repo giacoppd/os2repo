@@ -114,15 +114,23 @@ static struct clocksource csrc_octeon = {
 	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
+static bool use_fpa_clk;
+unsigned long long csrc_fpa_clk_sched_clock(void);
+void csrc_fpa_clk_init(void);
+
 unsigned long long notrace sched_clock(void)
 {
 	/* 64-bit arithmatic can overflow, so use 128-bit.  */
 	u64 t1, t2, t3;
 	unsigned long long rv;
-	u64 mult = csrc_octeon.mult;
-	u64 shift = csrc_octeon.shift;
-	u64 cnt = read_c0_cvmcount();
+	u64 mult, shift, cnt;
 
+	if (use_fpa_clk)
+		return csrc_fpa_clk_sched_clock();
+
+	mult = csrc_octeon.mult;
+	shift = csrc_octeon.shift;
+	cnt = read_c0_cvmcount();
 	asm (
 		"dmultu\t%[cnt],%[mult]\n\t"
 		"nor\t%[t1],$0,%[shift]\n\t"
@@ -140,8 +148,16 @@ unsigned long long notrace sched_clock(void)
 
 void __init plat_time_init(void)
 {
-	csrc_octeon.rating = 300;
-	clocksource_register_hz(&csrc_octeon, octeon_get_clock_rate());
+#ifdef CONFIG_NUMA
+	if (num_online_nodes() > 1)
+		use_fpa_clk = true;
+#endif
+	if (use_fpa_clk) {
+		csrc_fpa_clk_init();
+	} else {
+		csrc_octeon.rating = 300;
+		clocksource_register_hz(&csrc_octeon, octeon_get_clock_rate());
+	}
 }
 
 void __udelay(unsigned long us)
