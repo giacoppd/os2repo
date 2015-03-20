@@ -1683,12 +1683,14 @@ static int octeon3_eth_ndo_start_xmit(struct sk_buff *skb, struct net_device *ne
 			frag_count++;
 
 	/* Check if the skb can be recycled (freed back to the fpa) */
-	if (likely(recycle_skbs) &&
-	    likely(skb_shinfo(skb)->nr_frags == 0) &&
-	    likely(skb_shared(skb) == 0) &&
-	    likely(skb_cloned(skb) == 0) &&
-	    likely(frag_count == 0) &&
-	    likely(skb->fclone == SKB_FCLONE_UNAVAILABLE)) {
+	if (recycle_skbs &&
+	    skb_shinfo(skb)->nr_frags == 0 &&
+	    skb_shared(skb) == 0 &&
+	    skb_cloned(skb) == 0 &&
+	    frag_count == 0 &&
+	    skb_headroom(skb) >= 128 &&
+	    skb_end_offset(skb) >= packet_buffer_size &&
+	    skb->fclone == SKB_FCLONE_UNAVAILABLE) {
 		uint64_t	magic;
 
 		buf = (void **)PTR_ALIGN(skb->head, 128);
