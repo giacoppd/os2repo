@@ -42,7 +42,7 @@
  *
  * Interface to PCIe as a host(RC) or target(EP)
  *
- * <hr>$Revision: 106368 $<hr>
+ * <hr>$Revision: 108660 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -186,6 +186,7 @@ uint64_t cvmx_pcie_get_mem_size(int pcie_port)
  * @INTERNAL
  * Initialize the RC config space CSRs
  *
+ * @param node      node
  * @param pcie_port PCIe port to initialize
  */
 static void __cvmx_pcie_rc_initialize_config_space(int node, int pcie_port)
@@ -598,7 +599,7 @@ static int __cvmx_pcie_rc_initialize_link_gen1(int pcie_port)
 	return 0;
 }
 
-static inline void __cvmx_increment_ba(cvmx_sli_mem_access_subidx_t * pmas)
+static void __cvmx_increment_ba(cvmx_sli_mem_access_subidx_t * pmas)
 {
 	if (OCTEON_IS_MODEL(OCTEON_CN68XX))
 		pmas->cn68xx.ba++;
@@ -999,6 +1000,7 @@ retry:
  * port from reset to a link up state. Software can then begin
  * configuring the rest of the link.
  *
+ * @param node	    node
  * @param pcie_port PCIe port to initialize
  *
  * @return Zero on success
@@ -1739,7 +1741,8 @@ int cvmx_pcie_rc_shutdown(int pcie_port)
  * @INTERNAL
  * Build a PCIe config space request address for a device
  *
- * @param pcie_port PCIe port to access
+ * @param node	    node
+ * @param port	    PCIe port (relative to the node) to access
  * @param bus       Sub bus
  * @param dev       Device ID
  * @param fn        Device sub function
@@ -1747,14 +1750,14 @@ int cvmx_pcie_rc_shutdown(int pcie_port)
  *
  * @return 64bit Octeon IO address
  */
-static inline uint64_t __cvmx_pcie_build_config_addr(int node, int pcie_port, int bus,
-						     int dev, int fn, int reg)
+static uint64_t __cvmx_pcie_build_config_addr(int node, int port, int bus,
+					      int dev, int fn, int reg)
 {
 	cvmx_pcie_address_t pcie_addr;
 	cvmx_pciercx_cfg006_t pciercx_cfg006;
 
-	pciercx_cfg006.u32 = cvmx_pcie_cfgx_read(pcie_port,
-						 CVMX_PCIERCX_CFG006(pcie_port));
+	pciercx_cfg006.u32 = cvmx_pcie_cfgx_read_node(node, port,
+						      CVMX_PCIERCX_CFG006(port));
 	if ((bus <= pciercx_cfg006.s.pbnum) && (dev != 0))
 		return 0;
 
@@ -1765,7 +1768,7 @@ static inline uint64_t __cvmx_pcie_build_config_addr(int node, int pcie_port, in
 	pcie_addr.config.subdid = 1;
 	pcie_addr.config.node = node;
 	pcie_addr.config.es = _CVMX_PCIE_ES;
-	pcie_addr.config.port = pcie_port;
+	pcie_addr.config.port = port;
 	pcie_addr.config.ty = (bus > pciercx_cfg006.s.pbnum);
 	pcie_addr.config.bus = bus;
 	pcie_addr.config.dev = dev;

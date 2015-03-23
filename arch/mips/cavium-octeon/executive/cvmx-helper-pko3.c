@@ -111,7 +111,7 @@ static const int cvmx_pko_default_channel_level = 0;
 static const int debug = 0;
 
 /* These global variables are relevant for boot CPU only */
-static cvmx_fpa3_gaura_t __cvmx_pko3_aura;
+static CVMX_SHARED cvmx_fpa3_gaura_t __cvmx_pko3_aura[CVMX_MAX_NODES];
 
 /* This constant can not be modified, defined here for clarity only */
 #define CVMX_PKO3_POOL_BUFFER_SIZE 4096 /* 78XX PKO requires 4KB */
@@ -182,7 +182,7 @@ static int __cvmx_pko3_config_memory(unsigned node)
 	aura_num = aura.node << 10 | aura.laura;
 
 	/* Store handle for destruction */
-	__cvmx_pko3_aura = aura;
+	__cvmx_pko3_aura[node] = aura;
 
 	return aura_num;
 }
@@ -708,7 +708,7 @@ static int __cvmx_pko3_config_null_interface(unsigned int node)
 	int l2_q_num;
 	int l3_q, l4_q, l5_q;
 	int i, res, res_owner;
-	int xiface;
+	int xiface, ipd_port;
 	int num_dq = 1;	/* # of DQs for NULL */
 	const int dq = 0;	/* Reserve DQ#0 for NULL */
 	const int pko_mac_num = 0x1C; /* MAC# 28 virtual MAC for NULL */
@@ -720,8 +720,10 @@ static int __cvmx_pko3_config_null_interface(unsigned int node)
 		cvmx_dprintf("%s: null iface dq=%u-%u\n",
 			__FUNCTION__, dq, dq+num_dq-1);
 
+	ipd_port = cvmx_helper_node_to_ipd_port(node, CVMX_PKO3_IPD_PORT_NULL);
+
 	/* Build an identifiable owner identifier by MAC# for easy release */
-	res_owner = __cvmx_helper_pko3_res_owner(CVMX_PKO3_IPD_PORT_NULL);
+	res_owner = __cvmx_helper_pko3_res_owner(ipd_port);
 	if (res_owner < 0) {
 		cvmx_dprintf ("%s: ERROR Invalid interface\n", __FUNCTION__);
 		return -1;
@@ -825,10 +827,8 @@ EXPORT_SYMBOL(__cvmx_pko3_helper_dqs_activate);
 
 /** Configure and initialize PKO3 for an interface
  *
- * @param node
- * @param interface is the interface number to configure
+ * @param xiface is the interface number to configure
  * @return 0 on success.
- *
  */
 int cvmx_helper_pko3_init_interface(int xiface)
 {
@@ -1117,7 +1117,7 @@ int cvmx_helper_pko3_init_global(unsigned int node)
 	}
 
 	aura_num = res;
-	aura = __cvmx_pko3_aura;
+	aura = __cvmx_pko3_aura[node];
 
 	/* Exercise the FPA to make sure the AURA is functional */
 	ptr = cvmx_fpa3_alloc(aura);
@@ -1184,7 +1184,8 @@ int cvmx_helper_pko3_shut_interface(int xiface)
 	for (index = 0; index < num_ports; index ++) {
 
 		if (__cvmx_helper_xiface_is_null(xiface))
-			ipd_port = CVMX_PKO3_IPD_PORT_NULL;
+                        ipd_port = cvmx_helper_node_to_ipd_port(xi.node,
+				CVMX_PKO3_IPD_PORT_NULL);
 		else
 			ipd_port = cvmx_helper_get_ipd_port(xiface, index);
 
@@ -1302,7 +1303,7 @@ int cvmx_helper_pko3_shutdown(unsigned int node)
 
 #ifndef CVMX_BUILD_FOR_LINUX_KERNEL
 	/* shut down AURA/POOL we created, and free its resources */
-	cvmx_fpa3_shutdown_aura_and_pool(__cvmx_pko3_aura);
+	cvmx_fpa3_shutdown_aura_and_pool(__cvmx_pko3_aura[node]);
 #endif /* CVMX_BUILD_FOR_LINUX_KERNEL */
 	return res;
 }

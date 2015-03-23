@@ -43,7 +43,7 @@
  * Functions for XAUI initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 106617 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -92,7 +92,7 @@ int __cvmx_helper_xaui_enumerate(int xiface)
  * connected to it. The XAUI interface should still be down
  * after this call.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
@@ -344,7 +344,7 @@ int __cvmx_helper_xaui_link_init(int interface)
  * I/O should be fully functional. This is called with IPD
  * enabled but PKO disabled.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */

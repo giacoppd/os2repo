@@ -768,7 +768,6 @@ static int octeon3_eth_global_init(unsigned int node)
 		goto done;
 	}
 
-	__cvmx_helper_init_port_config_data();
 	rv = __cvmx_helper_pko3_init_global(node, oen->pko_aura.laura | (node << 10));
 	if (rv) {
 		pr_err("cvmx_helper_pko3_init_global failed\n");
@@ -1307,17 +1306,23 @@ static int octeon3_eth_ndo_init(struct net_device *netdev)
 	ipd_port = cvmx_helper_get_ipd_port(priv->xiface, priv->port_index);
 
 	r =  __cvmx_pko3_config_gen_interface(priv->xiface, priv->port_index, 1, false);
-	if (r)
+	if (r) {
+		dev_err(netdev->dev.parent, "__cvmx_pko3_config_gen_interface: %d\n", r);
 		return -ENODEV;
+	}
 
 	r = __cvmx_pko3_helper_dqs_activate(priv->xiface, priv->port_index, false);
-	if (r < 0)
+	if (r < 0) {
+		dev_err(netdev->dev.parent, "__cvmx_pko3_helper_dqs_activate: %d\n", r);
 		return -ENODEV;
+	}
 
 	/* Padding and FCS are done in BGX */
 	r = cvmx_pko3_interface_options(priv->xiface, priv->port_index, false, false, 0);
-	if (r)
+	if (r) {
+		dev_err(netdev->dev.parent, "cvmx_pko3_interface_options: %d\n", r);
 		return -ENODEV;
+	}
 
 	node_dq = cvmx_pko3_get_queue_base(ipd_port);
 	xdq = cvmx_helper_ipd_port_to_xport(node_dq);

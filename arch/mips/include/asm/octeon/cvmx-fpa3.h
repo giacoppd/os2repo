@@ -42,7 +42,7 @@
  *
  * Interface to the CN78XX Free Pool Allocator, a.k.a. FPA3
  *
- * <hr>$Revision: 106503 $<hr>
+ * <hr>$Revision: 108951 $<hr>
  *
  */
 
@@ -243,6 +243,29 @@ enum cvmx_fpa3_pool_alignment_e {
 #define	CVMX_FPA3_AURAX_LIMIT_MAX               ((1ull<<40)-1)
 
 /**
+ * Get the FPA3 POOL underneath FPA3 AURA, containing all its buffers
+ *
+ * @INTERNAL
+ */
+static inline cvmx_fpa3_pool_t
+cvmx_fpa3_aura_to_pool(cvmx_fpa3_gaura_t aura)
+{
+	cvmx_fpa3_pool_t pool;
+	cvmx_fpa_aurax_pool_t aurax_pool;
+
+	if (CVMX_ENABLE_PARAMETER_CHECKING) {
+		if (!__cvmx_fpa3_aura_valid(aura))
+			return CVMX_FPA3_INVALID_POOL;
+	}
+
+	aurax_pool.u64 = cvmx_read_csr_node(aura.node,
+		CVMX_FPA_AURAX_POOL(aura.laura));
+
+	pool = __cvmx_fpa3_pool(aura.node, aurax_pool.s.pool);
+	return pool;
+}
+
+/**
  * Get a new block from the FPA pool
  *
  * @INTERNAL
@@ -437,29 +460,6 @@ static inline int cvmx_fpa3_config_red_params(unsigned node, int qos_avg_en,
 	return 0;
 }
 
-/**
- * Get the FPA3 POOL underneath FPA3 AURA, containing all its buffers
- *
- * @INTERNAL
- */
-static inline cvmx_fpa3_pool_t
-cvmx_fpa3_aura_to_pool(cvmx_fpa3_gaura_t aura)
-{
-	cvmx_fpa3_pool_t pool;
-	cvmx_fpa_aurax_pool_t aurax_pool;
-
-	if (CVMX_ENABLE_PARAMETER_CHECKING) {
-		if (!__cvmx_fpa3_aura_valid(aura))
-			return CVMX_FPA3_INVALID_POOL;
-	}
-
-	aurax_pool.u64 = cvmx_read_csr_node(aura.node,
-		CVMX_FPA_AURAX_POOL(aura.laura));
-
-	pool = __cvmx_fpa3_pool(aura.node, aurax_pool.s.pool);
-	return pool;
-}
-
 
 /**
  * Gets the buffer size of the specified pool,
@@ -488,7 +488,8 @@ static inline int cvmx_fpa3_get_aura_buf_size(cvmx_fpa3_gaura_t aura)
 /**
  * Return the number of available buffers in an AURA
  *
- * FIXME: Add <limit>-<count> limitation.
+ * @param aura to receive count for
+ * @return available buffer count
  */
 static inline long long cvmx_fpa3_get_available(cvmx_fpa3_gaura_t aura)
 {
@@ -514,6 +515,8 @@ static inline long long cvmx_fpa3_get_available(cvmx_fpa3_gaura_t aura)
 		CVMX_FPA_AURAX_CNT(aura.laura));
 	limit_reg.u64 = cvmx_read_csr_node(aura.node,
 		CVMX_FPA_AURAX_CNT_LIMIT(aura.laura));
+
+	if (limit_reg.cn78xx.limit < cnt_reg.cn78xx.cnt) return 0;
 
 	/* Calculate AURA-based buffer allowance */
 	ret = limit_reg.cn78xx.limit -

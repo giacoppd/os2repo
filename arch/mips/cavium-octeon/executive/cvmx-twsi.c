@@ -412,7 +412,6 @@ retry:
 	return num_bytes;
 #endif
 }
-EXPORT_SYMBOL(cvmx_twsix_read);
 
 /**
  * Perform a twsi write operation to a 7 bit device address.
@@ -508,7 +507,6 @@ retry:
 	return 0;
 #endif
 }
-EXPORT_SYMBOL(cvmx_twsix_write);
 
 /**
  * Write 1-8 bytes to a TWSI device using an internal address.
@@ -680,7 +678,6 @@ retry:
 	return num_bytes;
 #endif
 }
-EXPORT_SYMBOL(cvmx_twsix_write_ia);
 
 #ifndef CVMX_BUILD_FOR_LINUX_KERNEL
 /* Controller command patterns */
