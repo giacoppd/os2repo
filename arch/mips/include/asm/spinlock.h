@@ -262,6 +262,7 @@ static inline void arch_read_unlock(arch_rwlock_t *rw)
 {
 	int dec = -1;
 
+	smp_mb();
 	__asm__ __volatile__(
 		"saa	%[dec], (%[rw])			\n"
 		"	pref	26, 0(%[rw]) #nudge	\n"
