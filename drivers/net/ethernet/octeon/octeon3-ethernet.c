@@ -855,10 +855,8 @@ static int octeon3_napi_alloc_cpu(int	node)
 		}
 	}
 
-	if (min_cpu < 0) {
-		pr_err("WARNING: Failed to allocate a cpu\n");
+	if (min_cpu < 0)
 		return min_cpu;
-	}
 
 	octeon3_cpu_napi_cnt[min_cpu]++;
 
