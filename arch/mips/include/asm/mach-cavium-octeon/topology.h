@@ -1,6 +1,10 @@
 #ifndef _ASM_MACH_CAVIUM_OCTEON_TOPOLOGY_H
 #define _ASM_MACH_CAVIUM_OCTEON_TOPOLOGY_H
 
+struct pci_bus;
+int pcibus_to_node(struct pci_bus *bus);
+#define pcibus_to_node pcibus_to_node
+
 #ifdef CONFIG_NUMA
 
 static inline int cpu_to_node(int cpu)
@@ -22,13 +26,6 @@ static inline int parent_node(int node)
 	return node;
 }
 #define parent_node parent_node
-
-struct pci_bus;
-static inline int pcibus_to_node(struct pci_bus *bus)
-{
-	return 0;
-}
-#define pcibus_to_node pcibus_to_node
 
 static inline struct cpumask *cpumask_of_pcibus(struct pci_bus *bus)
 {

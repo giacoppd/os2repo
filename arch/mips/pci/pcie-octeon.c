@@ -169,6 +169,13 @@ err:
 	return rv;
 }
 
+static struct octeon_pcie_interface *octeon_pcie_bus2interface(struct pci_bus *bus)
+{
+	struct octeon_pcie_interface *r;
+
+	r = container_of(bus->sysdata, struct octeon_pcie_interface, controller);
+	return r;
+}
 
 /**
  * Map a PCI device to the appropriate interrupt line
@@ -538,6 +545,27 @@ static int device_needs_bus_num_war(uint32_t deviceid)
 		return 1;
 	return 0;
 }
+
+int pcibus_to_node(struct pci_bus *bus)
+{
+#ifdef CONFIG_NUMA
+	struct octeon_pcie_interface *pi;
+
+	/* Only chips with PCIE have a possibility of nodes other than 0. */
+	if (!octeon_has_feature(OCTEON_FEATURE_PCIE))
+		return 0;
+
+	while (bus->parent) {
+		struct pci_dev *dev = to_pci_dev(bus->bridge);
+		bus = dev->bus;
+	}
+	pi = octeon_pcie_bus2interface(bus);
+	return pi->node;
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL(pcibus_to_node);
 
 /**
  * Initialize the Octeon PCIe controllers
