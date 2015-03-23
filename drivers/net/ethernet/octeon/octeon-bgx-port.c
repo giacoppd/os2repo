@@ -133,6 +133,16 @@ const u8 *bgx_port_get_mac(struct net_device *netdev)
 }
 EXPORT_SYMBOL(bgx_port_get_mac);
 
+int bgx_port_do_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
+{
+	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
+
+	if (p->phydev)
+		return phy_mii_ioctl(p->phydev, ifr, cmd);
+	return -EOPNOTSUPP;
+}
+EXPORT_SYMBOL(bgx_port_do_ioctl);
+
 static void bgx_port_write_cam(int numa_node, int interface, int index, int cam, const u8 *mac)
 {
 	int i;

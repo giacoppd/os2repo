@@ -1955,7 +1955,8 @@ static const struct net_device_ops octeon3_eth_netdev_ops = {
 	.ndo_get_stats64	= octeon3_eth_ndo_get_stats64,
 	.ndo_set_rx_mode	= bgx_port_set_rx_filtering,
 	.ndo_set_mac_address	= octeon3_eth_set_mac_address,
-	.ndo_change_mtu		= bgx_port_change_mtu
+	.ndo_change_mtu		= bgx_port_change_mtu,
+	.ndo_do_ioctl		= bgx_port_do_ioctl,
 };
 
 static int octeon3_eth_probe(struct platform_device *pdev)

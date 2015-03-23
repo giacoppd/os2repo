@@ -50,6 +50,7 @@ int bgx_port_ethtool_get_settings(struct net_device *netdev,
 int bgx_port_ethtool_set_settings(struct net_device *netdev,
 				  struct ethtool_cmd *cmd);
 int bgx_port_ethtool_nway_reset(struct net_device *netdev);
+int bgx_port_do_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd);
 
 struct bgx_platform_data {
 	int numa_node;
