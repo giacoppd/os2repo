@@ -2303,11 +2303,10 @@ static void octeon_irq_ciu3_ip2(void)
 		irq_hw_number_t intsn = dest_pp_int.s.intsn;
 		/* Get the domain to use from the major block */
 		int block = intsn >> 12;
-		int irq = irq_find_mapping(ciu3_info->domain[block], intsn);
+		int ret;
 
-		if (likely(irq)) {
-			do_IRQ(irq);
-		} else {
+		ret = handle_domain_irq(ciu3_info->domain[block], intsn, NULL);
+		if (ret < 0) {
 			union cvmx_ciu3_iscx_w1c isc_w1c;
 			u64 isc_w1c_addr = ciu3_addr + CIU3_ISC_W1C(intsn);
 

@@ -731,6 +731,7 @@ config CAVIUM_OCTEON_SOC
 	select MIPS_NR_CPU_NR_MAP_1024
 	select SYS_SUPPORTS_NUMA if SMP
 	select SPARSE_IRQ if NUMA
+	select HANDLE_DOMAIN_IRQ
 	help
 	  This option supports all of the Octeon SoCs and reference
 	  boards from Cavium, Inc. The Cavium Octeon processor is a
