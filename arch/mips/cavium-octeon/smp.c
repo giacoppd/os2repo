@@ -324,6 +324,12 @@ static void octeon_smp_finish(void)
  */
 static void octeon_cpus_done(void)
 {
+	struct cvmx_sysinfo *sysinfo = cvmx_sysinfo_get();
+	int cpus_in_coremask = cvmx_coremask_get_core_count(&sysinfo->core_mask);
+
+	WARN(cpus_in_coremask > setup_max_cpus,
+	     "Error: %d CPUs in coremask, but kernel configured for only %d\n",
+	     cpus_in_coremask, setup_max_cpus);
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
