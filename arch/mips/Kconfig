@@ -733,6 +733,7 @@ config CAVIUM_OCTEON_SOC
 	select SPARSE_IRQ if NUMA
 	select HANDLE_DOMAIN_IRQ
 	select USB_ARCH_HAS_XHCI
+	select CAVIUM_ERET_MISPREDICT_WORKAROUND if KVM_MIPS_VZ
 	help
 	  This option supports all of the Octeon SoCs and reference
 	  boards from Cavium, Inc. The Cavium Octeon processor is a
