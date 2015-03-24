@@ -2016,7 +2016,7 @@ static bool manage_workers(struct worker *worker)
 	if (!mutex_trylock(&pool->manager_arb))
 		return false;
 
-	ret |= maybe_create_worker(pool);
+	maybe_create_worker(pool);
 
 	mutex_unlock(&pool->manager_arb);
 	return true;
