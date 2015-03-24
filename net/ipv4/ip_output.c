@@ -1459,26 +1459,6 @@ static int ip_reply_glue_bits(void *dptr, char *to, int offset,
 	return 0;
 }
 
-/*
- *	Generic function to send a packet as reply to another packet.
- *	Used to send some TCP resets/acks so far.
- */
-static DEFINE_PER_CPU(struct inet_sock, unicast_sock) = {
-	.sk = {
-		.__sk_common = {
-			.skc_refcnt = ATOMIC_INIT(1),
-		},
-		.sk_wmem_alloc	= ATOMIC_INIT(1),
-		.sk_allocation	= GFP_ATOMIC,
-		.sk_flags	= (1UL << SOCK_USE_WRITE_QUEUE),
-	},
-	.pmtudisc	= IP_PMTUDISC_WANT,
-	.uc_ttl		= -1,
-};
-
-/* serialize concurrent calls on the same CPU to ip_send_unicast_reply */
-static DEFINE_LOCAL_IRQ_LOCK(unicast_lock);
-
 void ip_send_unicast_reply(struct sock *sk, struct sk_buff *skb, __be32 daddr,
 			   __be32 saddr, const struct ip_reply_arg *arg,
 			   unsigned int len)
@@ -1518,13 +1498,7 @@ void ip_send_unicast_reply(struct sock *sk, struct sk_buff *skb, __be32 daddr,
 	if (IS_ERR(rt))
 		return;
 
-<<<<<<< HEAD
-	inet = &get_locked_var(unicast_lock, unicast_sock);
-||||||| merged common ancestors
-	inet = &get_cpu_var(unicast_sock);
-=======
 	inet_sk(sk)->tos = arg->tos;
->>>>>>> standard/base
 
 	sk->sk_priority = skb->priority;
 	sk->sk_protocol = ip_hdr(skb)->protocol;
@@ -1548,14 +1522,6 @@ void ip_send_unicast_reply(struct sock *sk, struct sk_buff *skb, __be32 daddr,
 		ip_push_pending_frames(sk, &fl4);
 	}
 out:
-<<<<<<< HEAD
-	put_locked_var(unicast_lock, unicast_sock);
-
-||||||| merged common ancestors
-	put_cpu_var(unicast_sock);
-
-=======
->>>>>>> standard/base
 	ip_rt_put(rt);
 }
 
