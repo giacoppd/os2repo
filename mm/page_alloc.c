@@ -706,7 +706,7 @@ static void free_pcppages_bulk(struct zone *zone, int count,
 
 		mt = get_freepage_migratetype(page);
 		/* MIGRATE_MOVABLE list may include MIGRATE_RESERVEs */
-		__free_one_page(page, zone, 0, mt);
+		__free_one_page(page, page_to_pfn(page), zone, 0, mt);
 		trace_mm_page_pcpu_drain(page, 0, mt);
 		if (likely(!is_migrate_isolate_page(page))) {
 			__mod_zone_page_state(zone, NR_FREE_PAGES, 1);
