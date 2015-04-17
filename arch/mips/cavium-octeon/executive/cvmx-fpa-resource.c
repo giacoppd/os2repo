@@ -251,6 +251,7 @@ int cvmx_fpa1_release_pool(cvmx_fpa1_pool_t pool)
 /**
  * Query if an FPA pool is available for reservation
  * using global resources
+ * @note This function is no longer in use, and will be removed in a future release
  */
 int cvmx_fpa1_is_pool_available(cvmx_fpa1_pool_t pool)
 {
@@ -260,11 +261,14 @@ int cvmx_fpa1_is_pool_available(cvmx_fpa1_pool_t pool)
 	return 1;
 }
 
+/**
+ * @INTERNAL
+ *
+ * This function is no longer in use, and will be removed in a future release
+ */
 int cvmx_fpa3_is_pool_available(int node, int lpool)
 {
 	cvmx_fpa3_pool_t pool;
-	if (lpool < 0)
-		return 1;
 
 	pool = cvmx_fpa3_reserve_pool(node, lpool);
 
@@ -275,12 +279,14 @@ int cvmx_fpa3_is_pool_available(int node, int lpool)
 	return 1;
 }
 
+/**
+ * @INTERNAL
+ *
+ * This function is no longer in use, and will be removed in a future release
+ */
 int cvmx_fpa3_is_aura_available(int node, int laura)
 {
 	cvmx_fpa3_gaura_t aura;
-
-	if (laura < 0)
-		return 1;
 
 	aura = cvmx_fpa3_reserve_aura(node, laura);
 
@@ -293,9 +299,10 @@ int cvmx_fpa3_is_aura_available(int node, int laura)
 
 /**
  * Return if aura/pool is already reserved
- * @param node - node of fpa to check, -1 for current node
  * @param pool_num - pool to check (aura for o78+)
  * @return 0 if reserved, 1 if available
+ *
+ * @note This function is no longer in use, and will be removed in a future release
  */
 int cvmx_fpa_is_pool_available(int pool_num)
 {

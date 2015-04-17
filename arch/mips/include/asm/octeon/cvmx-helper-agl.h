@@ -69,7 +69,7 @@ extern "C" {
 
 extern int __cvmx_helper_agl_enumerate(int interface);
 
-extern int cvmx_helper_agl_get_port(int interface);
+extern int cvmx_helper_agl_get_port(int xiface);
 
 /**
  * @INTERNAL

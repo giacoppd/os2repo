@@ -134,6 +134,9 @@ int cvmx_pko3_hw_init_global(int node, uint16_t aura)
 	uint64_t cycles;
 	const unsigned timeout = 100;	/* 100 milliseconds */
 
+	if (node != (aura >> 10))
+		cvmx_dprintf("WARNING: AURA vs PKO node mismatch\n");
+
 	pko_enable.u64 = cvmx_read_csr_node(node, CVMX_PKO_ENABLE);
 	if (pko_enable.s.enable) {
 		cvmx_dprintf("WARNING: %s: PKO already enabled on node %u\n",
@@ -217,7 +220,7 @@ int cvmx_pko3_hw_disable(int node)
 	cvmx_pko_enable_t pko_enable;
 	cvmx_pko_status_t pko_status;
 	uint64_t cycles;
-	const unsigned timeout = 100;	/* 100 milliseconds */
+	const unsigned timeout = 10;	/* 10 milliseconds */
 	unsigned mac_num, fifo, i;
 
 	(void) pko_status;
@@ -298,8 +301,8 @@ int cvmx_pko3_hw_disable(int node)
 	cvmx_write_csr_node(node, CVMX_PKO_DPFI_FLUSH, pko_flush.u64);
 
 	/* Prepare timeout */
-        cycles = cvmx_get_cycle();
-        cycles += cvmx_clock_get_rate(CVMX_CLOCK_CORE)/1000 * timeout;
+	cycles = cvmx_get_cycle();
+	cycles += cvmx_clock_get_rate(CVMX_CLOCK_CORE)/1000 * timeout;
 
 	/* Wait until all pointers have been returned */
 	do {
@@ -307,8 +310,6 @@ int cvmx_pko3_hw_disable(int node)
 		if (cycles < cvmx_get_cycle())
 			break;
 	} while (!dpfi_status.s.cache_flushed);
-
-
 
 	/* disable PKO buffer manager, should return all buffers to FPA */
 	dpfi_enable.u64 = 0;
@@ -333,7 +334,7 @@ int cvmx_pko3_hw_disable(int node)
 	return 0;
 }
 
- /** Open configured descriptor queues before queueing packets into them.
+/** Open configured descriptor queues before queueing packets into them.
  *
  * @param node is to specify the node to which this configuration is applied.
  * @param dq is the descriptor queue number to be opened.
@@ -364,7 +365,7 @@ int cvmx_pko_dq_open(int node, int dq)
 }
 
 
- /*
+/**
  * Close a descriptor queue
  *
  * @param node is to specify the node to which this configuration is applied.
@@ -406,6 +407,9 @@ int cvmx_pko3_dq_close(int node, int dq)
  * Before closing a DQ, this call will drain all pending traffic
  * on the DQ to the NULL MAC, which will circumvent any traffic
  * shaping and flow control to quickly reclaim all packet buffers.
+ *
+ * @param node is to specify the node to which this configuration is applied.
+ * @param dq is the descriptor queue number to be drained.
  */
 void cvmx_pko3_dq_drain(int node, int dq)
 {
@@ -458,15 +462,6 @@ int cvmx_pko3_dq_query(int node, int dq)
 	return pko_status.s.depth;
 }
 
-static struct cvmx_pko3_mac_s {
-	cvmx_helper_interface_mode_t mac_mode;
-	uint8_t fifo_cnt;
-	uint8_t fifo_id;
-	uint8_t pri;
-	uint8_t spd;
-	uint8_t mac_fifo_cnt;
-} cvmx_pko3_mac_table[ CVMX_PKO_MAX_MACS ];
-
 /*
  * PKO initialization of MACs and FIFOs
  *
@@ -487,10 +482,19 @@ static int cvmx_pko_setup_macs(int node)
 	uint8_t fifo_group_cfg[8];
 	uint8_t fifo_group_spd[8];
 	unsigned fifo_count = 0;
+	struct {
+		cvmx_helper_interface_mode_t mac_mode;
+		uint8_t fifo_cnt;
+		uint8_t fifo_id;
+		uint8_t pri;
+		uint8_t spd;
+		uint8_t mac_fifo_cnt;
+	} cvmx_pko3_mac_table[CVMX_PKO_MAX_MACS];
 
 	/* Initialize FIFO allocation table */
 	memset(&fifo_group_cfg, 0, sizeof(fifo_group_cfg));
 	memset(&fifo_group_spd, 0, sizeof(fifo_group_spd));
+	memset(cvmx_pko3_mac_table, 0, sizeof(cvmx_pko3_mac_table));
 
 	/* Initialize all MACs as disabled */
 	for(mac_num = 0; mac_num < CVMX_PKO_MAX_MACS; mac_num++) {
@@ -502,8 +506,9 @@ static int cvmx_pko_setup_macs(int node)
 	}
 
 	for(interface = 0; interface < num_interfaces; interface ++) {
-		mode = cvmx_helper_interface_get_mode(interface);
-		num_ports = cvmx_helper_interface_enumerate(interface);
+		int xiface =  cvmx_helper_node_interface_to_xiface(node, interface);
+		mode = cvmx_helper_interface_get_mode(xiface);
+		num_ports = cvmx_helper_interface_enumerate(xiface);
 
 		if(mode == CVMX_HELPER_INTERFACE_MODE_DISABLED)
 			continue;
@@ -519,10 +524,10 @@ static int cvmx_pko_setup_macs(int node)
 			int i;
 
 			/* convert interface/port to mac number */
-			i = __cvmx_pko3_get_mac_num(interface, port);
+			i = __cvmx_pko3_get_mac_num(xiface, port);
 			if (i < 0 || i>= CVMX_PKO_MAX_MACS) {
-				cvmx_dprintf("%s: ERROR: interface %d port %d has no MAC\n",
-					__func__, interface, port);
+				cvmx_dprintf("%s: ERROR: interface %d:%u port %d has no MAC\n",
+					     __func__, node, interface, port);
 				continue;
 			}
 
@@ -562,9 +567,8 @@ static int cvmx_pko_setup_macs(int node)
 			}
 
 			if(debug)
-				cvmx_dprintf("%s: intf %u port %u %s "
-					"mac %02u cnt %u spd %u\n",
-				__FUNCTION__, interface, port,
+				cvmx_dprintf("%s: intf %d:%u port %u %s mac %02u cnt %u spd %u\n",
+					     __FUNCTION__, node, interface, port,
 				cvmx_helper_interface_mode_to_string(mode),
 				i, cvmx_pko3_mac_table[i].fifo_cnt,
 				cvmx_pko3_mac_table[i].spd);
@@ -923,6 +927,10 @@ EXPORT_SYMBOL(cvmx_pko3_interface_options);
  * The `min_pad` parameter must be in agreement with the interface-level
  * padding option for all descriptor queues assigned to that particular
  * interface/port.
+ *
+ * @param node on which to operate
+ * @param dq descriptor queue to set
+ * @param min_pad minimum padding to set for dq
  */
 void cvmx_pko3_dq_options(unsigned node, unsigned dq, bool min_pad)
 {
@@ -1497,8 +1505,9 @@ int cvmx_pko3_pdesc_buf_append(cvmx_pko3_pdesc_t *pdesc, void *p_data,
  * @param wqe Work Queue Entry in a model-native format.
  * @param node The OCI node of the SSO where the WQE will be delivered.
  * @param group The SSO group where the WQE is delivered.
- * @param tt The SSO Tag Type for the WQE. If tt is not NULL, WQE should
- * contain a valid tag value for the work entry.
+ * @param tt The SSO Tag Type for the WQE. If tt is not NULL, tag should be a
+ * valid tag value.
+ * @param tag Valid tag value to assign to WQE
  *
  * @return Returns 0 on success, -1 on error.
  *
@@ -1599,7 +1608,7 @@ int cvmx_pko3_pdesc_notify_decrement(cvmx_pko3_pdesc_t *pdesc,
  * Clearing of a single byte is requested by this function.
  *
  * @param pdesc Packet Descriptor.
- * @param p_counter A pointer to a byte location.
+ * @param p_mem A pointer to a byte location.
  *
  * @return Returns 0 on success, -1 on failure.
  */

@@ -1,3 +1,4 @@
+
 /***********************license start***************
  * Copyright (c) 2003-2010  Cavium Inc. (support@cavium.com). All rights
  * reserved.
@@ -630,7 +631,7 @@ extern int cvmx_fau16_alloc(int reserve);
 extern int cvmx_fau8_alloc(int reserve);
 
 /** Frees the specified FAU register.
- *  @param Base address of register to release.
+ *  @param address Base address of register to release.
  *  @return 0 on success; -1 on failure
  */
 extern int cvmx_fau_free(int address);

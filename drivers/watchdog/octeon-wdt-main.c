@@ -90,7 +90,7 @@ static unsigned int max_timeout_sec;
 static unsigned int timeout_sec;
 
 /* Set to non-zero when userspace countdown mode active */
-static int do_coundown;
+static bool do_countdown;
 static unsigned int countdown_reset;
 static unsigned int per_cpu_countdown[NR_CPUS];
 
@@ -111,7 +111,7 @@ MODULE_PARM_DESC(nowayout,
 				__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
 static int disable;
-module_param(disable, int, 0444);
+module_param(disable, int, S_IRUGO);
 MODULE_PARM_DESC(disable,
 	"Disable the watchdog entirely (default=0)");
 
@@ -124,18 +124,9 @@ void octeon_wdt_nmi_stage2(void);
 static int cpu2core(int cpu)
 {
 #ifdef CONFIG_SMP
-	return cpu_logical_map(cpu);
+	return cpu_logical_map(cpu) & 0x3f;
 #else
 	return cvmx_get_core_num();
-#endif
-}
-
-static int core2cpu(int coreid)
-{
-#ifdef CONFIG_SMP
-	return cpu_number_map(coreid);
-#else
-	return 0;
 #endif
 }
 
@@ -149,11 +140,11 @@ static int core2cpu(int coreid)
  */
 static irqreturn_t octeon_wdt_poke_irq(int cpl, void *dev_id)
 {
-	unsigned int core = cvmx_get_core_num();
-	int cpu = core2cpu(core);
-	int node = cvmx_get_node_num();
+	int cpu = raw_smp_processor_id();
+	unsigned int core = cpu2core(cpu);
+	int node = cpu_to_node(cpu);
 
-	if (do_coundown) {
+	if (do_countdown) {
 		if (per_cpu_countdown[cpu] > 0) {
 			/* We're alive, poke the watchdog */
 			cvmx_write_csr_node(node, CVMX_CIU_PP_POKEX(core), 1);
@@ -422,7 +413,7 @@ static void octeon_wdt_ping(void)
 		node = cpu_to_node(cpu);
 		cvmx_write_csr_node(node, CVMX_CIU_PP_POKEX(coreid), 1);
 		per_cpu_countdown[cpu] = countdown_reset;
-		if ((countdown_reset || !do_coundown) &&
+		if ((countdown_reset || !do_countdown) &&
 		    !cpumask_test_cpu(cpu, &irq_enabled_cpus)) {
 			/* We have to enable the irq */
 			enable_irq(octeon_wdt_cpu_to_irq(cpu));
@@ -586,7 +577,7 @@ static int octeon_wdt_open(struct inode *inode, struct file *file)
 	 *	Activate
 	 */
 	octeon_wdt_ping();
-	do_coundown = 1;
+	do_countdown = true;
 	return nonseekable_open(inode, file);
 }
 
@@ -605,7 +596,7 @@ static int octeon_wdt_open(struct inode *inode, struct file *file)
 static int octeon_wdt_release(struct inode *inode, struct file *file)
 {
 	if (expect_close) {
-		do_coundown = 0;
+		do_countdown = false;
 		octeon_wdt_ping();
 	} else {
 		pr_crit("WDT device closed unexpectedly.  WDT will not stop!\n");

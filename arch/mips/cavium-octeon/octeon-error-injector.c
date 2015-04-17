@@ -60,7 +60,7 @@ static void octeon_error_injector_fpa1(void)
 	char *mem;
 	u64 old_threshold;
 
-	cvmx_fpa_enable();
+	cvmx_fpa1_enable();
 
 	mem = kmalloc(1024, GFP_KERNEL);
 	if (!mem) {
