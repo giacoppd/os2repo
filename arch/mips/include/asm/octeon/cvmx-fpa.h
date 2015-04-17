@@ -42,7 +42,7 @@
  *
  * Interface to the hardware Free Pool Allocator.
  *
- * <hr>$Revision: 104152 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  *
  */
 
@@ -83,10 +83,10 @@ typedef struct cvmx_fpa_pool_config cvmx_fpa_pool_config_t;
 /**
  * Return the name of the pool
  *
- * @param pool   Pool to get the name of
+ * @param pool_num   Pool to get the name of
  * @return The name
  */
-const char *cvmx_fpa_get_name(int pool);
+const char *cvmx_fpa_get_name(int pool_num);
 
 /**
  * Return the base of the pool
@@ -136,7 +136,7 @@ static inline void cvmx_fpa_disable(void)
 
 /**
  * @INTERNAL
- * @OBSOLETE
+ * @deprecated OBSOLETE
  *
  * Kept for transition assistance only
  */

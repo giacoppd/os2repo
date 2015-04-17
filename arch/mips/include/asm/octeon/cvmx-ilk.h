@@ -96,7 +96,7 @@ static inline int CVMX_ILK_MAX_LANES(void) {
 		return 16;
 	return -1;
 }
-extern CVMX_SHARED unsigned short cvmx_ilk_lane_mask[CVMX_NUM_ILK_INTF];
+extern CVMX_SHARED unsigned short cvmx_ilk_lane_mask[CVMX_MAX_NODES][CVMX_NUM_ILK_INTF];
 
 typedef struct {
 	unsigned int pipe;
@@ -107,7 +107,7 @@ typedef struct {
 /* Max number of channels allowed */
 #define CVMX_ILK_MAX_CHANS 8
 
-extern CVMX_SHARED unsigned char cvmx_ilk_chans[CVMX_NUM_ILK_INTF];
+extern CVMX_SHARED unsigned char cvmx_ilk_chans[CVMX_MAX_NODES][CVMX_NUM_ILK_INTF];
 extern unsigned char cvmx_ilk_chan_map[CVMX_NUM_ILK_INTF][CVMX_ILK_MAX_CHANS];
 
 typedef struct {

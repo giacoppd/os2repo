@@ -208,11 +208,12 @@ syscall_exit_work:
 	li	t0, _TIF_WORK_SYSCALL_EXIT
 	and	t0, a2			# a2 is preloaded with TI_FLAGS
 	beqz	t0, work_pending	# trace bit set?
-	local_irq_enable		# could let syscall_trace_leave()
+					# could let syscall_trace_leave()
 					# call schedule() instead
 #ifdef CONFIG_TRACE_IRQFLAGS
 	jal	trace_hardirqs_on
 #endif
+	local_irq_enable
 	move	a0, sp
 	jal	syscall_trace_leave
 	b	resume_userspace

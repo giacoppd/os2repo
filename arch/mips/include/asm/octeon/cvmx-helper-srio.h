@@ -54,11 +54,11 @@
  * connected to it. The SRIO interface should still be down after
  * this call.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
-extern int __cvmx_helper_srio_probe(int interface);
+extern int __cvmx_helper_srio_probe(int xiface);
 
 /**
  * @INTERNAL
@@ -66,11 +66,11 @@ extern int __cvmx_helper_srio_probe(int interface);
  * I/O should be fully functional. This is called with IPD
  * enabled but PKO disabled.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_srio_enable(int interface);
+extern int __cvmx_helper_srio_enable(int xiface);
 
 /**
  * @INTERNAL
