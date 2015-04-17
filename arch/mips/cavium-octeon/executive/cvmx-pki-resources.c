@@ -480,7 +480,7 @@ int cvmx_pki_bpid_alloc(int node, int bpid)
 /**
  * This function frees a bpid from pool of global bpid per node.
  * @param node	 node to free bpid from.
- * @param style	 bpid to free
+ * @param bpid	 bpid to free
  * @return 	 0 on success, -1 on failure or
  */
 int cvmx_pki_bpid_free(int node, int bpid)

@@ -43,7 +43,7 @@
  * Functions for NPI initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 96176 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifndef __CVMX_HELPER_NPI_H__
 #define __CVMX_HELPER_NPI_H__
@@ -66,11 +66,11 @@ extern int __cvmx_helper_npi_probe(int interface);
  * I/O should be fully functional. This is called with IPD
  * enabled but PKO disabled.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_npi_enable(int interface);
+extern int __cvmx_helper_npi_enable(int xiface);
 
 /**
  * Sets the number of pipe used by SLI packet output in the variable,

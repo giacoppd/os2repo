@@ -43,7 +43,7 @@
  * Functions for XAUI initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 94200 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifndef __CVMX_HELPER_XAUI_H__
 #define __CVMX_HELPER_XAUI_H__
@@ -54,12 +54,12 @@
  * connected to it. The XAUI interface should still be down
  * after this call.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
-extern int __cvmx_helper_xaui_probe(int interface);
-extern int __cvmx_helper_xaui_enumerate(int interface);
+extern int __cvmx_helper_xaui_probe(int xiface);
+extern int __cvmx_helper_xaui_enumerate(int xiface);
 
 /**
  * @INTERNAL
@@ -67,11 +67,11 @@ extern int __cvmx_helper_xaui_enumerate(int interface);
  * I/O should be fully functional. This is called with IPD
  * enabled but PKO disabled.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_xaui_enable(int interface);
+extern int __cvmx_helper_xaui_enable(int xiface);
 
 /**
  * @INTERNAL

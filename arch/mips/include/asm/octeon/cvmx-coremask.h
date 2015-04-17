@@ -60,7 +60,7 @@
  * provide future compatibility if more cores are added to future processors
  * or more nodes are supported.
  *
- * <hr>$Revision: 104294 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  *
  */
 
@@ -292,7 +292,6 @@ static inline int cvmx_coremask_clear_core(cvmx_coremask_t *pcm, int core)
  * Clear ``current core'' from the coremask.
  *
  * @param pcm is the pointer to the coremask.
- * @param core
  * @return 0.
  */
 static inline int cvmx_coremask_clear_self(cvmx_coremask_t *pcm)
@@ -322,7 +321,6 @@ static inline int cvmx_coremask_toggle_core(cvmx_coremask_t *pcm, int core)
  * Toggle ``current core'' in the coremask.
  *
  * @param pcm is the pointer to the coremask.
- * @param core
  * @return 0.
  */
 static inline int cvmx_coremask_toggle_self(cvmx_coremask_t *pcm)
@@ -385,7 +383,7 @@ static inline uint64_t cvmx_coremask_get64_node(const cvmx_coremask_t *pcm,
  *
  * @param[in] pcm - pointer to coremask
  * @return 32-bit coremask for the first node
- * @DEPRECATED This function is to maintain compatibility with older
+ * @deprecated This function is to maintain compatibility with older
  *             SDK applications and may disappear at some point.
  * This function is not compatible with the CN78XX or any other
  * Octeon device with more than 32 cores.
@@ -758,8 +756,8 @@ static inline int cvmx_coremask_is_subset(const cvmx_coremask_t *main,
 /**
  * Returns if one coremask intersects another coremask
  *
- * @param main - main coremask to test
- * @param subset - subset coremask to test
+ * @param c1 - main coremask to test
+ * @param c2 - subset coremask to test
  *
  * @return 1 if coremask c1 intersects coremask c2, 0 if they are exclusive
  */
@@ -777,7 +775,7 @@ static inline int cvmx_coremask_intersects(const cvmx_coremask_t *c1,
 /**
  * Masks a single node of a coremask
  *
- * @param pcm[inout] - coremask to mask
+ * @param[inout] pcm - coremask to mask
  * @param node       - node number to mask against
  */
 static inline void cvmx_coremask_mask_node(cvmx_coremask_t *pcm, int node)
