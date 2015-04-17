@@ -43,7 +43,7 @@
  * Functions for RGMII/GMII/MII initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 96176 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifndef __CVMX_HELPER_RGMII_H__
 #define __CVMX_HELPER_RGMII_H__
@@ -52,7 +52,7 @@
  * @INTERNAL
  * Probe RGMII ports and determine the number present
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of RGMII/GMII/MII ports (0-4).
  */
@@ -72,11 +72,11 @@ extern void cvmx_helper_rgmii_internal_loopback(int port);
  * Configure all of the ASX, GMX, and PKO regsiters required
  * to get RGMII to function on the supplied interface.
  *
- * @param interface PKO Interface to configure (0 or 1)
+ * @param xiface PKO Interface to configure (0 or 1)
  *
  * @return Zero on success
  */
-extern int __cvmx_helper_rgmii_enable(int interface);
+extern int __cvmx_helper_rgmii_enable(int xiface);
 
 /**
  * @INTERNAL

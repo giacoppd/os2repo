@@ -727,7 +727,7 @@ int cvmx_pki_pcam_write_entry(int node, int index, uint64_t cluster_mask,
  *			1-enable 0-disable
  * @param ena_drop	Enable/disable tail drop when max drop level exceeds
  *			1-enable 0-disable
- * @param ena_red	Enable/Disable asserting backpressure on bpid when
+ * @param ena_bp 	Enable/Disable asserting backpressure on bpid when
  *			max DROP level exceeds.
  *			1-enable 0-disable
  */
@@ -819,7 +819,7 @@ int cvmx_pki_get_pkind_style(int node, int pkind)
  * make sure software allocate enough buffers to now have wqe separate from packet data.
  * @param node		node number.
  * @param style		style to configure.
- * @param pkt_outside_wqe.	0 = The packet link pointer will be at word [FIRST_SKIP]
+ * @param pkt_outside_wqe	0 = The packet link pointer will be at word [FIRST_SKIP]
  *				immediately followed by packet data, in the same buffer
  *				as the work queue entry.
  *				1 = The packet link pointer will be at word [FIRST_SKIP] in a new
@@ -951,6 +951,7 @@ void cvmx_pki_dis_frame_len_chk(int node, int pknd)
  * This function shows the qpg table entries,
  * read directly from hardware.
  * @param node	node number
+ * @param num_entry number of entries to show
  */
 void cvmx_pki_show_qpg_entries(int node, uint16_t num_entry)
 {
@@ -1047,6 +1048,7 @@ void cvmx_pki_show_valid_pcam_entries(int node)
  * This function shows the pkind attributes in readable format,
  * read directly from hardware.
  * @param node    node number
+ * @param pkind   pkind info to print
  */
 void cvmx_pki_show_pkind_attributes(int node, int pkind)
 {

@@ -618,6 +618,7 @@ struct cvmx_pki_port_stats {
  * Number of clusters assign to that group determines how many engine can work
  * in parallel to process the packet. Eack cluster can process x MPPS.
  *
+ * @param node		node
  * @param cluster_group Group to attach clusters to
  * @param cluster_mask  It is the mask of clusters which needs to be assigned to group.
  * to that group
@@ -727,7 +728,7 @@ static inline void cvmx_pki_enable_backpressure(int node)
  * Get the statistics counters for a port.
  *
  * @param node	   node number
- * @param port_num Port number (ipd_port) to get statistics for.
+ * @param port Port number (ipd_port) to get statistics for.
  *		   Make sure PKI_STATS_CTL:mode is set to 0 for
  *		   collecting per port/pkind stats.
  *
@@ -1005,7 +1006,7 @@ static inline void cvmx_pki_get_stats(int node, int index, struct cvmx_pki_port_
  * Get the statistics counters for a port.
  *
  * @param node	   node number
- * @param port_num Port number (ipd_port) to get statistics for.
+ * @param port Port number (ipd_port) to get statistics for.
  *		   Make sure PKI_STATS_CTL:mode is set to 0 for
  *		   collecting per port/pkind stats.
  * @param status   Where to put the results.
@@ -1023,7 +1024,7 @@ static inline void cvmx_pki_get_port_stats(int node, uint64_t port, struct cvmx_
  * Get the statistics counters for a flow represented by style in PKI.
  *
  * @param node	   node number
- * @param style	   style number to get statistics for.
+ * @param style_num   style number to get statistics for.
  *		   Make sure PKI_STATS_CTL:mode is set to 1 for
  *		   collecting per style/flow stats.
  * @param status   Where to put the results.
@@ -1198,7 +1199,7 @@ int cvmx_pki_write_aura_bpid(int node, int aura, int bpid);
  *                  1-enable 0-disable
  * @param ena_drop  Enable/disable tail drop when max drop level exceeds
  *                  1-enable 0-disable
- * @param ena_red   Enable/Disable asserting backpressure on bpid when
+ * @param ena_bp    Enable/Disable asserting backpressure on bpid when
  *                  max DROP level exceeds.
  *                  1-enable 0-disable
  */
@@ -1218,7 +1219,7 @@ int cvmx_pki_get_pkind_style(int node, int pkind);
  * make sure software allocate enough buffers to now have wqe separate from packet data.
  * @param node	              node number.
  * @param style		      style to configure.
- * @param pkt_outside_wqe.	0 = The packet link pointer will be at word [FIRST_SKIP]
+ * @param pkt_outside_wqe	0 = The packet link pointer will be at word [FIRST_SKIP]
  *				    immediately followed by packet data, in the same buffer
  *				    as the work queue entry.
  *				1 = The packet link pointer will be at word [FIRST_SKIP] in a new
@@ -1270,6 +1271,7 @@ void cvmx_pki_endis_fcs_check(int node, int pknd, bool fcs_chk, bool fcs_strip);
  * This function shows the qpg table entries,
  * read directly from hardware.
  * @param node    node number
+ * @param num_entry number of entries to print
  */
 void cvmx_pki_show_qpg_entries(int node, uint16_t num_entry);
 
@@ -1291,6 +1293,7 @@ void cvmx_pki_show_valid_pcam_entries(int node);
  * This function shows the pkind attributes in readable format,
  * read directly from hardware.
  * @param node    node number
+ * @param pkind   pkind number to print
  */
 void cvmx_pki_show_pkind_attributes(int node, int pkind);
 
@@ -1303,6 +1306,7 @@ void cvmx_pki_show_pkind_attributes(int node, int pkind);
  * PKI.
  * WARNING: It is very important that PKI be
  * reset soon after a call to this function.
+ * @param node	              node number.
  */
 void __cvmx_pki_free_ptr(int node);
 

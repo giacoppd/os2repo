@@ -76,7 +76,7 @@ int __cvmx_helper_agl_enumerate(int xiface)
  * @INTERNAL
  * Convert interface to port to assess CSRs.
  *
- * @param interface  Interface to probe
+ * @param xiface  Interface to probe
  * @return  The port corresponding to the interface
  */
 int cvmx_helper_agl_get_port(int xiface)

@@ -98,7 +98,7 @@ int __cvmx_helper_bgx_enumerate(int xiface)
  * @INTERNAL
  * Disable the BGX port
  *
- * @param  IPD port of the BGX interface to disable
+ * @param xipd_port IPD port of the BGX interface to disable
  */
 void cvmx_helper_bgx_disable(int xipd_port)
 {
@@ -124,9 +124,8 @@ void cvmx_helper_bgx_disable(int xipd_port)
  * @INTERNAL
  * Configure the bgx mac.
  *
- * @param interface Interface to bring up
- *
- * @param mode      Mode to configure the bgx mac as
+ * @param xiface Interface to bring up
+ * @param index  port on interface to bring up
  */
 static void __cvmx_bgx_common_init(int xiface, int index)
 {
@@ -235,7 +234,7 @@ static void __cvmx_bgx_common_init_pknd(int xiface, int index)
  * connected to it. The SGMII interface should still be down after
  * this call. This is used by interfaces using the bgx mac.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
@@ -254,7 +253,7 @@ EXPORT_SYMBOL(__cvmx_helper_bgx_probe);
  * @INTERNAL
  * Perform initialization required only once for an SGMII port.
  *
- * @param interface Interface to init
+ * @param xiface Interface to init
  * @param index     Index of prot on the interface
  *
  * @return Zero on success, negative on failure
@@ -334,7 +333,7 @@ static int __cvmx_helper_bgx_sgmii_hardware_init_one_time(int xiface, int index)
  * leave I/O disabled using the GMX override. This function
  * follows the bringup documented in 10.6.3 of the manual.
  *
- * @param interface Interface to bringup
+ * @param xiface Interface to bringup
  * @param num_ports Number of ports on the interface
  *
  * @return Zero on success, negative on failure
@@ -378,7 +377,7 @@ static int __cvmx_helper_bgx_sgmii_hardware_init(int xiface, int num_ports)
  * enabled but PKO disabled. This is used by interfaces using
  * the bgx mac.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
@@ -397,7 +396,7 @@ int __cvmx_helper_bgx_sgmii_enable(int xiface)
  * Initialize the SERTES link for the first time or after a loss
  * of link.
  *
- * @param interface Interface to init
+ * @param xiface Interface to init
  * @param index     Index of prot on the interface
  *
  * @return Zero on success, negative on failure
@@ -472,7 +471,7 @@ static int __cvmx_helper_bgx_sgmii_hardware_init_link(int xiface, int index)
  * Configure an SGMII link to the specified speed after the SERTES
  * link is up.
  *
- * @param interface Interface to init
+ * @param xiface Interface to init
  * @param index     Index of prot on the interface
  * @param link_info Link state to configure
  *
@@ -599,7 +598,7 @@ static int __cvmx_helper_bgx_sgmii_hardware_init_link_speed(int xiface,
  * the last call to cvmx_helper_link_set(). This is used by
  * interfaces using the bgx mac.
  *
- * @param ipd_port IPD/PKO port to query
+ * @param xipd_port IPD/PKO port to query
  *
  * @return Link state
  */
@@ -701,7 +700,7 @@ int cvmx_helper_bgx_errata_22429(int xipd_port, int link_up)
  * cvmx_helper_link_autoconf() instead. This is used by interfaces
  * using the bgx mac.
  *
- * @param ipd_port  IPD/PKO port to configure
+ * @param xipd_port  IPD/PKO port to configure
  * @param link_info The new link state
  *
  * @return Zero on success, negative on failure
@@ -762,7 +761,8 @@ int __cvmx_helper_bgx_sgmii_link_set(int xipd_port,
  * Bringup XAUI interface. After this call packet I/O should be
  * fully functional.
  *
- * @param interface Interface to bring up
+ * @param index port on interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
@@ -1026,7 +1026,7 @@ EXPORT_SYMBOL(__cvmx_helper_bgx_port_init);
  * causes packets received from the wire to sent out again. This is used by
  * interfaces using the bgx mac.
  *
- * @param ipd_port IPD/PKO port to loopback.
+ * @param xipd_port IPD/PKO port to loopback.
  * @param enable_internal
  *                 Non zero if you want internal loopback
  * @param enable_external
@@ -1257,13 +1257,19 @@ cvmx_helper_link_info_t __cvmx_helper_bgx_xaui_link_get(int xipd_port)
 	int node = xi.node;
 	int index = cvmx_helper_get_interface_index_num(xp.port);
 	cvmx_bgxx_spux_status1_t spu_status1;
+	cvmx_bgxx_smux_tx_ctl_t smu_tx_ctl;
+	cvmx_bgxx_smux_rx_ctl_t smu_rx_ctl;
 	cvmx_helper_link_info_t result;
 
 	result.u64 = 0;
 
 	spu_status1.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_STATUS1(index, interface));
+	smu_tx_ctl.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SMUX_TX_CTL(index, interface));
+	smu_rx_ctl.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SMUX_RX_CTL(index, interface));
 
-	if (spu_status1.s.rcv_lnk) {
+	if ((smu_tx_ctl.s.ls == 0)
+	    && (smu_rx_ctl.s.status == 0)
+	    && (spu_status1.s.rcv_lnk)) {
 		int lanes;
 		int qlm = cvmx_qlm_interface(xiface);
 		uint64_t speed;

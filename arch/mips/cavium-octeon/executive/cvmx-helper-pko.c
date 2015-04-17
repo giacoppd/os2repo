@@ -42,7 +42,7 @@
  *
  * Helper Functions for the PKO
  *
- * $Id: cvmx-helper-pko.c 106502 2014-10-22 16:28:44Z cchavva $
+ * $Id: cvmx-helper-pko.c 108660 2014-11-25 06:45:45Z cchavva $
  */
 
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
@@ -181,7 +181,7 @@ int cvmx_helper_pko_init(void)
 	//#	error "Pool number in kernel not implemented"
 #endif
 
-	__cvmx_helper_init_port_config_data();
+	__cvmx_helper_init_port_config_data(0);
 
 	cvmx_pko_hw_init(
 		cvmx_fpa_get_pko_pool(),

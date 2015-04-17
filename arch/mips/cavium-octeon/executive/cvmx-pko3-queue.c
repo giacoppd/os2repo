@@ -107,8 +107,7 @@ int cvmx_pko3_get_queue_base(int ipd_port)
 	dq_table = __cvmx_pko3_dq_table + CVMX_PKO3_IPD_NUM_MAX * xp.node;
 
 	if(dq_table[i].dq_count > 0)
-		ret = xp.node << 10 |
-		    cvmx_helper_node_to_ipd_port(xp.node, dq_table[i].dq_base);
+		ret = xp.node << 10 | dq_table[i].dq_base;
 
 	return ret;
 }
@@ -187,18 +186,19 @@ int __cvmx_pko3_dq_table_setup(void)
  * by priority) for a given IPD-port, which is either a physical port,
  * or a channel on a channelized interface (i.e. ILK).
  *
- * @param interface is the physical interface number
- * @param port is either a physical port on an interface
- * @param or a channel of an ILK interface
+ * @param xiface is the physical interface number
+ * @param index is either a physical port on an interface
+ *        or a channel of an ILK interface
  * @param dq_base is the first Descriptor Queue number in a consecutive range
  * @param dq_count is the number of consecutive Descriptor Queues leading
- * @param the same channel or port.
+ *        the same channel or port.
  *
  * Only a consecurive range of Descriptor Queues can be associated with any
  * given channel/port, and usually they are ordered from most to least
  * in terms of scheduling priority.
  *
  * Note: thus function only populates the node-local translation table.
+ * NOTE: This function would be cleaner if it had a single ipd_port argument
  *
  * @returns 0 on success, -1 on failure.
  */
@@ -206,23 +206,33 @@ int __cvmx_pko3_ipd_dq_register(int xiface, int index,
 		unsigned dq_base, unsigned dq_count)
 {
 	struct cvmx_pko3_dq *dq_table;
-	uint16_t ipd_port;
+	int ipd_port;
 	unsigned i;
+	struct cvmx_xiface xi = cvmx_helper_xiface_to_node_interface(xiface);
 	struct cvmx_xport xp;
 
         if(__cvmx_helper_xiface_is_null(xiface))
-		ipd_port = CVMX_PKO3_IPD_PORT_NULL;
-	else
-		ipd_port = cvmx_helper_get_ipd_port(xiface, index);
+		ipd_port = cvmx_helper_node_to_ipd_port(xi.node, CVMX_PKO3_IPD_PORT_NULL);
+	else {
+		int p;
+		p = cvmx_helper_get_ipd_port(xiface, index);
+		if (p < 0) {
+			cvmx_dprintf("ERROR: %s: xiface %#x has no IPD port\n",
+			__func__, xiface);
+			return -1;
+		}
+		ipd_port = p;
+	}
 
 	xp = cvmx_helper_ipd_port_to_xport(ipd_port);
+
 	i = CVMX_PKO3_SWIZZLE_IPD ^ xp.port;
 
 	/* get per-node table */
 	if(__cvmx_pko3_dq_table == NULL)
 		__cvmx_pko3_dq_table_setup();
 
-	dq_table = __cvmx_pko3_dq_table + CVMX_PKO3_IPD_NUM_MAX * xp.node;
+	dq_table = __cvmx_pko3_dq_table + CVMX_PKO3_IPD_NUM_MAX * xi.node;
 
 	if(debug)
 		cvmx_dprintf("%s: ipd=%#x ix=%#x dq %u cnt %u\n",
@@ -246,20 +256,32 @@ int __cvmx_pko3_ipd_dq_register(int xiface, int index,
  * @INTERNAL
  *
  * Unregister DQs associated with CHAN_E (IPD port)
+ *
+ * NOTE: This function would be cleaner if it had a single ipd_port argument
  */
 int __cvmx_pko3_ipd_dq_unregister(int xiface, int index)
 {
 	struct cvmx_pko3_dq *dq_table;
-	uint16_t ipd_port;
+	int ipd_port;
 	unsigned i;
 	struct cvmx_xport xp;
+	struct cvmx_xiface xi = cvmx_helper_xiface_to_node_interface(xiface);
 
         if(__cvmx_helper_xiface_is_null(xiface))
-		ipd_port = CVMX_PKO3_IPD_PORT_NULL;
-	else
-		ipd_port = cvmx_helper_get_ipd_port(xiface, index);
+		ipd_port = cvmx_helper_node_to_ipd_port(xi.node, CVMX_PKO3_IPD_PORT_NULL);
+	else {
+		int p;
+		p = cvmx_helper_get_ipd_port(xiface, index);
+		if (p < 0) {
+			cvmx_dprintf("ERROR: %s: xiface %#x has no IPD port\n",
+			__func__, xiface);
+			return -1;
+		}
+		ipd_port = p;
+	}
 
 	xp = cvmx_helper_ipd_port_to_xport(ipd_port);
+
 	i = CVMX_PKO3_SWIZZLE_IPD ^ xp.port;
 
 	/* get per-node table */
@@ -267,7 +289,7 @@ int __cvmx_pko3_ipd_dq_unregister(int xiface, int index)
 		__cvmx_pko3_dq_table_setup();
 
 	/* get per-node table */
-	dq_table = __cvmx_pko3_dq_table + CVMX_PKO3_IPD_NUM_MAX * xp.node;
+	dq_table = __cvmx_pko3_dq_table + CVMX_PKO3_IPD_NUM_MAX * xi.node;
 
 	if (dq_table[i].dq_count == 0) {
 		cvmx_dprintf("%s:ipd=%#x already released\n",
@@ -393,7 +415,6 @@ void cvmx_pko3_map_channel(unsigned node,
  * @param child_base is the first child queue number in the static prioriy childs.
  * @param child_rr_prio is the round robin childs priority.
  * @param mac_num is the mac number of the mac that will be tied to this port_queue.
- * @return returns none.
  */
 static void cvmx_pko_configure_port_queue(int node, int port_queue,
 					 int child_base, int child_rr_prio,
@@ -461,7 +482,6 @@ static void cvmx_pko_configure_l2_queue(int node, int queue, int parent_queue,
  * @param rr_quantum is this queue's round robin quantum value.
  * @param child_base is the first child queue number in the static prioriy childs.
  * @param child_rr_prio is the round robin childs priority.
- * @return returns none.
  */
 static void cvmx_pko_configure_l3_queue(int node, int queue, int parent_queue,
 					       int prio, int rr_quantum,
@@ -510,7 +530,6 @@ static void cvmx_pko_configure_l3_queue(int node, int queue, int parent_queue,
  * @param rr_quantum is this queue's round robin quantum value.
  * @param child_base is the first child queue number in the static prioriy childs.
  * @param child_rr_prio is the round robin childs priority.
- * @return returns none.
  */
 static void cvmx_pko_configure_l4_queue(int node, int queue, int parent_queue,
 					       int prio, int rr_quantum,
@@ -558,7 +577,6 @@ static void cvmx_pko_configure_l4_queue(int node, int queue, int parent_queue,
  * @param rr_quantum is this queue's round robin quantum value.
  * @param child_base is the first child queue number in the static prioriy childs.
  * @param child_rr_prio is the round robin childs priority.
- * @return returns none.
  */
 static void cvmx_pko_configure_l5_queue(int node, int queue, int parent_queue,
 					       int prio, int rr_quantum,
@@ -606,7 +624,6 @@ static void cvmx_pko_configure_l5_queue(int node, int queue, int parent_queue,
  * @param rr_quantum is this queue's round robin quantum value.
  * @param child_base is the first child queue number in the static prioriy childs.
  * @param child_rr_prio is the round robin childs priority.
- * @return returns none.
  */
 static void cvmx_pko_configure_dq(int node, int dq, int parent_queue,
 				int prio, int rr_quantum,
@@ -698,6 +715,7 @@ static const struct {
  * could be multiple L2 SQs attached to a single L1 PQ, either in a
  * fair round-robin scheduling, or with static and/or round-robin priorities.
  *
+ * @param node on which to operate
  * @param mac_num is the LMAC number to that is associated with the Port Queue,
  * @param which is identical to the Port Queue number that is configured
  * @param child_base is the number of the first L2 SQ attached to the PQ
@@ -792,10 +810,10 @@ int cvmx_pko3_pq_config_children(unsigned node, unsigned mac_num,
  * The children can have fair round-robin or priority-based scheduling
  * when multiple children are assigned a single parent.
  *
+ * @param node on which to operate
  * @param parent_level is the level of the parent queue, 2 to 5.
  * @param parent_queue is the number of the parent Scheduler Queue
  * @param child_base is the number of the first child SQ or DQ to assign to
- * @param parent
  * @param child_count is the number of consecutive children to assign
  * @param stat_prio_count is the priority setting for the children L2 SQs
  *
@@ -896,7 +914,7 @@ int cvmx_pko3_sq_config_children(unsigned int node, unsigned parent_level,
  *
  * @param tclk is the time-wheel clock for the specific shaper
  * @param reg is a pointer to a register structure
- * @param rate_kips is the requested bit rate in kilobits/sec
+ * @param rate_kbips is the requested bit rate in kilobits/sec
  * @param burst_bytes is the size of maximum burst in bytes
  *
  * @return A negative number means the transfer rate could
@@ -1047,7 +1065,7 @@ static int cvmx_pko3_shaper_rate_compute(unsigned long tclk,
  * @param node The OCI node where the target port is located
  * @param pq_num The L1/PQ queue number for this setting
  * @param rate_kbips The desired throughput in kilo-bits-per-second
- * @param burst_size The size of a burst in bytes, at least MTU
+ * @param burst_bytes The size of a burst in bytes, at least MTU
  *
  * @return Returns zero if both settings applied within allowed tolerance,
  * otherwise the error is returned in parts-per-million.
@@ -1106,7 +1124,7 @@ int cvmx_pko3_port_cir_set(unsigned node, unsigned pq_num,
  * @param node The OCI node where the target port is located
  * @param dq_num The descriptor queue number for this setting
  * @param rate_kbips The desired throughput in kilo-bits-per-second
- * @param burst_size The size of a burst in bytes, at least MTU
+ * @param burst_bytes The size of a burst in bytes, at least MTU
  *
  * @return Returns zero if both settings applied within allowed tolerance,
  * otherwise the error is returned in parts-per-million.
@@ -1173,7 +1191,7 @@ int cvmx_pko3_dq_cir_set(unsigned node, unsigned dq_num,
  * @param node The OCI node where the target port is located
  * @param dq_num The descriptor queue number for this setting
  * @param rate_kbips The desired throughput in kilo-bits-per-second
- * @param burst_size The size of a burst in bytes, at least MTU
+ * @param burst_bytes The size of a burst in bytes, at least MTU
  *
  * @return Returns zero if both settings applied within allowed tolerance,
  * otherwise the error is returned in parts-per-million.
