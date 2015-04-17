@@ -1654,7 +1654,7 @@ static inline cvmx_pow_tag_info_t cvmx_pow_get_current_tag(void)
 		cvmx_sso_sl_ppx_tag_t sl_ppx_tag;
 		cvmx_xgrp_t xgrp;
 		int node = cvmx_get_node_num();
-		int core = cvmx_get_core_num();
+		int core = cvmx_get_local_core_num();
 		sl_ppx_tag.u64 = cvmx_read_csr_node(node, CVMX_SSO_SL_PPX_TAG(core));
 		result.index = sl_ppx_tag.s.index;
 		result.tag_type = sl_ppx_tag.s.tt;
@@ -1707,7 +1707,7 @@ static inline cvmx_wqe_t *cvmx_pow_get_current_wqp(void)
 	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		cvmx_sso_sl_ppx_wqp_t sso_wqp;
 		int node = cvmx_get_node_num();
-		int core = cvmx_get_core_num();
+		int core = cvmx_get_local_core_num();
 		sso_wqp.u64 = cvmx_read_csr_node(node, CVMX_SSO_SL_PPX_WQP(core));
 		if (sso_wqp.s.wqp)
 			return (cvmx_wqe_t *) cvmx_phys_to_ptr(sso_wqp.s.wqp);
@@ -2391,7 +2391,7 @@ static inline void cvmx_pow_work_submit(cvmx_wqe_t * wqp, uint32_t tag, cvmx_pow
 		xgrp = (grp & 0x1f) << 3 ;
 		xgrp |= (qos & 7);
 		xgrp |= 0x300 & (node << 8);
- 
+
 		wqp->word1.cn78xx.rsvd_0 = 0;
 		wqp->word1.cn78xx.rsvd_1 = 0;
 		wqp->word1.cn78xx.tag = tag;
@@ -2464,7 +2464,7 @@ static inline void cvmx_pow_work_submit(cvmx_wqe_t * wqp, uint32_t tag, cvmx_pow
  * Note that the tag provided is for the work queue entry submitted,
  * and is unrelated to the tag that the core currently holds.
  *
- * @param wqp pointer to work queue entry to submit. 
+ * @param wqp pointer to work queue entry to submit.
  * This entry is updated to match the other parameters
  * @param tag tag value to be assigned to work queue entry
  * @param tag_type type of tag
@@ -2490,7 +2490,7 @@ static inline void cvmx_pow_work_submit_node(cvmx_wqe_t * wqp, uint32_t tag, cvm
 
 		gxgrp = xgrp & 0xff;
 		gxgrp |= node << 8;
- 
+
 		wqp->word1.cn78xx.rsvd_0 = 0;
 		wqp->word1.cn78xx.rsvd_1 = 0;
 		wqp->word1.cn78xx.tag = tag;
@@ -2593,7 +2593,7 @@ static inline void cvmx_pow_set_group_mask(uint64_t core_num, uint64_t mask)
 
 		node = cvmx_coremask_core_to_node(core_num);
 		core = cvmx_coremask_core_on_node(core_num);
-	
+
 		/* 256 groups divided into 4 X 64 bit registers */
 		for (rix = 0; rix < (CVMX_SSO_NUM_XGRP >> 6); rix ++ ) {
 			grp_msk.u64 = 0;
@@ -2660,7 +2660,7 @@ static inline void cvmx_pow_set_xgrp_mask( uint64_t core_num,
 
 	if (!octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		cvmx_dprintf(
-			"ERROR: %s is not supported on this chip)\n", 
+			"ERROR: %s is not supported on this chip)\n",
 			__FUNCTION__);
 		return;
 	}
@@ -2705,7 +2705,7 @@ static inline void cvmx_pow_set_xgrp_mask( uint64_t core_num,
  * 			<mask_set> values range from 0 to 3, where
  * 			each of the two bits represents a mask set.
  * 			Cores will be added to the mask set whith corresponding
- * 			bit set, and removed from the mask set with 
+ * 			bit set, and removed from the mask set with
  * 			corresponding bit clear.
  *
  * Note: cores can only accept work from SSO groups on the same node,
@@ -2722,7 +2722,7 @@ static inline void cvmx_sso_set_group_core_affinity(cvmx_xgrp_t xgrp,
 
 	if (!octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		cvmx_dprintf(
-			"ERROR: %s is not supported on this chip)\n", 
+			"ERROR: %s is not supported on this chip)\n",
 			__FUNCTION__);
 		return;
 	}
@@ -2737,21 +2737,21 @@ static inline void cvmx_sso_set_group_core_affinity(cvmx_xgrp_t xgrp,
 		reg_addr = CVMX_SSO_PPX_SX_GRPMSKX(ncore, 0, grp_index);
 		grp_msk.u64 = cvmx_read_csr_node(node, reg_addr);
 
-		if(mask_set & 1) 
+		if(mask_set & 1)
 			grp_msk.s.grp_msk |= (1ull << bit_pos);
 		else
 			grp_msk.s.grp_msk &= ~(1ull << bit_pos);
-		
+
 		cvmx_write_csr_node(node, reg_addr, grp_msk.u64);
 
 		reg_addr = CVMX_SSO_PPX_SX_GRPMSKX(ncore, 1, grp_index);
 		grp_msk.u64 = cvmx_read_csr_node(node, reg_addr);
 
-		if(mask_set & 2) 
+		if(mask_set & 2)
 			grp_msk.s.grp_msk |= (1ull << bit_pos);
 		else
 			grp_msk.s.grp_msk &= ~(1ull << bit_pos);
-		
+
 		cvmx_write_csr_node(node, reg_addr, grp_msk.u64);
 	}
 }
@@ -2785,7 +2785,7 @@ static inline void cvmx_sso_set_group_priority(int node, cvmx_xgrp_t xgrp,
 
 	if (!octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		cvmx_dprintf(
-			"ERROR: %s is not supported on this chip)\n", 
+			"ERROR: %s is not supported on this chip)\n",
 			__FUNCTION__);
 		return;
 	}
@@ -3153,22 +3153,26 @@ static inline uint32_t cvmx_pow_tag_get_hw_bits(uint64_t tag)
 	return (tag & cvmx_build_mask(32 - CVMX_TAG_SW_BITS));
 }
 
+static inline uint64_t cvmx_sso_get_total_wqe_count_78xx(int node)
+{
+	cvmx_sso_grpx_aq_cnt_t aq_cnt;
+	int grp = 0;
+	uint64_t cnt = 0;
+
+	for( grp = 0; grp < CVMX_SSO_NUM_XGRP; grp++) {
+		aq_cnt.u64 = cvmx_read_csr_node(node,
+				CVMX_SSO_GRPX_AQ_CNT(grp));
+		cnt += aq_cnt.s.aq_cnt;
+	}
+	return cnt;
+}
+
 static inline uint64_t cvmx_sso_get_total_wqe_count(void)
 {
-
 	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE))
 	{
-		cvmx_sso_grpx_aq_cnt_t aq_cnt;
 		int node = cvmx_get_node_num();
-		int grp = 0;
-		uint64_t cnt = 0;
-
-		for( grp = 0; grp < CVMX_SSO_NUM_XGRP; grp++) {
-			aq_cnt.u64 = cvmx_read_csr_node(node,
-					CVMX_SSO_GRPX_AQ_CNT(grp));
-			cnt += aq_cnt.s.aq_cnt;
-		}
-		return cnt;
+		return cvmx_sso_get_total_wqe_count_78xx(node);
 	}
 	else if (OCTEON_IS_MODEL(OCTEON_CN68XX))
 	{

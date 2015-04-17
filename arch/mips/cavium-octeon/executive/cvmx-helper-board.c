@@ -159,7 +159,7 @@ static void cvmx_retry_i2c_write(int twsi_id, uint8_t dev_addr,
  * Returns the Ethernet node offset in the device tree
  *
  * @param     fdt_addr - pointer to flat device tree in memory
- * @param     alias    - offset of alias in device tree
+ * @param     aliases    - offset of alias in device tree
  * @param     ipd_port - ipd port number to look up
  *
  * @returns   offset of Ethernet node if >= 0, error if -1
@@ -1211,7 +1211,7 @@ int __get_phy_info_from_dt(cvmx_phy_info_t *phy_info, int ipd_port)
  * This function outputs the cvmx_phy_info_t data structure for the specified
  * port.
  *
- * @param - phy_info - phy info data structure
+ * @param phy_info - phy info data structure
  * @param ipd_port - port to get phy info for
  *
  * @return 0 for success, -1 if info not available

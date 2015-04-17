@@ -50,13 +50,13 @@
 
 #define CVMX_BGX_RX_FIFO_SIZE	(64 * 1024)
 
-extern int __cvmx_helper_bgx_enumerate(int interface);
+extern int __cvmx_helper_bgx_enumerate(int xiface);
 
 /**
  * @INTERNAL
  * Disable the BGX port
  *
- * @param  IPD port of the BGX interface to disable
+ * @param xipd_port IPD port of the BGX interface to disable
  */
 extern void cvmx_helper_bgx_disable(int xipd_port);
 
@@ -66,11 +66,11 @@ extern void cvmx_helper_bgx_disable(int xipd_port);
  * connected to it. The SGMII/XAUI interface should still be down after
  * this call. This is used by interfaces using the bgx mac.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
-extern int __cvmx_helper_bgx_probe(int interface);
+extern int __cvmx_helper_bgx_probe(int xiface);
 
 /**
  * @INTERNAL
@@ -79,11 +79,11 @@ extern int __cvmx_helper_bgx_probe(int interface);
  * enabled but PKO disabled. This is used by interfaces using the
  * bgx mac.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_bgx_sgmii_enable(int interface);
+extern int __cvmx_helper_bgx_sgmii_enable(int xiface);
 
 /**
  * @INTERNAL
@@ -93,11 +93,11 @@ extern int __cvmx_helper_bgx_sgmii_enable(int interface);
  * the last call to cvmx_helper_link_set(). This is used by
  * interfaces using the bgx mac.
  *
- * @param ipd_port IPD/PKO port to query
+ * @param xipd_port IPD/PKO port to query
  *
  * @return Link state
  */
-extern cvmx_helper_link_info_t __cvmx_helper_bgx_sgmii_link_get(int ipd_port);
+extern cvmx_helper_link_info_t __cvmx_helper_bgx_sgmii_link_get(int xipd_port);
 
 /**
  * @INTERNAL
@@ -108,12 +108,12 @@ extern cvmx_helper_link_info_t __cvmx_helper_bgx_sgmii_link_get(int ipd_port);
  * cvmx_helper_link_autoconf() instead. This is used by interfaces
  * using the bgx mac.
  *
- * @param ipd_port  IPD/PKO port to configure
+ * @param xipd_port  IPD/PKO port to configure
  * @param link_info The new link state
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_bgx_sgmii_link_set(int ipd_port,
+extern int __cvmx_helper_bgx_sgmii_link_set(int xipd_port,
 					    cvmx_helper_link_info_t link_info);
 
 /**
@@ -123,7 +123,7 @@ extern int __cvmx_helper_bgx_sgmii_link_set(int ipd_port,
  * causes packets received from the wire to sent out again. This is used by
  * interfaces using the bgx mac.
  *
- * @param ipd_port IPD/PKO port to loopback.
+ * @param xipd_port IPD/PKO port to loopback.
  * @param enable_internal
  *                 Non zero if you want internal loopback
  * @param enable_external
@@ -131,7 +131,7 @@ extern int __cvmx_helper_bgx_sgmii_link_set(int ipd_port,
  *
  * @return Zero on success, negative on failure.
  */
-extern int __cvmx_helper_bgx_sgmii_configure_loopback(int ipd_port,
+extern int __cvmx_helper_bgx_sgmii_configure_loopback(int xipd_port,
 						      int enable_internal,
 						      int enable_external);
 
@@ -142,11 +142,11 @@ extern int __cvmx_helper_bgx_sgmii_configure_loopback(int ipd_port,
  * enabled but PKO disabled. This is used by interfaces using the
  * bgx mac.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_bgx_xaui_enable(int interface);
+extern int __cvmx_helper_bgx_xaui_enable(int xiface);
 
 /**
  * @INTERNAL
@@ -156,11 +156,11 @@ extern int __cvmx_helper_bgx_xaui_enable(int interface);
  * the last call to cvmx_helper_link_set(). This is used by
  * interfaces using the bgx mac.
  *
- * @param ipd_port IPD/PKO port to query
+ * @param xipd_port IPD/PKO port to query
  *
  * @return Link state
  */
-extern cvmx_helper_link_info_t __cvmx_helper_bgx_xaui_link_get(int ipd_port);
+extern cvmx_helper_link_info_t __cvmx_helper_bgx_xaui_link_get(int xipd_port);
 
 /**
  * @INTERNAL
@@ -171,12 +171,12 @@ extern cvmx_helper_link_info_t __cvmx_helper_bgx_xaui_link_get(int ipd_port);
  * cvmx_helper_link_autoconf() instead. This is used by interfaces
  * using the bgx mac.
  *
- * @param ipd_port  IPD/PKO port to configure
+ * @param xipd_port  IPD/PKO port to configure
  * @param link_info The new link state
  *
  * @return Zero on success, negative on failure
  */
-extern int __cvmx_helper_bgx_xaui_link_set(int ipd_port,
+extern int __cvmx_helper_bgx_xaui_link_set(int xipd_port,
 					   cvmx_helper_link_info_t link_info);
 
 /**
@@ -186,7 +186,7 @@ extern int __cvmx_helper_bgx_xaui_link_set(int ipd_port,
  * causes packets received from the wire to sent out again. This is used by
  * interfaces using the bgx mac.
  *
- * @param ipd_port IPD/PKO port to loopback.
+ * @param xipd_port IPD/PKO port to loopback.
  * @param enable_internal
  *                 Non zero if you want internal loopback
  * @param enable_external
@@ -194,7 +194,7 @@ extern int __cvmx_helper_bgx_xaui_link_set(int ipd_port,
  *
  * @return Zero on success, negative on failure.
  */
-extern int __cvmx_helper_bgx_xaui_configure_loopback(int ipd_port,
+extern int __cvmx_helper_bgx_xaui_configure_loopback(int xipd_port,
 						     int enable_internal,
 						     int enable_external);
 /**

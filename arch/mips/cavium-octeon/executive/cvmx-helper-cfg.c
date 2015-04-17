@@ -508,20 +508,22 @@ void cvmx_helper_cfg_set_jabber_and_frame_max()
 
 	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
 		int ipd_port;
+		int node = cvmx_get_node_num();
 
 		/*Set the frame max size and jabber size to 65535. */
 		for (interface = 0; interface < cvmx_helper_get_number_of_interfaces(); interface++) {
 			/* Set the frame max size and jabber size to 65535, as the defaults
 		   	are too small. */
-			cvmx_helper_interface_mode_t imode = cvmx_helper_interface_get_mode(interface);
+			int xiface = cvmx_helper_node_interface_to_xiface(node, interface);
+			cvmx_helper_interface_mode_t imode = cvmx_helper_interface_get_mode(xiface);
 			int num_ports = cvmx_helper_ports_on_interface(interface);
 
 			switch (imode) {
 			case CVMX_HELPER_INTERFACE_MODE_SGMII:
 				for (port = 0; port < num_ports; port++) {
-					ipd_port = cvmx_helper_get_ipd_port(interface, port);
+					ipd_port = cvmx_helper_get_ipd_port(xiface, port);
 					cvmx_pki_set_max_frm_len(ipd_port, -1);
-					cvmx_write_csr(CVMX_BGXX_GMP_GMI_RXX_JABBER(port, interface), 65535);
+					cvmx_write_csr_node(node, CVMX_BGXX_GMP_GMI_RXX_JABBER(port, interface), 65535);
 				}
 				break;
 			case CVMX_HELPER_INTERFACE_MODE_XAUI:
@@ -531,9 +533,9 @@ void cvmx_helper_cfg_set_jabber_and_frame_max()
 			case CVMX_HELPER_INTERFACE_MODE_10G_KR:
 			case CVMX_HELPER_INTERFACE_MODE_40G_KR4:
 				for (port = 0; port < num_ports; port++) {
-					ipd_port = cvmx_helper_get_ipd_port(interface, port);
+					ipd_port = cvmx_helper_get_ipd_port(xiface, port);
 					cvmx_pki_set_max_frm_len(ipd_port, -1);
-					cvmx_write_csr(CVMX_BGXX_SMUX_RX_JABBER(port, interface), 65535);
+					cvmx_write_csr_node(node, CVMX_BGXX_SMUX_RX_JABBER(port, interface), 65535);
 				}
 				break;
 			default:
@@ -790,7 +792,7 @@ static int cvmx_helper_cfg_init_pko_iports_and_queues_using_static_config(void)
 /**
  * Returns if port is valid for a given interface
  *
- * @param interface  interface to check
+ * @param xiface  interface to check
  * @param index      port index in the interface
  *
  * @return status of the port present or not.
@@ -1000,7 +1002,7 @@ int cvmx_pko_alloc_iport_and_queues(int interface, int port, int port_cnt, int q
 }
 EXPORT_SYMBOL(cvmx_pko_alloc_iport_and_queues);
 
-int __cvmx_helper_init_port_config_data(void)
+int __cvmx_helper_init_port_config_data(int node)
 {
 	int rv = 0;
 	int i, j, n;
@@ -1019,18 +1021,20 @@ int __cvmx_helper_init_port_config_data(void)
 		/* PKO3: only needs BPID, PKND to be setup,
 		 * while the rest of PKO3 init is done in cvmx-helper-pko3.c
 		 */
+		pknd = 0;
+		bpid = 0;
 		for (i = 0; i < cvmx_helper_get_number_of_interfaces(); i++) {
-			n = cvmx_helper_interface_enumerate(i);
-			if (cvmx_helper_interface_get_mode(i) !=
-				CVMX_HELPER_INTERFACE_MODE_NPI) {
+			int xiface = cvmx_helper_node_interface_to_xiface(node, i);
+			n = cvmx_helper_interface_enumerate(xiface);
+			if (cvmx_helper_interface_get_mode(xiface) != CVMX_HELPER_INTERFACE_MODE_NPI) {
 				for (j = 0; j < n; j++) {
-					cvmx_cfg_port[0][i][j].ccpp_pknd = pknd++;
-					cvmx_cfg_port[0][i][j].ccpp_bpid = bpid++;
+					cvmx_cfg_port[node][i][j].ccpp_pknd = pknd++;
+					cvmx_cfg_port[node][i][j].ccpp_bpid = bpid++;
 				}
 			} else {
 				for (j = 0; j < n; j++) {
-					cvmx_cfg_port[0][i][j].ccpp_pknd = pknd;
-					cvmx_cfg_port[0][i][j].ccpp_bpid = bpid;
+					cvmx_cfg_port[node][i][j].ccpp_pknd = pknd;
+					cvmx_cfg_port[node][i][j].ccpp_bpid = bpid;
 				}
 				pknd++;
 				bpid++;
