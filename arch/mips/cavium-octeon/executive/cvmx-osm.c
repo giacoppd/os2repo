@@ -151,9 +151,9 @@ EXPORT_SYMBOL(cvmx_osm_reserve_banks);
 /**
  * Release consecutive banks in OSM
  *
- * @param start_bank_num - starting bank number 
+ * @param start_bank_num - starting bank number
  * @param num_banks - number of banks
- * @param bank_assign - bank owner
+ * @param bank_owner - bank owner
  * @return 0 on success non zero on failure
  *
  */

@@ -335,9 +335,6 @@ void cvmx_debug_init(void)
 	cvmx_spinlock_t *lock;
 	cvmx_coremask_t *pcm = cvmx_debug_core_mask();
 
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX))
-	  return;
-
 	if (!cvmx_debug_enabled())
 		return;
 
@@ -493,15 +490,12 @@ static int cvmx_debug_putcorepacket(char *buf, int core)
 	if (core < 10) {
 		packet[6] = ' ';
 		packet[7] = core + '0';
-	} else if (core < 20) {
-		packet[6] = '1';
-		packet[7] = core - 10 + '0';
-	} else if (core < 30) {
-		packet[6] = '2';
-		packet[7] = core - 20 + '0';
+	} else if (core < 100) {
+		packet[6] = (core / 10) + '0';
+		packet[7] = (core % 10) + '0';
 	} else {
-		packet[6] = '3';
-		packet[7] = core - 30 + '0';
+		packet[6] = '?';
+		packet[7] = '?';
 	}
 	return cvmx_debug_putpacket_noformat(packet);
 }
@@ -740,7 +734,7 @@ static cvmx_debug_command_t cvmx_debug_process_packet(const char *packet)
 
 			/* The focus core must be in the active_cores mask */
 			if ((state.active_cores & (1ull << state.focus_core)) == 0) {
-				cvmx_debug_putpacket_noformat("!Focus core was added to the masked.");
+				cvmx_debug_putpacket_noformat("!Focus core was added to the mask.");
 				state.active_cores |= 1ull << state.focus_core;
 			}
 

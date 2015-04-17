@@ -64,6 +64,8 @@ int cvmx_debug_uart = 1;
 
 #ifdef CVMX_BUILD_FOR_TOOLCHAIN
 #pragma weak cvmx_uart_enable_intr
+#pragma weak cvmx_uart_mask_intr_on_core
+#pragma weak cvmx_uart_unmask_intr_on_core
 int cvmx_debug_uart = 1;
 #endif
 
@@ -227,16 +229,15 @@ static int cvmx_debug_uart_putpacket(char *packet)
 static void cvmx_debug_uart_change_core(int oldcore, int newcore)
 {
 #ifndef CVMX_BUILD_FOR_LINUX_KERNEL
-	cvmx_ciu_intx0_t irq_control;
-
-	irq_control.u64 = cvmx_read_csr(CVMX_CIU_INTX_EN0(newcore * 2));
-	irq_control.s.uart |= (1u << cvmx_debug_uart);
-	cvmx_write_csr(CVMX_CIU_INTX_EN0(newcore * 2), irq_control.u64);
-
-	/* Disable interrupts to this core since he is about to die */
-	irq_control.u64 = cvmx_read_csr(CVMX_CIU_INTX_EN0(oldcore * 2));
-	irq_control.s.uart &= ~(1u << cvmx_debug_uart);
-	cvmx_write_csr(CVMX_CIU_INTX_EN0(oldcore * 2), irq_control.u64);
+	/* Change which core controls the uart interrupt.  */
+# ifdef CVMX_BUILD_FOR_TOOLCHAIN
+	if (cvmx_uart_mask_intr_on_core)
+# endif
+	  cvmx_uart_unmask_intr_on_core(cvmx_debug_uart, newcore);
+# ifdef CVMX_BUILD_FOR_TOOLCHAIN
+	if (cvmx_uart_mask_intr_on_core)
+# endif
+	  cvmx_uart_mask_intr_on_core(cvmx_debug_uart, oldcore);
 #endif
 }
 

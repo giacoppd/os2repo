@@ -437,7 +437,7 @@ static inline int octeon_has_feature_OCTEON_FEATURE_MULTICAST_TIMER(void)
 
 static inline int octeon_has_feature_OCTEON_FEATURE_MULTINODE(void)
 {
-	return (OCTEON_IS_MODEL(OCTEON_CN78XX));
+	return OCTEON_IS_MODEL(OCTEON_CN78XX);
 }
 
 static inline int octeon_has_feature_OCTEON_FEATURE_CN78XX_WQE(void)
