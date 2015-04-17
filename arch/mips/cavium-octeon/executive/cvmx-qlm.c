@@ -42,7 +42,7 @@
  *
  * Helper utilities for qlm.
  *
- * <hr>$Revision: 105521 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -157,7 +157,9 @@ int cvmx_qlm_get_num(void)
 /**
  * Return the qlm number based on the interface
  *
- * @param interface  Interface to look up
+ * @param xiface  interface to look up
+ *
+ * @return 0 on success other on failure
  */
 int cvmx_qlm_interface(int xiface)
 {
@@ -224,6 +226,8 @@ int cvmx_qlm_interface(int xiface)
 
 /**
  * Return number of lanes for a given qlm
+ *
+ * @param qlm    QLM to examine
  *
  * @return  Number of lanes
  */
