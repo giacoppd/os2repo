@@ -43,7 +43,7 @@
  * Functions for SGMII initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 105303 $<hr>
+ * <hr>$Revision: 108660 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -158,7 +158,7 @@ static int __cvmx_helper_need_g15618(void)
 	if (cvmx_sysinfo_get()->board_type == CVMX_BOARD_TYPE_SIM ||
 	    OCTEON_IS_MODEL(OCTEON_CN63XX) ||
 	    OCTEON_IS_MODEL(OCTEON_CN66XX_PASS1_X) ||
-	    OCTEON_IS_MODEL(OCTEON_CN68XX_PASS1_X))
+	    OCTEON_IS_MODEL(OCTEON_CN68XX))
 		return 1;
 	else
 		return 0;
@@ -486,7 +486,7 @@ int __cvmx_helper_sgmii_enumerate(int xiface)
  * connected to it. The SGMII interface should still be down after
  * this call.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
@@ -532,7 +532,7 @@ int __cvmx_helper_sgmii_probe(int xiface)
  * I/O should be fully functional. This is called with IPD
  * enabled but PKO disabled.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */

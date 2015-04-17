@@ -751,13 +751,16 @@ int __cvmx_helper_pki_qos_rsrcs(int node, struct cvmx_pki_qos_schd *qossch)
 			cvmx_dprintf("aura alloced is %d\n", qossch->aura_num);
 	}
 	/* Reserve sso group resources */
+	/* Find which node work needs to be schedules vinita_to_do to extract node*/
 	if (qossch->sso_grp_per_qos && qossch->sso_grp < 0) {
+		//unsigned grp_node;
+		//grp_node = (abs)(qossch->sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);
 		rs = cvmx_sso_allocate_group(node);
 		if (rs < 0) {
 			cvmx_dprintf("pki-helper:qos-rsrc: ERROR: sso grp not available\n");
 			return rs;
 		}
-		qossch->sso_grp = rs;
+		qossch->sso_grp = rs | (node<<8);
 		if (pki_helper_debug)
 			cvmx_dprintf("pki-helper:qos-rsrc: sso grp alloced is %d\n", qossch->sso_grp);
 	}
@@ -809,14 +812,16 @@ int __cvmx_helper_pki_port_rsrcs(int node, struct cvmx_pki_prt_schd *prtsch)
 		if (pki_helper_debug)
 			cvmx_dprintf("aura alloced is %d\n", prtsch->aura_num);
 	}
-	/* Reserve sso group resources */
+	/* Reserve sso group resources , vinita_to_do to extract node*/
 	if (prtsch->sso_grp_per_prt && prtsch->sso_grp < 0) {
+		//unsigned grp_node;
+		//grp_node = (abs)(prtsch->sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);
 		rs = cvmx_sso_allocate_group(node);
 		if (rs < 0) {
 			cvmx_printf("ERROR: %s: sso grp not available\n", __func__);
 			return rs;
 		}
-		prtsch->sso_grp = rs;
+		prtsch->sso_grp = rs | (node << 8);
 		if (pki_helper_debug)
 			cvmx_dprintf("pki-helper:port-rsrc: sso grp alloced is %d\n", prtsch->sso_grp);
 	}
@@ -869,13 +874,16 @@ int __cvmx_helper_pki_intf_rsrcs(int node, struct cvmx_pki_intf_schd *intf)
 		if (pki_helper_debug)
 			cvmx_dprintf("aura alloced is %d\n", intf->aura_num);
 	}
+	/* vinita_to_do to extract node */
 	if (intf->sso_grp_per_intf && intf->sso_grp < 0) {
+		//unsigned grp_node;
+		//grp_node = (abs)(intf->sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);
 		rs = cvmx_sso_allocate_group(node);
 		if (rs < 0) {
 			cvmx_printf("ERROR: %s: sso grp not available\n", __func__);
 			return rs;
 		}
-		intf->sso_grp = rs;
+		intf->sso_grp = rs | (node << 8);
 	}
 #endif /* CVMX_BUILD_FOR_LINUX_KERNEL */
 	return 0;
@@ -974,12 +982,14 @@ int cvmx_helper_pki_set_gbl_schd(int node, struct cvmx_pki_global_schd *gblsch)
 
 	}
 	if (gblsch->setup_sso_grp) {
+		//unsigned grp_node;
+		//grp_node = (abs)(gblsch->setup_sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);/*vinita_to_do to extract node*/
 		rs = cvmx_sso_allocate_group(node);
 		if (rs < 0) {
 			cvmx_dprintf("pki-helper:gbl: ERROR: sso grp not available\n");
 			return rs;
 		}
-		gblsch->sso_grp = rs;
+		gblsch->sso_grp = rs | (node << 8);
 		if (pki_helper_debug)
 			cvmx_dprintf("pki-helper:gbl: sso grp alloced is %d\n", gblsch->sso_grp);
 	}
@@ -1095,9 +1105,9 @@ EXPORT_SYMBOL(cvmx_helper_pki_init_port);
  * This function sets up scheduling parameters (pool, aura, sso group etc)
  * of an interface (all ports/channels on that interface).
  * @param xiface        interface number with node.
- * @param intf_sch      pointer to struct containing interface
+ * @param intfsch      pointer to struct containing interface
  *                      scheduling parameters.
- * @param gbl_sch       pointer to struct containing global scheduling parameters
+ * @param gblsch       pointer to struct containing global scheduling parameters
  *                      (can be NULL if not used)
  */
 int cvmx_helper_pki_init_interface(const int xiface, struct cvmx_pki_intf_schd *intfsch,
@@ -1636,7 +1646,6 @@ void cvmx_pki_dump_wqe(const cvmx_wqe_78xx_t *wqp)
  * Modifies maximum frame length to check.
  * It modifies the global frame length set used by this port, any other
  * port using the same set will get affected too.
- * @param node		node number
  * @param ipd_port	ipd port for which to modify max len.
  * @param max_size	maximum frame length
  */
@@ -1669,9 +1678,10 @@ void cvmx_pki_set_max_frm_len(int ipd_port, uint32_t max_size)
 /**
  * This function sets up all th eports of particular interface
  * for chosen fcs mode. (only use for backward compatibility).
- * New application can control it via init_interfcae calls.
+ * New application can control it via init_interface calls.
  * @param node		node number.
- * @param interfcae	interfcae number.
+ * @param interface	interface number.
+ * @param nports	number of ports
  * @param has_fcs	1 -- enable fcs check and fcs strip.
  *			0 -- disable fcs check.
  */
@@ -1702,7 +1712,7 @@ void cvmx_helper_pki_set_fcs_op(int node, int interface, int nports, int has_fcs
  * either in same buffer as wqe OR it can go in separate buffer. If used the later mode,
  * make sure software allocate enough buffers to now have wqe separate from packet data.
  * @param node			node number.
- * @param pkt_outside_wqe.	0 = The packet link pointer will be at word [FIRST_SKIP]
+ * @param pkt_outside_wqe	0 = The packet link pointer will be at word [FIRST_SKIP]
  *				immediately followed by packet data, in the same buffer
  *				as the work queue entry.
  *				1 = The packet link pointer will be at word [FIRST_SKIP] in a new

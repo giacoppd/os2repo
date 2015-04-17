@@ -22,6 +22,7 @@ obj-y += executive/
 
 obj-$(CONFIG_SMP)		      += smp.o
 obj-$(CONFIG_NUMA)                      += octeon-numa.o
+obj-$(CONFIG_NUMA)                     += csrc-fpa-clk.o
 obj-$(CONFIG_SYSFS)                   += octeon-power-throttle.o
 obj-$(CONFIG_SYSFS)                   += cacheinfo.o
 obj-$(CONFIG_MTD)                    += flash_setup.o

@@ -43,7 +43,7 @@
  * Functions for RGMII/GMII/MII initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 96596 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -71,7 +71,7 @@
  * @INTERNAL
  * Probe RGMII ports and determine the number present
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of RGMII/GMII/MII ports (0-4).
  */
@@ -147,7 +147,7 @@ void cvmx_helper_rgmii_internal_loopback(int port)
  * Configure all of the ASX, GMX, and PKO regsiters required
  * to get RGMII to function on the supplied interface.
  *
- * @param interface PKO Interface to configure (0 or 1)
+ * @param xiface PKO Interface to configure (0 or 1)
  *
  * @return Zero on success
  */
