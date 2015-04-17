@@ -42,7 +42,7 @@
  *
  * interface to the serial port UART hardware
  *
- * <hr>$Revision: 88249 $<hr>
+ * <hr>$Revision: 107051 $<hr>
  *
  */
 
@@ -64,6 +64,8 @@ extern "C" {
 typedef void (*cvmx_uart_intr_handler_t) (int, uint64_t[]);
 
 extern void cvmx_uart_enable_intr(int, cvmx_uart_intr_handler_t);
+extern void cvmx_uart_unmask_intr_on_core(int, int);
+extern void cvmx_uart_mask_intr_on_core(int, int);
 extern int cvmx_uart_setup2(int, int, int);
 extern int cvmx_uart_setup(int);
 

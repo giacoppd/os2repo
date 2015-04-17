@@ -42,7 +42,7 @@
  *
  * Helper utilities for qlm.
  *
- * <hr>$Revision: 102508 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 
 #ifndef __CVMX_QLM_H__
@@ -83,13 +83,15 @@ extern int cvmx_qlm_get_num(void);
 /**
  * Return the qlm number based on the interface
  *
- * @param interface  Interface to look up
+ * @param xiface  Interface to look up
  */
-extern int cvmx_qlm_interface(int interface);
+extern int cvmx_qlm_interface(int xiface);
 
 /**
  * Return number of lanes for a given qlm
  * 
+ * @param qlm QLM block to query
+ *
  * @return  Number of lanes
  */
 extern int cvmx_qlm_get_lanes(int qlm);
@@ -160,6 +162,14 @@ extern void __cvmx_qlm_pcie_cfg_rxd_set_tweak(int qlm, int lane);
  * @return Speed in Mhz
  */
 extern int cvmx_qlm_get_gbaud_mhz(int qlm);
+/**
+ * Get the speed (Gbaud) of the QLM in Mhz on specific node.
+ *
+ * @param node   Target QLM node
+ * @param qlm    QLM to examine
+ *
+ * @return Speed in Mhz
+ */
 extern int cvmx_qlm_get_gbaud_mhz_node(int node, int qlm);
 
 enum cvmx_qlm_mode {

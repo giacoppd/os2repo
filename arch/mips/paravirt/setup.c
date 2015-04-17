@@ -21,11 +21,25 @@ const char *get_system_type(void)
 	return "MIPS Para-Virtualized Guest";
 }
 
+static cycle_t csrc_host_time_read(struct clocksource *cs)
+{
+	return kvm_hypercall0(KVM_HC_MIPS_GET_HOST_TIME);
+}
+
+static struct clocksource csrc_host_time = {
+	.name		= "HOST_TIME",
+	.read		= csrc_host_time_read,
+	.mask		= CLOCKSOURCE_MASK(64),
+	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
+};
+
 void __init plat_time_init(void)
 {
 	mips_hpt_frequency = kvm_hypercall0(KVM_HC_MIPS_GET_CLOCK_FREQ);
 
 	preset_lpj = mips_hpt_frequency / (2 * HZ);
+	csrc_host_time.rating = 400;
+	clocksource_register_hz(&csrc_host_time, 1000000000);
 }
 
 static void plat_halt_this_cpu(void *ignore)

@@ -42,7 +42,7 @@
  *
  * Small helper utilities.
  *
- * <hr>$Revision: 104282 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 
 #ifndef __CVMX_HELPER_UTIL_H__
@@ -284,7 +284,7 @@ extern const char *cvmx_helper_get_version(void);
  * ports. These setting apply to almost all configurations of all
  * chips.
  *
- * @param interface Interface to configure
+ * @param xiface Interface to configure
  * @param num_ports Number of ports on the interface
  *
  * @return Zero on success, negative on failure
@@ -394,8 +394,8 @@ extern int cvmx_helper_get_interface_index_num(int ipd_port);
 /**
  * Get port kind for a given port in an interface.
  *
- * @param interface  Interface
- * @param port       index of the port in the interface
+ * @param xiface  Interface
+ * @param index   index of the port in the interface
  *
  * @return port kind on sucicess  and -1 on failure
  */

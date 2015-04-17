@@ -43,7 +43,7 @@
  * Functions for SGMII initialization, configuration,
  * and monitoring.
  *
- * <hr>$Revision: 96415 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  */
 #ifndef __CVMX_HELPER_SGMII_H__
 #define __CVMX_HELPER_SGMII_H__
@@ -54,7 +54,7 @@
  * connected to it. The SGMII interface should still be down after
  * this call.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Number of ports on the interface. Zero to disable.
  */
@@ -67,7 +67,7 @@ extern int __cvmx_helper_sgmii_enumerate(int xiface);
  * I/O should be fully functional. This is called with IPD
  * enabled but PKO disabled.
  *
- * @param interface Interface to bring up
+ * @param xiface Interface to bring up
  *
  * @return Zero on success, negative on failure
  */

@@ -355,7 +355,7 @@ extern int cvmx_helper_cfg_ipd2pko_port_num(int ipd_port);
  * @INTERNAL
  * The init function
  *
- * @param none
+ * @param node
  * @return 0 for success.
  *
  * Note: this function is meant to be called to set the ``configured
@@ -363,7 +363,7 @@ extern int cvmx_helper_cfg_ipd2pko_port_num(int ipd_port);
  * any of the corresponding cvmx_helper_cfg_xxxx() functions are
  * called.
  */
-extern int __cvmx_helper_init_port_config_data(void);
+extern int __cvmx_helper_init_port_config_data(int node);
 
 /*
  * @INTERNAL
@@ -436,12 +436,12 @@ void cvmx_pko_queue_free_all(void);
 /**
  * Returns if port is valid for a given interface
  *
- * @param interface  interface to check
+ * @param xiface     interface to check
  * @param index      port index in the interface
  *
  * @return status of the port present or not.
  */
-int cvmx_helper_is_port_valid(int interface, int index);
+int cvmx_helper_is_port_valid(int xiface, int index);
 
 /**
  * Set whether or not a port is valid
@@ -502,7 +502,7 @@ extern void cvmx_helper_set_port_force_link_up(int interface, int index,
  * @INTERNAL
  * Return true if PHY is present to the passed xiface
  *
- * @param interface the interface number
+ * @param xiface the interface number
  * @param index the port's index
  */
 extern bool cvmx_helper_get_port_phy_present(int xiface, int index);

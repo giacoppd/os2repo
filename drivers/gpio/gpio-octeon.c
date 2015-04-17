@@ -7,9 +7,8 @@
  */
 
 #include <linux/of_device.h>
-#include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #include <linux/io.h>
 
 #include <asm/octeon/octeon.h>
@@ -135,19 +134,26 @@ static int octeon_gpio_probe(struct platform_device *pdev)
 	pdev->dev.platform_data = chip;
 	chip->label = "octeon-gpio";
 	chip->dev = &pdev->dev;
+	chip->of_node = pdev->dev.of_node;
 	chip->owner = THIS_MODULE;
-	chip->base = 0;
+	/*
+	* Node zero is at base of 0, other nodes are automatically
+	* allocated.
+	*/
+	chip->base = of_node_to_nid(chip->of_node) ? -1 : 0;
 	chip->can_sleep = false;
 	chip->ngpio = 20;
 	chip->direction_input = octeon_gpio_dir_in;
 	chip->get = octeon_gpio_get;
 	chip->direction_output = octeon_gpio_dir_out;
 	chip->set = octeon_gpio_set;
+	chip->of_gpio_n_cells = 2;
+	chip->of_xlate = of_gpio_simple_xlate;
 	err = gpiochip_add(chip);
 	if (err)
 		goto out;
 
-	dev_info(&pdev->dev, "OCTEON GPIO driver probed.\n");
+	dev_info(&pdev->dev, "OCTEON GPIO: base = %d\n", chip->base);
 out:
 	return err;
 }
