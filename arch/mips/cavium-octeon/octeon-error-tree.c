@@ -303,21 +303,21 @@ static void octeon_error_tree_handler78(int node, int intsn)
 	if (error_array_cn78xxp1[idx].intsn == intsn) {
 		snprintf(msg, sizeof(msg), error_array_cn78xxp1[idx].err_mesg,
 			 error_array_cn78xxp1[idx].block_csr, error_array_cn78xxp1[idx].block_csr_bitpos);
-		pr_err("%s\n", msg);
+		pr_err("Node-%d: %s\n", node, msg);
 		if (error_array_cn78xxp1[idx].block_csr) {
 			u64 clear_addr;
 			clear_addr = 0x8000000000000000ull | error_array_cn78xxp1[idx].block_csr;
-			cvmx_write_csr(clear_addr, 1ull << error_array_cn78xxp1[idx].block_csr_bitpos);
+			cvmx_write_csr_node(node, clear_addr, 1ull << error_array_cn78xxp1[idx].block_csr_bitpos);
 		}
 	} else {
 		pr_err("ERROR: Unknown intsn 0x%x\n", intsn);
-		octeon_ciu3_errbits_disable_intsn(0, intsn);
+		octeon_ciu3_errbits_disable_intsn(node, intsn);
 	}
 }
 
 static int __init octeon_error_tree_init78(void)
 {
-	int i;
+	int i, node;
 	if (disable || !octeon_has_feature(OCTEON_FEATURE_CIU3))
 		return 0;
 
@@ -326,9 +326,10 @@ static int __init octeon_error_tree_init78(void)
 		/* Just count them... */;
 	octeon_78xx_tree_size = i;
 
-	for (i = 0; error_array_cn78xxp1[i].intsn < 0xfffff; i++)
-		if (error_array_cn78xxp1[i].error_group != CVMX_ERROR_GROUP_ETHERNET)
-			octeon_ciu3_errbits_enable_intsn(0, error_array_cn78xxp1[i].intsn);
+	for_each_online_node(node)
+		for (i = 0; error_array_cn78xxp1[i].intsn < 0xfffff; i++)
+			if (error_array_cn78xxp1[i].error_group != CVMX_ERROR_GROUP_ETHERNET)
+				octeon_ciu3_errbits_enable_intsn(node, error_array_cn78xxp1[i].intsn);
 
 	return 0;
 }

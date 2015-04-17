@@ -42,7 +42,7 @@
  *
  * Interface to PCIe as a host(RC) or target(EP)
  *
- * <hr>$Revision: 104992 $<hr>
+ * <hr>$Revision: 108660 $<hr>
  */
 
 #ifndef __CVMX_PCIE_H__
@@ -134,7 +134,7 @@ typedef union {
 		uint64_t port:2;
 		uint64_t es:2;
 		uint64_t node:2;
-		uint64_t reserved_38_39:4;
+		uint64_t reserved_38_39:2;
 		uint64_t subdid:3;
 		uint64_t did:5;
 		uint64_t io:1;
@@ -156,7 +156,7 @@ typedef union {
 	struct {
 		uint64_t address:36;
 		uint64_t node:2;
-		uint64_t reserved_38_39:4;
+		uint64_t reserved_38_39:2;
 		uint64_t subdid:3;
 		uint64_t did:5;
 		uint64_t io:1;

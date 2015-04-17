@@ -783,7 +783,7 @@ EXPORT_SYMBOL(cvmx_helper_setup_red);
  * ports. These setting apply to almost all configurations of all
  * chips.
  *
- * @param interface Interface to configure
+ * @param xiface Interface to configure
  * @param num_ports Number of ports on the interface
  *
  * @return Zero on success, negative on failure
@@ -962,8 +962,11 @@ int cvmx_helper_get_ipd_port(int xiface, int index)
 			return ipd_port + index;
 		else if (port_map[xi.interface].type == LB)
 			return ipd_port + index;
-		else
+		else {
+			cvmx_dprintf("ERROR: %s: interface %u:%u bad mode\n",
+				__func__, xi.node, xi.interface);
 			return -1;
+		}
 
 	} else if (cvmx_helper_interface_get_mode(xiface) == CVMX_HELPER_INTERFACE_MODE_AGL) {
 		return 24;

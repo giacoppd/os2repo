@@ -606,7 +606,7 @@ cvmx_helper_link_info_t __cvmx_helper_get_link_info(int xiface, int port)
 /**
  * Returns if FCS is enabled for the specified interface and port
  *
- * @param interface - interface to check
+ * @param xiface - interface to check
  *
  * @return zero if FCS is not used, otherwise FCS is used.
  */
@@ -883,19 +883,18 @@ static cvmx_helper_interface_mode_t __cvmx_get_mode_cn68xx(int interface)
 		break;
 
 	case 7:
-		qlm_cfg.u64 = cvmx_read_csr(CVMX_MIO_QLMX_CFG(3));
-		/* QLM is disabled when QLM SPD is 15. */
-		if (qlm_cfg.s.qlm_spd == 15) {
-			iface_ops[interface] = &iface_ops_dis;
-		} else if (qlm_cfg.s.qlm_cfg != 0) {
-			qlm_cfg.u64 = cvmx_read_csr(CVMX_MIO_QLMX_CFG(1));
-			if (qlm_cfg.s.qlm_cfg != 0)
-				iface_ops[interface] = &iface_ops_dis;
-			else
-				iface_ops[interface] = &iface_ops_npi;
-		} else
-			iface_ops[interface] = &iface_ops_npi;
-		break;
+       {
+               union cvmx_mio_qlmx_cfg qlm_cfg1;
+               /* Check if PCIe0/PCIe1 is configured for PCIe */
+               qlm_cfg.u64 = cvmx_read_csr(CVMX_MIO_QLMX_CFG(3));
+               qlm_cfg1.u64 = cvmx_read_csr(CVMX_MIO_QLMX_CFG(1));
+                /* QLM is disabled when QLM SPD is 15. */
+               if ((qlm_cfg.s.qlm_spd != 15 && qlm_cfg.s.qlm_cfg == 0)
+                    || (qlm_cfg1.s.qlm_spd != 15 && qlm_cfg1.s.qlm_cfg == 0))
+                        iface_ops[interface] = &iface_ops_npi;
+               else
+                       iface_ops[interface] = &iface_ops_dis;
+       }
 
 	case 8:
 		iface_ops[interface] = &iface_ops_loop;
@@ -1154,7 +1153,7 @@ EXPORT_SYMBOL(cvmx_helper_interface_get_mode);
  * Determine the actual number of hardware ports connected to an
  * interface. It doesn't setup the ports or enable them.
  *
- * @param interface Interface to enumerate
+ * @param xiface Interface to enumerate
  *
  * @return The number of ports on the interface, negative on failure
  */
@@ -1178,7 +1177,7 @@ EXPORT_SYMBOL(cvmx_helper_interface_enumerate);
  * interface_port_count[interface] correctly. Final hardware setup of
  * the ports will be performed later.
  *
- * @param interface Interface to probe
+ * @param xiface Interface to probe
  *
  * @return Zero on success, negative on failure
  */
@@ -1454,9 +1453,7 @@ int __cvmx_helper_backpressure_is_misaligned(void)
  * hardware ports. PKO should still be disabled to make sure packets
  * aren't sent out partially setup hardware.
  *
- * @param interface Interface to enable
- * @param iflags Interface flags
- * @param pflags Array of flags, one per port on the interface
+ * @param xiface Interface to enable
  *
  * @return Zero on success, negative on failure
  */
@@ -1607,7 +1604,7 @@ int cvmx_helper_initialize_packet_io_node(unsigned int node)
 
 	/* PKO3 init precedes that of interfaces */
 	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
-		__cvmx_helper_init_port_config_data();
+		__cvmx_helper_init_port_config_data(node);
 		result = cvmx_helper_pko3_init_global(node);
 	} else {
 		result = cvmx_helper_pko_init();
@@ -1797,24 +1794,24 @@ static int __cvmx_helper_shutdown_packet_io_global_cn78xx(int node)
 					continue;
 
 				/* Disable GMX before we make any changes. Remember the enable state */
-				cmr_config.u64 = cvmx_read_csr(CVMX_BGXX_CMRX_CONFIG(index, interface));
+				cmr_config.u64 = cvmx_read_csr_node(node, CVMX_BGXX_CMRX_CONFIG(index, interface));
 				cmr_config.s.enable = 0;
-				cvmx_write_csr(CVMX_BGXX_CMRX_CONFIG(index, interface), cmr_config.u64);
+				cvmx_write_csr_node(node, CVMX_BGXX_CMRX_CONFIG(index, interface), cmr_config.u64);
 
 				/* Clear all error interrupts before enabling the interface. */
 				if (cvmx_sysinfo_get()->board_type != CVMX_BOARD_TYPE_SIM) {
-					cvmx_write_csr(CVMX_BGXX_SMUX_RX_INT(index, interface), ~0x0ull);
-					cvmx_write_csr(CVMX_BGXX_SMUX_TX_INT(index, interface), ~0x0ull);
-					cvmx_write_csr(CVMX_BGXX_SPUX_INT(index, interface), ~0x0ull);
+				       cvmx_write_csr_node(node, CVMX_BGXX_SMUX_RX_INT(index, interface), ~0x0ull);
+                                       cvmx_write_csr_node(node, CVMX_BGXX_SMUX_TX_INT(index, interface), ~0x0ull);
+                                       cvmx_write_csr_node(node, CVMX_BGXX_SPUX_INT(index, interface), ~0x0ull);
 				}
 
 				/* Wait for GMX RX to be idle */
-				if (CVMX_WAIT_FOR_FIELD64(CVMX_BGXX_SMUX_CTRL(index, interface),
+ 				if (CVMX_WAIT_FOR_FIELD64_NODE(node, CVMX_BGXX_SMUX_CTRL(index, interface),
 							cvmx_bgxx_smux_ctrl_t, rx_idle, ==, 1, 10000))
 					return -1;
 
 				/* Wait for GMX TX to be idle */
-				if (CVMX_WAIT_FOR_FIELD64(CVMX_BGXX_SMUX_CTRL(index, interface),
+				if (CVMX_WAIT_FOR_FIELD64_NODE(node, CVMX_BGXX_SMUX_CTRL(index, interface),
 							cvmx_bgxx_smux_ctrl_t, tx_idle, ==, 1, 10000))
 					return -1;
 
@@ -1834,14 +1831,15 @@ static int __cvmx_helper_shutdown_packet_io_global_cn78xx(int node)
 				if (!cvmx_helper_is_port_valid(interface, index))
 					continue;
 				/* Disable GMX before we make any changes. Remember the enable state */
-				cmr_config.u64 = cvmx_read_csr(CVMX_BGXX_CMRX_CONFIG(index, interface));
+				cmr_config.u64 = cvmx_read_csr_node(node, CVMX_BGXX_CMRX_CONFIG(index, interface));
 				cmr_config.s.enable = 0;
-				cvmx_write_csr(CVMX_BGXX_CMRX_CONFIG(index, interface), cmr_config.u64);
+                        	cvmx_write_csr_node(node, CVMX_BGXX_CMRX_CONFIG(index, interface), cmr_config.u64);
+
 
 				/* Wait for GMX to be idle */
-				if (CVMX_WAIT_FOR_FIELD64(CVMX_BGXX_GMP_GMI_PRTX_CFG(index, interface),
+				if (CVMX_WAIT_FOR_FIELD64_NODE(node, CVMX_BGXX_GMP_GMI_PRTX_CFG(index, interface),
 				  		cvmx_bgxx_gmp_gmi_prtx_cfg_t, rx_idle, ==, 1, 10000) ||
-				    CVMX_WAIT_FOR_FIELD64(CVMX_BGXX_GMP_GMI_PRTX_CFG(index, interface),
+				    CVMX_WAIT_FOR_FIELD64_NODE(node, CVMX_BGXX_GMP_GMI_PRTX_CFG(index, interface),
 						cvmx_bgxx_gmp_gmi_prtx_cfg_t, tx_idle, ==, 1, 10000)) {
 					cvmx_dprintf("SGMII%d: Timeout waiting for port %d to be idle\n",
 						     interface, index);
@@ -1849,7 +1847,7 @@ static int __cvmx_helper_shutdown_packet_io_global_cn78xx(int node)
 				}
 
 				/* Read GMX CFG again to make sure the disable completed */
-				cvmx_read_csr(CVMX_BGXX_GMP_GMI_PRTX_CFG(index, interface));
+				cvmx_read_csr_node(node, CVMX_BGXX_GMP_GMI_PRTX_CFG(index, interface));
 			}
 			break;
 		}
