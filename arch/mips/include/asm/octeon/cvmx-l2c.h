@@ -43,7 +43,7 @@
  * Interface to the Level 2 Cache (L2C) control, measurement, and debugging
  * facilities.
  *
- * <hr>$Revision: 106657 $<hr>
+ * <hr>$Revision: 107050 $<hr>
  *
  */
 
@@ -534,7 +534,7 @@ int cvmx_l2c_vrt_assign_virtid(int virtid, uint32_t coremask);
  * Remove a virt id assigned to a set of cores. Update the virtid mask and
  * virtid stored for each core.
  *
- * @param coremask  the group of cores whose virtual id is removed.
+ * @param virtid  Remove the specified Virtualization machine ID.
  */
 void cvmx_l2c_vrt_remove_virtid(int virtid);
 
@@ -543,7 +543,6 @@ void cvmx_l2c_vrt_remove_virtid(int virtid);
  *
  * @param start_addr   Starting address of memory region
  * @param size         Size of the memory to protect
- * @param virtid_mask  Virtual ID to use
  * @param mode         Allow/Disallow write access
  *                        = 0,  Allow write access by virtid
  *                        = 1,  Disallow write access by virtid

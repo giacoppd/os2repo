@@ -39,7 +39,7 @@
 
 #include "octeon-bgx.h"
 
-static atomic_t bgx_nexus_once;
+static atomic_t bgx_nexus_once[4];
 static atomic_t request_ethernet3_once;
 
 static int bgx_probe(struct platform_device *pdev)
@@ -57,14 +57,14 @@ static int bgx_probe(struct platform_device *pdev)
 	int r = 0;
 	char id[64];
 
-	/* One time initialization */
-	if (atomic_cmpxchg(&bgx_nexus_once, 0, 1) == 0)
-		__cvmx_helper_init_port_config_data();
-
 	reg = of_get_property(pdev->dev.of_node, "reg", NULL);
 	addr = of_translate_address(pdev->dev.of_node, reg);
 	interface = (addr >> 24) & 0xf;
 	numa_node = (addr >> 36) & 0x7;
+
+	/* One time initialization */
+	if (atomic_cmpxchg(bgx_nexus_once + numa_node, 0, 1) == 0)
+		__cvmx_helper_init_port_config_data(numa_node);
 
 	__cvmx_helper_bgx_probe(cvmx_helper_node_interface_to_xiface(numa_node, interface));
 

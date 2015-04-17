@@ -830,6 +830,22 @@ append_arg:
 #ifdef CONFIG_CAVIUM_GDB
 	cvmx_debug_init();
 #endif
+
+#ifdef CONFIG_PCI
+	if (octeon_has_feature(OCTEON_FEATURE_PCIE)) {
+		if (octeon_has_feature(OCTEON_FEATURE_NPEI))
+			octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_PCIE;
+		else
+			octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_PCIE2;
+	} else {
+		if (OCTEON_IS_MODEL(OCTEON_CN31XX) ||
+		    OCTEON_IS_MODEL(OCTEON_CN38XX_PASS2))
+			octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_SMALL;
+		else
+			octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_BIG;
+	}
+#endif
+
 	pr_info("Cavium Inc. SDK-" SDK_VERSION "\n");
 }
 
@@ -944,6 +960,15 @@ void __init plat_mem_setup(void)
 	u64 limit_max, limit_min;
 	const struct cvmx_bootmem_named_block_desc *named_block;
 	u64 system_limit = cvmx_bootmem_available_mem(mem_alloc_size);
+
+#ifndef CONFIG_NUMA
+	int last_core;
+	struct cvmx_sysinfo *sysinfo = cvmx_sysinfo_get();
+
+	last_core = cvmx_coremask_get_last_core(&sysinfo->core_mask);
+	if (last_core >= CVMX_COREMASK_MAX_CORES_PER_NODE)
+		panic("Must build kernel with CONFIG_NUMA for multi-node system.");
+#endif
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (rd_name[0]) {
