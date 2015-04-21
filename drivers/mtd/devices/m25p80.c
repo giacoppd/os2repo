@@ -15,7 +15,6 @@
  *
  */
 
-#include <linux/init.h>
 #include <linux/err.h>
 #include <linux/errno.h>
 #include <linux/module.h>
@@ -41,7 +40,8 @@
 #define	OPCODE_WRSR		0x01	/* Write status register 1 byte */
 #define	OPCODE_NORM_READ	0x03	/* Read data bytes (low frequency) */
 #define	OPCODE_FAST_READ	0x0b	/* Read data bytes (high frequency) */
-#define	OPCODE_QUAD_READ        0x6b    /* Read data bytes */
+#define	OPCODE_DUAL_READ        0x3b    /* Read data bytes (Dual SPI) */
+#define	OPCODE_QUAD_READ        0x6b    /* Read data bytes (Quad SPI) */
 #define	OPCODE_PP		0x02	/* Page program (up to 256 bytes) */
 #define OPCODE_QPP		0x32	/* Quad page program */
 #define	OPCODE_BE_4K		0x20	/* Erase 4KiB block */
@@ -58,7 +58,8 @@
 /* 4-byte address opcodes - used on Spansion and some Macronix flashes. */
 #define	OPCODE_NORM_READ_4B	0x13	/* Read data bytes (low frequency) */
 #define	OPCODE_FAST_READ_4B	0x0c	/* Read data bytes (high frequency) */
-#define	OPCODE_QUAD_READ_4B	0x6c    /* Read data bytes */
+#define	OPCODE_DUAL_READ_4B	0x3c    /* Read data bytes (Dual SPI) */
+#define	OPCODE_QUAD_READ_4B	0x6c    /* Read data bytes (Quad SPI) */
 #define	OPCODE_PP_4B		0x12	/* Page program (up to 256 bytes) */
 #define	OPCODE_SE_4B		0xdc	/* Sector erase (usually 64KiB) */
 
@@ -107,6 +108,7 @@
 enum read_type {
 	M25P80_NORMAL = 0,
 	M25P80_FAST,
+	M25P80_DUAL,
 	M25P80_QUAD,
 };
 
@@ -634,6 +636,7 @@ static inline int m25p80_dummy_cycles_read(struct m25p *flash)
 {
 	switch (flash->flash_read) {
 	case M25P80_FAST:
+	case M25P80_DUAL:
 	case M25P80_QUAD:
 		return 1;
 	case M25P80_NORMAL:
@@ -647,6 +650,8 @@ static inline int m25p80_dummy_cycles_read(struct m25p *flash)
 static inline unsigned int m25p80_rx_nbits(const struct m25p *flash)
 {
 	switch (flash->flash_read) {
+	case M25P80_DUAL:
+		return 2;
 	case M25P80_QUAD:
 		return 4;
 	default:
@@ -1095,14 +1100,15 @@ struct flash_info {
 	u16		addr_width;
 
 	u16		flags;
-#define	SECT_4K		0x01		/* OPCODE_BE_4K works uniformly */
-#define	M25P_NO_ERASE	0x02		/* No erase command needed */
-#define	SST_WRITE	0x04		/* use SST byte programming */
-#define	M25P_NO_FR	0x08		/* Can't do fastread */
-#define	SECT_4K_PMC	0x10		/* OPCODE_BE_4K_PMC works uniformly */
-#define	M25P80_QUAD_READ	0x20    /* Flash supports Quad Read */
-#define	SECT_32K	0x80		/* OPCODE_BE_32K */
-#define E_FSR		0x40		/* Flag SR exists for flash */
+#define	SECT_4K			0x01	/* SPINOR_OP_BE_4K works uniformly */
+#define	M25P_NO_ERASE		0x02	/* No erase command needed */
+#define	SST_WRITE		0x04	/* use SST byte programming */
+#define	M25P_NO_FR		0x08	/* Can't do fastread */
+#define	SECT_4K_PMC		0x10	/* SPINOR_OP_BE_4K_PMC works uniformly */
+#define	M25P80_DUAL_READ	0x20    /* Flash supports Dual Read */
+#define	M25P80_QUAD_READ	0x40    /* Flash supports Quad Read */
+#define	USE_FSR			0x80	/* use flag status register */
+#define	SECT_32K		0x80	/* OPCODE_BE_32K */
 };
 
 #define INFO(_jedec_id, _ext_id, _sector_size, _n_sectors, _flags)	\
@@ -1181,6 +1187,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "mx25l25635e", INFO(0xc22019, 0, 64 * 1024, 512, 0) },
 	{ "mx25l25655e", INFO(0xc22619, 0, 64 * 1024, 512, 0) },
 	{ "mx66l51235l", INFO(0xc2201a, 0, 64 * 1024, 1024, M25P80_QUAD_READ) },
+	{ "mx66l1g55g",  INFO(0xc2261b, 0, 64 * 1024, 2048, M25P80_QUAD_READ) },
 
 	/* Micron */
 	{ "n25q064",  INFO(0x20ba17, 0, 64 * 1024, 128, M25P80_QUAD_READ) },
@@ -1190,19 +1197,19 @@ static const struct spi_device_id m25p_ids[] = {
 	/* Numonyx flash n25q128 - FIXME check the name */
 	{ "n25q128",   INFO(0x20bb18, 0, 64 * 1024, 256, M25P80_QUAD_READ) },
 	{ "n25q128a11",  INFO(0x20bb18, 0, 64 * 1024, 256,
-			      E_FSR | M25P80_QUAD_READ) },
+			      USE_FSR | M25P80_QUAD_READ) },
 	{ "n25q128a13",  INFO(0x20ba18, 0, 64 * 1024, 256,
-			      E_FSR | M25P80_QUAD_READ) },
+			      USE_FSR | M25P80_QUAD_READ) },
 	{ "n25q256a13", INFO(0x20ba19,  0, 64 * 1024,  512,
-			     SECT_4K | E_FSR | M25P80_QUAD_READ) },
+			     SECT_4K | USE_FSR | M25P80_QUAD_READ) },
 	{ "n25q256a11", INFO(0x20bb19,  0, 64 * 1024,  512,
-			     SECT_4K | E_FSR | M25P80_QUAD_READ) },
+			     SECT_4K | USE_FSR | M25P80_QUAD_READ) },
 	{ "n25q512a13", INFO(0x20ba20,  0, 64 * 1024,  1024,
-			     SECT_4K | E_FSR | M25P80_QUAD_READ) },
+			     SECT_4K | USE_FSR | M25P80_QUAD_READ) },
 	{ "n25q512a11", INFO(0x20bb20,  0, 64 * 1024,  1024,
-			     SECT_4K | E_FSR | M25P80_QUAD_READ) },
+			     SECT_4K | USE_FSR | M25P80_QUAD_READ) },
 	{ "n25q00aa13", INFO(0x20ba21,  0, 64 * 1024,  2048,
-			     SECT_4K | E_FSR | M25P80_QUAD_READ) },
+			     SECT_4K | USE_FSR | M25P80_QUAD_READ) },
 
 	/* PMC */
 	{ "pm25lv512",   INFO(0,        0, 32 * 1024,    2, SECT_4K_PMC) },
@@ -1239,6 +1246,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "s25sl016a",  INFO(0x010214,      0,  64 * 1024,  32, 0) },
 	{ "s25sl032a",  INFO(0x010215,      0,  64 * 1024,  64, 0) },
 	{ "s25sl064a",  INFO(0x010216,      0,  64 * 1024, 128, 0) },
+	{ "s25fl008k",  INFO(0xef4014,      0,  64 * 1024,  16, SECT_4K) },
 	{ "s25fl016k",  INFO(0xef4015,      0,  64 * 1024,  32, SECT_4K) },
 	/* s25fl064k supports 4KiB, 32KiB and 64KiB sectors erase size. */
 	/* To support JFFS2, the minimum erase size is 8KiB(>4KiB). */
@@ -1359,9 +1367,8 @@ static const struct spi_device_id *jedec_probe(struct spi_device *spi)
 	for (tmp = 0; tmp < ARRAY_SIZE(m25p_ids) - 1; tmp++) {
 		info = (void *)m25p_ids[tmp].driver_data;
 		if (info->jedec_id == jedec) {
-			if (info->ext_id != 0 && info->ext_id != ext_jedec)
-				continue;
-			return &m25p_ids[tmp];
+			if (info->ext_id == 0 || info->ext_id == ext_jedec)
+				return &m25p_ids[tmp];
 		}
 	}
 	dev_err(&spi->dev, "unrecognized JEDEC id %06x\n", jedec);
@@ -1543,7 +1550,7 @@ static int m25p_probe(struct spi_device *spi)
 	if (info->flags & M25P_NO_ERASE)
 		flash->mtd.flags |= MTD_NO_ERASE;
 
-	if (info->flags & E_FSR)
+	if (info->flags & USE_FSR)
 		flash->check_fsr = 1;
 
 	flash->jedec_id = info->jedec_id;
@@ -1567,7 +1574,7 @@ static int m25p_probe(struct spi_device *spi)
 	if (info->flags & M25P_NO_FR)
 		flash->flash_read = M25P80_NORMAL;
 
-	/* Quad-read mode takes precedence over fast/normal */
+	/* Quad/Dual-read mode takes precedence over fast/normal */
 	if (spi->mode & SPI_RX_QUAD && info->flags & M25P80_QUAD_READ) {
 #ifndef CONFIG_SPI_ZYNQ_QSPI
 		int ret;
@@ -1578,12 +1585,17 @@ static int m25p_probe(struct spi_device *spi)
 		}
 #endif
 		flash->flash_read = M25P80_QUAD;
+	} else if (spi->mode & SPI_RX_DUAL && info->flags & M25P80_DUAL_READ) {
+		flash->flash_read = M25P80_DUAL;
 	}
 
 	/* Default commands */
 	switch (flash->flash_read) {
 	case M25P80_QUAD:
 		flash->read_opcode = OPCODE_QUAD_READ;
+		break;
+	case M25P80_DUAL:
+		flash->read_opcode = OPCODE_DUAL_READ;
 		break;
 	case M25P80_FAST:
 		flash->read_opcode = OPCODE_FAST_READ;
@@ -1625,6 +1637,9 @@ static int m25p_probe(struct spi_device *spi)
 			switch (flash->flash_read) {
 			case M25P80_QUAD:
 				flash->read_opcode = OPCODE_QUAD_READ_4B;
+				break;
+			case M25P80_DUAL:
+				flash->read_opcode = OPCODE_DUAL_READ_4B;
 				break;
 			case M25P80_FAST:
 				flash->read_opcode = OPCODE_FAST_READ_4B;
