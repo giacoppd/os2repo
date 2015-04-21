@@ -1383,7 +1383,6 @@ static int m25p_probe(struct spi_device *spi)
 	unsigned			i;
 	struct mtd_part_parser_data	ppdata;
 	struct device_node *np = spi->dev.of_node;
-	int ret;
 
 	/* Platform data helps sort out which chip type we have, as
 	 * well as how this board partitions it.  If we don't have
@@ -1570,11 +1569,14 @@ static int m25p_probe(struct spi_device *spi)
 
 	/* Quad-read mode takes precedence over fast/normal */
 	if (spi->mode & SPI_RX_QUAD && info->flags & M25P80_QUAD_READ) {
+#ifndef CONFIG_SPI_ZYNQ_QSPI
+		int ret;
 		ret = set_quad_mode(flash, info->jedec_id);
 		if (ret) {
 			dev_err(&flash->spi->dev, "quad mode not supported\n");
 			return ret;
 		}
+#endif
 		flash->flash_read = M25P80_QUAD;
 	}
 
