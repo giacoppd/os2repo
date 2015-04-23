@@ -75,6 +75,7 @@
 #endif
 
 int boot_cpuid = 0;
+EXPORT_SYMBOL_GPL(boot_cpuid);
 int spinning_secondaries;
 u64 ppc64_pft_size;
 
