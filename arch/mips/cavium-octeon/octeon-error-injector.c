@@ -23,14 +23,39 @@ int test_param;
 module_param(test_param, int, S_IRUGO);
 MODULE_PARM_DESC(test_param, "Parameter used in the test case.");
 
+volatile int octeon_error_injector_foo;
+
+static void octeon_error_injector_l1_icache_parity(void)
+{
+	unsigned long coreid = cvmx_get_core_num();
+	if (OCTEON_IS_OCTEON3() || OCTEON_IS_OCTEON2()) {
+		u64 icache;
+
+		icache = read_octeon_c0_icacheerr();
+		icache |= (1ull << 31);
+		write_octeon_c0_icacheerr(icache);
+		asm volatile("synci	0($0)" ::: "memory");
+		pr_err("Wrote CacheErr(ICache): %016llx on core %lu\n", (unsigned long long)icache, coreid);
+	}
+}
+
 static void octeon_error_injector_l1_dcache_parity(void)
 {
+	unsigned long coreid = cvmx_get_core_num();
 	if (OCTEON_IS_OCTEON3()) {
-		u64 errctl = read_octeon_c0_errctl();
+		u64 errctl;
+		int i;
+
+		errctl = read_octeon_c0_errctl();
 		errctl |= (1ull << 11);
 		write_octeon_c0_errctl(errctl);
-	} else if (OCTEON_IS_OCTEON2())
+		asm volatile("cache	1, 0($0)" ::: "memory");
+		i = octeon_error_injector_foo;
+		pr_err("Wrote ErrCtl: %016llx on core %lu\n", (unsigned long long)errctl, coreid);
+	} else if (OCTEON_IS_OCTEON2()) {
 		write_octeon_c0_dcacheerr(1ull<<3);
+		pr_err("Wrote DCacheErr: %016llx on core %lu\n", 1ull<<3, coreid);
+	}
 }
 
 static void octeon_error_injector_tlb_parity(void)
@@ -102,6 +127,9 @@ static int __init octeon_error_injector_init(void)
 		break;
 	case 4:
 		octeon_error_injector_tlb_parity();
+		break;
+	case 5:
+		octeon_error_injector_l1_icache_parity();
 		break;
 	default:
 		pr_err("Error: Unrecognized test number: %d\n",  test_number);
