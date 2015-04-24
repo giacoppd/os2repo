@@ -842,7 +842,7 @@ static struct sk_buff *octeon3_eth_work_to_skb(void *w)
 static int octeon3_napi_alloc_cpu(int	node)
 {
 	int				cpu;
-	int				min_cnt = MAX_NAPI_PER_CPU;
+	int				min_cnt = MAX_NAPIS_PER_NODE;
 	int				min_cpu = -EBUSY;
 
 	for_each_cpu(cpu, cpumask_of_node(node)) {
@@ -1588,6 +1588,7 @@ static int octeon3_eth_ndo_open(struct net_device *netdev)
  err4:
 	bitmap_clear(priv->rx_cxt[i].napi_idx_bitmap, idx, 1);
  err3:
+	irq_set_affinity_hint(rx->rx_irq, NULL);
 	free_irq(rx->rx_irq, rx);
  err2:
 	irq_dispose_mapping(rx->rx_irq);
