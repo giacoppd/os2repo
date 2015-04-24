@@ -72,9 +72,13 @@ static struct bgx_port_priv *bgx_port_netdev2priv(struct net_device *netdev)
 
 void bgx_port_set_netdev(struct device *dev, struct net_device *netdev)
 {
-	struct bgx_port_netdev_priv *nd_priv = netdev_priv(netdev);
 	struct bgx_port_priv *priv = dev_get_drvdata(dev);
-	nd_priv->bgx_priv = priv;
+
+	if (netdev) {
+		struct bgx_port_netdev_priv *nd_priv = netdev_priv(netdev);
+		nd_priv->bgx_priv = priv;
+	}
+
 	priv->netdev = netdev;
 }
 EXPORT_SYMBOL(bgx_port_set_netdev);
