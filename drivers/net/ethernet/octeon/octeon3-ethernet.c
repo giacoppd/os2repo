@@ -789,12 +789,20 @@ static int octeon3_eth_global_init(unsigned int node)
 	unsigned int sso_intsn;
 	struct octeon3_ethernet_node *oen;
 	union cvmx_fpa_gen_cfg fpa_cfg;
+
 	mutex_lock(&octeon3_eth_init_mutex);
 
 	oen = octeon3_eth_node + node;
 
 	if (oen->init_done)
 		goto done;
+
+	/* CN78XX-P1.0 cannot un-initialize PKO, so get a module
+	 * reference to prevent it from being unloaded.
+	 */
+	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_0))
+		if (!try_module_get(THIS_MODULE))
+			pr_err("ERROR: Could not obtain module reference for CN78XX-P1.0\n");
 
 	__cvmx_export_app_config_to_named_block(CVMX_APP_CONFIG);
 
@@ -2403,9 +2411,6 @@ static void __exit octeon3_eth_exit(void)
 {
 	if (!OCTEON_IS_MODEL(OCTEON_CN78XX))
 		return;
-
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_0))
-		pr_err("ERROR: rmmod of this driver is not supported on CN78XX-P1.0\n");
 
 	platform_driver_unregister(&octeon3_eth_driver);
 }
