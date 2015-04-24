@@ -2332,9 +2332,6 @@ static int octeon3_eth_global_exit(int node)
 	cvmx_fpa3_release_pool(oen->sso_pool);
 	kfree(oen->sso_pool_stack);
 
-	/* Destroy the memory cache used by sso and pko */
-	kmem_cache_destroy(octeon3_eth_sso_pko_cache);
-
 	return 0;
 }
 
@@ -2413,6 +2410,10 @@ static void __exit octeon3_eth_exit(void)
 		return;
 
 	platform_driver_unregister(&octeon3_eth_driver);
+
+	/* Destroy the memory cache used by sso and pko */
+	if (octeon3_eth_sso_pko_cache)
+		kmem_cache_destroy(octeon3_eth_sso_pko_cache);
 }
 module_exit(octeon3_eth_exit);
 
