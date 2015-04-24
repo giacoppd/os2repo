@@ -54,7 +54,7 @@ static octeon_message_fn_t  octeon_message_functions[8] = {
 #endif
 };
 
-static  int octeon_message_free_mask = 0xf8;
+static  int octeon_message_free_mask = IS_ENABLED(KEXEC) ? 0xf0 : 0xf8;
 static DEFINE_SPINLOCK(octeon_message_functions_lock);
 
 int octeon_request_ipi_handler(octeon_message_fn_t fn)
