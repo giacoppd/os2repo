@@ -292,7 +292,7 @@ int __cvmx_helper_pki_setup_sso_groups(int node)
 	uint8_t core_mask_set;
 
 	/* try to reserve sso groups and configure them if they are not configured */
-	grp = cvmx_sso_allocate_group_range(node, &pki_dflt_sso_grp[node].group, 1);
+	grp = cvmx_sso_reserve_group_range(node, &pki_dflt_sso_grp[node].group, 1);
 	if (grp == CVMX_RESOURCE_ALLOC_FAILED)
 		return -1;
 	else if (grp == CVMX_RESOURCE_ALREADY_RESERVED)
@@ -542,6 +542,7 @@ int cvmx_helper_pki_port_shutdown(int ipd_port)
 	/* __cvmx_pki_port_rsrc_free(node); */
 	return 0;
 }
+EXPORT_SYMBOL(cvmx_helper_pki_port_shutdown);
 
 /**
  * This function shuts down complete PKI hardware
@@ -561,6 +562,7 @@ void cvmx_helper_pki_shutdown(int node)
 	except fpa pools & aura which will be done in fpa block */
 	__cvmx_pki_global_rsrc_free(node);
 }
+EXPORT_SYMBOL(cvmx_helper_pki_shutdown);
 
 /**
  * This function calculates how mant qpf entries will be needed for
@@ -755,7 +757,7 @@ int __cvmx_helper_pki_qos_rsrcs(int node, struct cvmx_pki_qos_schd *qossch)
 	if (qossch->sso_grp_per_qos && qossch->sso_grp < 0) {
 		//unsigned grp_node;
 		//grp_node = (abs)(qossch->sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);
-		rs = cvmx_sso_allocate_group(node);
+		rs = cvmx_sso_reserve_group(node);
 		if (rs < 0) {
 			cvmx_dprintf("pki-helper:qos-rsrc: ERROR: sso grp not available\n");
 			return rs;
@@ -821,7 +823,7 @@ int __cvmx_helper_pki_port_rsrcs(int node, struct cvmx_pki_prt_schd *prtsch)
 	if (prtsch->sso_grp_per_prt && prtsch->sso_grp < 0) {
 		//unsigned grp_node;
 		//grp_node = (abs)(prtsch->sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);
-		rs = cvmx_sso_allocate_group(node);
+		rs = cvmx_sso_reserve_group(node);
 		if (rs < 0) {
 			cvmx_printf("ERROR: %s: sso grp not available\n", __func__);
 			return rs;
@@ -883,7 +885,7 @@ int __cvmx_helper_pki_intf_rsrcs(int node, struct cvmx_pki_intf_schd *intf)
 	if (intf->sso_grp_per_intf && intf->sso_grp < 0) {
 		//unsigned grp_node;
 		//grp_node = (abs)(intf->sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);
-		rs = cvmx_sso_allocate_group(node);
+		rs = cvmx_sso_reserve_group(node);
 		if (rs < 0) {
 			cvmx_printf("ERROR: %s: sso grp not available\n", __func__);
 			return rs;
@@ -989,7 +991,7 @@ int cvmx_helper_pki_set_gbl_schd(int node, struct cvmx_pki_global_schd *gblsch)
 	if (gblsch->setup_sso_grp) {
 		//unsigned grp_node;
 		//grp_node = (abs)(gblsch->setup_sso_grp + CVMX_PKI_FIND_AVAILABLE_RSRC);/*vinita_to_do to extract node*/
-		rs = cvmx_sso_allocate_group(node);
+		rs = cvmx_sso_reserve_group(node);
 		if (rs < 0) {
 			cvmx_dprintf("pki-helper:gbl: ERROR: sso grp not available\n");
 			return rs;
