@@ -570,7 +570,8 @@ module_init(bgx_port_driver_init);
 static void __exit bgx_port_driver_exit(void)
 {
 	platform_driver_unregister(&bgx_port_driver);
-	destroy_workqueue(check_state_wq);
+	if (check_state_wq)
+		destroy_workqueue(check_state_wq);
 }
 module_exit(bgx_port_driver_exit);
 
