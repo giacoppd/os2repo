@@ -2368,6 +2368,7 @@ static int octeon3_eth_remove(struct platform_device *pdev)
 
 static void octeon3_eth_shutdown(struct platform_device *pdev)
 {
+	octeon3_eth_remove(pdev);
 	return;
 }
 
