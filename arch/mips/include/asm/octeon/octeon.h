@@ -323,9 +323,9 @@ struct octeon_ciu_chip_data {
 		struct {		/* only used for ciu/ciu2 */
 			u8 line;
 			u8 bit;
-			u8 gpio_line;
 		};
 	};
+	int gpio_line;
 	int current_cpu;	/* Next CPU expected to take this irq */
 	int ciu_node; /* NUMA node number of the CIU */
 };
