@@ -43,7 +43,7 @@
  * Interface to the PCI / PCIe DMA engines. These are only avialable
  * on chips with PCI / PCIe.
  *
- * <hr>$Revision: 113328 $<hr>
+ * <hr>$Revision: 113619 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <linux/export.h>
@@ -333,7 +333,7 @@ int cvmx_dma_engine_submit(int engine, cvmx_dma_engine_header_t header, int num_
 	   ring the doorbell for the DMA engines. This prevents doorbells from
 	   possibly arriving out of order with respect to the command queue
 	   entries */
-	__cvmx_cmd_queue_lock(CVMX_CMD_QUEUE_DMA(engine), __cvmx_cmd_queue_get_state(CVMX_CMD_QUEUE_DMA(engine)));
+	__cvmx_cmd_queue_lock(CVMX_CMD_QUEUE_DMA(engine));
 	result = cvmx_cmd_queue_write(CVMX_CMD_QUEUE_DMA(engine), 0, cmd_count, cmds);
 	/* This SYNCWS is needed since the command queue didn't do locking, which
 	   normally implies the SYNCWS. This one makes sure the command queue
@@ -354,7 +354,7 @@ int cvmx_dma_engine_submit(int engine, cvmx_dma_engine_header_t header, int num_
 		}
 	}
 	/* Here is the unlock for the above errata workaround */
-	__cvmx_cmd_queue_unlock(__cvmx_cmd_queue_get_state(CVMX_CMD_QUEUE_DMA(engine)));
+	__cvmx_cmd_queue_unlock((CVMX_CMD_QUEUE_DMA(engine)));
 	return result;
 }
 

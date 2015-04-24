@@ -777,8 +777,13 @@ int __cvmx_helper_pki_port_rsrcs(int node, struct cvmx_pki_prt_schd *prtsch)
 
        /* Erratum 22557: Disable per-port allocation for CN78XX pass 1.X */
 	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
+		static bool warned = false;
 		prtsch->pool_per_prt = 0;
-		cvmx_printf("Warning: Ports configured in single-pool mode per erratum 22557.\n");
+		if (!warned)
+			cvmx_printf("WARNING: %s: "
+			"Ports configured in single-pool mode "
+			"per erratum 22557.\n", __func__);
+			warned = true;
 	}
 	/* Reserve pool resources */
 	if (prtsch->pool_per_prt && prtsch->pool_num < 0) {

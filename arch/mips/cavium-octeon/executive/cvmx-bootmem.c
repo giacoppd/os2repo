@@ -43,7 +43,7 @@
  * Simple allocate only memory allocator.  Used to allocate memory at
  * application start time.
  *
- * <hr>$Revision: 113339 $<hr>
+ * <hr>$Revision: 113619 $<hr>
  *
  */
 
@@ -592,8 +592,12 @@ void *cvmx_bootmem_alloc_named_range_once(uint64_t size, uint64_t min_addr,
 		return NULL;
 	}
 	ptr = cvmx_phys_to_ptr(addr);
+
 	if (init)
 		init(ptr);
+	else
+		memset(ptr, 0, size);
+
 	__cvmx_bootmem_unlock(0);
 	return ptr;
 }

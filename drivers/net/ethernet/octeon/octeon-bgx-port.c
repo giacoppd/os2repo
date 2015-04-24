@@ -479,9 +479,9 @@ static int bgx_port_probe(struct platform_device *pdev)
 	r = dev_set_drvdata(&pdev->dev, priv);
 
 	if (priv->phy_np)
-		__cvmx_helper_bgx_port_init(priv->ipd_port, 1, 0);
+		__cvmx_helper_bgx_port_init(priv->ipd_port, 1);
 	else
-		__cvmx_helper_bgx_port_init(priv->ipd_port, 0, 0);
+		__cvmx_helper_bgx_port_init(priv->ipd_port, 0);
 
 	if (r)
 		goto err;

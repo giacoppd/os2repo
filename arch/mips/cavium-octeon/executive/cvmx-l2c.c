@@ -43,7 +43,7 @@
  * Implementation of the Level 2 Cache (L2C) control,
  * measurement, and debugging facilities.
  *
- * <hr>$Revision: 113332 $<hr>
+ * <hr>$Revision: 113624 $<hr>
  *
  */
 
@@ -114,13 +114,15 @@ int cvmx_l2c_set_core_way_partition(uint32_t core, uint32_t mask)
 	uint32_t valid_mask;
 	int node = cvmx_get_node_num();
 
-	valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
+	if (OCTEON_IS_OCTEON1PLUS()) {
+		valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
 
-	mask &= valid_mask;
+		mask &= valid_mask;
 
-	/* A UMSK setting which blocks all L2C Ways is an error on some chips */
-	if (mask == valid_mask && (OCTEON_IS_OCTEON1PLUS()))
-		return -1;
+		/* A UMSK setting which blocks all L2C Ways is an error on some chips */
+		if (mask == valid_mask)
+			return -1;
+	}
 
 	/* Validate the core number */
 	if (core >= cvmx_octeon_num_cores())
@@ -164,12 +166,14 @@ int cvmx_l2c_set_hw_way_partition(uint32_t mask)
 	uint32_t valid_mask;
 	int node = cvmx_get_node_num();
 
-	valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
-	mask &= valid_mask;
+	if (OCTEON_IS_OCTEON1PLUS()) {
+		valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
+		mask &= 0xffff;
 
-	/* A UMSK setting which blocks all L2C Ways is an error on some chips */
-	if (mask == valid_mask && OCTEON_IS_OCTEON1PLUS())
-		return -1;
+		/* A UMSK setting which blocks all L2C Ways is an error on some chips */
+		if (mask == valid_mask)
+			return -1;
+	}
 
 	if (OCTEON_IS_OCTEON2() || OCTEON_IS_OCTEON3())
 		cvmx_write_csr_node(node, CVMX_L2C_WPAR_IOBX(0), mask);

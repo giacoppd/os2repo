@@ -346,7 +346,7 @@ static int __cvmx_helper_bgx_sgmii_hardware_init(int xiface, int num_ports)
 	for (index = 0; index < num_ports; index++) {
 		int xipd_port = cvmx_helper_get_ipd_port(xiface, index);
 
-		__cvmx_helper_bgx_port_init(xipd_port, 0, 0);
+		__cvmx_helper_bgx_port_init(xipd_port, 0);
 
 		if (!cvmx_helper_is_port_valid(xiface, index))
 			continue;
@@ -1021,11 +1021,10 @@ static void __cvmx_bgx_restart_training(int node, int unit, int lmac)
  *
  * @param xipd_port IPD/PKO port to configure.
  * @param phy_pres  If set, enable disparity, only applies to RXAUI interface
- * @param is_mix    Configure lmac for MIX interface
  *
  * @return Zero on success, negative on failure.
  */
-int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres, int is_mix)
+int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres)
 {
 	int xiface = cvmx_helper_get_interface_num(xipd_port);
 	struct cvmx_xiface xi = cvmx_helper_xiface_to_node_interface(xiface);
@@ -1037,8 +1036,7 @@ int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres, int is_mix)
 
 	mode = cvmx_helper_interface_get_mode(xiface);
 
-	if (is_mix)
-		__cvmx_bgx_common_init(xiface, index);
+	__cvmx_bgx_common_init(xiface, index);
 
 	__cvmx_bgx_common_init_pknd(xiface, index);
 
@@ -1322,7 +1320,7 @@ int __cvmx_helper_bgx_xaui_enable(int xiface)
 			phy_pres = 1;
 		else
 			phy_pres = 0;
-		if (__cvmx_helper_bgx_port_init(xipd_port, phy_pres, 0))
+		if (__cvmx_helper_bgx_port_init(xipd_port, phy_pres))
 			return -1;
 
 		res = __cvmx_helper_bgx_xaui_link_init(index, xiface);

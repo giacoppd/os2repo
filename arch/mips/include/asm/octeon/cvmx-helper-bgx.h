@@ -256,5 +256,5 @@ extern void cvmx_helper_bgx_tx_options(unsigned node,
  * @param mac       mac address for the ipd_port
  */
 extern void cvmx_helper_bgx_set_mac(int xipd_port, int bcst, int mcst, uint64_t mac);
-extern int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres, int is_mix);
+extern int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres);
 #endif
