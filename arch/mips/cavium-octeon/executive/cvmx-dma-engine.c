@@ -43,7 +43,7 @@
  * Interface to the PCI / PCIe DMA engines. These are only avialable
  * on chips with PCI / PCIe.
  *
- * <hr>$Revision: 103836 $<hr>
+ * <hr>$Revision: 113328 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <linux/export.h>
@@ -320,7 +320,7 @@ int cvmx_dma_engine_submit(int engine, cvmx_dma_engine_header_t header, int num_
 	}
 
 	cmds[0] = header.word0.u64;
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
+	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		cmds[1] = header.word1.u64;
 		cmd_count = 2;
 	}
@@ -378,7 +378,7 @@ static inline int __cvmx_dma_engine_build_internal_pointers(cvmx_dma_engine_buff
 		if (chunk > 8191)
 			chunk = 8191;
 		buffers[segments].u64 = 0;
-		if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
+		if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 			buffers[segments].internal_cn78xx.ac = 1;
 			buffers[segments].internal_cn78xx.size = chunk;
 			buffers[segments].internal_cn78xx.addr = address;
@@ -506,7 +506,7 @@ int cvmx_dma_engine_transfer(int engine, cvmx_dma_engine_header_t header, uint64
 	uint32_t nfst, nlst;
 	cvmx_dma_engine_transfer_t type;
 
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX))
+	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE))
 		type = header.word0.cn78xx.type;
 	else
 		type = header.word0.cn38xx.type;
@@ -533,7 +533,7 @@ int cvmx_dma_engine_transfer(int engine, cvmx_dma_engine_header_t header, uint64
 	default:
 		return -1;
 	}
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
+	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		header.word0.cn78xx.nlst = nlst;
 		header.word0.cn78xx.nfst = nfst;
 	} else {

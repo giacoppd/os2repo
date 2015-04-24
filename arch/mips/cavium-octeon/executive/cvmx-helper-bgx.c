@@ -346,7 +346,7 @@ static int __cvmx_helper_bgx_sgmii_hardware_init(int xiface, int num_ports)
 	for (index = 0; index < num_ports; index++) {
 		int xipd_port = cvmx_helper_get_ipd_port(xiface, index);
 
-		__cvmx_helper_bgx_port_init(xipd_port, 0);
+		__cvmx_helper_bgx_port_init(xipd_port, 0, 0);
 
 		if (!cvmx_helper_is_port_valid(xiface, index))
 			continue;
@@ -672,7 +672,7 @@ int cvmx_helper_bgx_errata_22429(int xipd_port, int link_up)
 
 	/* Errata BGX-22429 */
 	if (link_up) {
-		if (!index) /*does not apply for port 0*/
+		if (!index) /* does not apply for port 0 */
 			return 0;
 		cmr_config.u64 = cvmx_read_csr_node(node, CVMX_BGXX_CMRX_CONFIG(0, interface));
 		if (!cmr_config.s.enable) {
@@ -782,15 +782,13 @@ static int __cvmx_helper_bgx_xaui_init(int index, int xiface)
 	int interface = xi.interface;
 	int node = xi.node;
 	int use_auto_neg = 0;
-	int use_training = 0;
 	int xipd_port = cvmx_helper_get_ipd_port(xiface, index);
 
 	mode = cvmx_helper_interface_get_mode(xiface);
 
 	if (mode == CVMX_HELPER_INTERFACE_MODE_10G_KR
 	    || mode == CVMX_HELPER_INTERFACE_MODE_40G_KR4) {
-		use_training = 1;
-		use_auto_neg = 0;
+		use_auto_neg = 1;
 	}
 
 	/* NOTE: This code was moved first, out of order compared to the HRM
@@ -863,13 +861,7 @@ static int __cvmx_helper_bgx_xaui_init(int index, int xiface)
 
 		/* 4c. For 10GBASE-KR or 40GBASE-KR, enable link training by writing
 		     BGX(0..5)_SPU(0..3)_BR_PMD_CONTROL[TRAIN_EN] = 1. */
-		if (use_training) {
-			cvmx_bgxx_spux_br_pmd_control_t spu_br_pmd_control;
-			spu_br_pmd_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface));
-			spu_br_pmd_control.s.train_en = 1;
-			cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface), spu_br_pmd_control.u64);
-
-		}
+		/* Moved to xaui_link */
 	} else { /* enable for simulator */
 		cmr_config.u64 = cvmx_read_csr_node(node, CVMX_BGXX_CMRX_CONFIG(index, interface));
 		cmr_config.s.enable = 1;
@@ -951,10 +943,89 @@ static int __cvmx_helper_bgx_xaui_init(int index, int xiface)
 	smu_tx_ctl.s.uni_en = 0;
 	cvmx_write_csr_node(node, CVMX_BGXX_SMUX_TX_CTL(index, interface), smu_tx_ctl.u64);
 
+	{
+		/* Calculate the number of s-clk cycles per usec. */
+		const uint64_t clock_mhz = cvmx_clock_get_rate_node(node, CVMX_CLOCK_SCLK) / 1000000;
+		cvmx_bgxx_spu_dbg_control_t dbg_control;
+		dbg_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPU_DBG_CONTROL(interface));
+		dbg_control.s.us_clk_period = clock_mhz - 1;
+		cvmx_write_csr_node(node, CVMX_BGXX_SPU_DBG_CONTROL(interface), dbg_control.u64);
+	}
+
 	return 0;
 }
 
-int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres)
+static void __cvmx_bgx_start_training(int node, int unit, int lmac)
+{
+	cvmx_bgxx_spux_int_t spu_int;
+	cvmx_bgxx_spux_br_pmd_control_t pmd_control;
+	cvmx_bgxx_spux_an_control_t an_control;
+
+	/* Clear the training interrupts (W1C) */
+	spu_int.u64 = 0;
+	spu_int.s.training_failure = 1;
+	spu_int.s.training_done = 1;
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_INT(lmac, unit), spu_int.u64);
+
+	/* These registers aren't cleared when training is restarted. Manually
+	   clear them. */
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_LP_CUP(lmac, unit), 0);
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_LD_CUP(lmac, unit), 0);
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_LD_REP(lmac, unit), 0);
+
+	/* Disable autonegotiation */
+	an_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_AN_CONTROL(lmac, unit));
+	an_control.s.an_en = 0;
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_AN_CONTROL(lmac, unit), an_control.u64);
+	cvmx_wait_usec(1);
+
+	/* Restart training */
+	pmd_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(lmac, unit));
+	pmd_control.s.train_en = 1;
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(lmac, unit), pmd_control.u64);
+
+	cvmx_wait_usec(1);
+	pmd_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(lmac, unit));
+	pmd_control.s.train_restart = 1;
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(lmac, unit), pmd_control.u64);
+}
+
+static void __cvmx_bgx_restart_training(int node, int unit, int lmac)
+{
+	cvmx_bgxx_spux_int_t spu_int;
+	cvmx_bgxx_spux_br_pmd_control_t pmd_control;
+
+	/* Clear the training interrupts (W1C) */
+	spu_int.u64 = 0;
+	spu_int.s.training_failure = 1;
+	spu_int.s.training_done = 1;
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_INT(lmac, unit), spu_int.u64);
+
+	cvmx_wait_usec(1700);  /* Wait 1.7 msec */
+
+	/* These registers aren't cleared when training is restarted. Manually
+	   clear them. */
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_LP_CUP(lmac, unit), 0);
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_LD_CUP(lmac, unit), 0);
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_LD_REP(lmac, unit), 0);
+
+	/* Restart training */
+	pmd_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(lmac, unit));
+	pmd_control.s.train_restart = 1;
+	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(lmac, unit), pmd_control.u64);
+}
+
+/*
+ * @INTERNAL
+ * Wrapper function to configure the BGX, does not enable.
+ *
+ * @param xipd_port IPD/PKO port to configure.
+ * @param phy_pres  If set, enable disparity, only applies to RXAUI interface
+ * @param is_mix    Configure lmac for MIX interface
+ *
+ * @return Zero on success, negative on failure.
+ */
+int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres, int is_mix)
 {
 	int xiface = cvmx_helper_get_interface_num(xipd_port);
 	struct cvmx_xiface xi = cvmx_helper_xiface_to_node_interface(xiface);
@@ -965,6 +1036,9 @@ int __cvmx_helper_bgx_port_init(int xipd_port, int phy_pres)
 	cvmx_helper_interface_mode_t mode;
 
 	mode = cvmx_helper_interface_get_mode(xiface);
+
+	if (is_mix)
+		__cvmx_bgx_common_init(xiface, index);
 
 	__cvmx_bgx_common_init_pknd(xiface, index);
 
@@ -1086,25 +1160,48 @@ static int __cvmx_helper_bgx_xaui_link_init(int index, int xiface)
 	cvmx_write_csr_node(node, CVMX_BGXX_SPUX_MISC_CONTROL(index, interface), spu_misc_control.u64);
 
 	if (cvmx_sysinfo_get()->board_type != CVMX_BOARD_TYPE_SIM) {
-		if (use_training) {
-			spu_int.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_INT(index, interface));
-			if (!spu_int.s.training_done) {
-				cvmx_bgxx_spux_br_pmd_control_t pmd_control;
-				/* Clear the training interrupts (W1C) */
+		cvmx_bgxx_spux_an_control_t spu_an_control;
+		cvmx_bgxx_spux_br_pmd_control_t pmd_control;
 
+		spu_an_control.u64 = cvmx_read_csr_node(node,
+					CVMX_BGXX_SPUX_AN_CONTROL(index, interface));
+		if (spu_an_control.s.an_en) {
+			spu_int.u64 = cvmx_read_csr_node(node,
+						CVMX_BGXX_SPUX_INT(index, interface));
+			if (!spu_int.s.an_link_good) {
+				/* Clear the auto negotiation (W1C) */
 				spu_int.u64 = 0;
-				spu_int.s.training_failure = 1;
-				spu_int.s.training_done = 1;
+				spu_int.s.an_complete = 1;
+				spu_int.s.an_link_good = 1;
+				spu_int.s.an_page_rx = 1;
 				cvmx_write_csr_node(node, CVMX_BGXX_SPUX_INT(index, interface), spu_int.u64);
 
-				/* Restart training */
-				pmd_control.u64 = cvmx_read_csr_node(node,
-							CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface));
-				pmd_control.s.train_restart = 1;
-				cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface), pmd_control.u64);
-
-				/*cvmx_dprintf("Restarting link training\n"); */
+				/* Restart auto negotiation */
+				spu_an_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_AN_CONTROL(index, interface));
+				spu_an_control.s.an_restart = 1;
+				cvmx_write_csr_node(node, CVMX_BGXX_SPUX_AN_CONTROL(index, interface), spu_an_control.u64);
 				return -1;
+			}
+		}
+
+		if (use_training) {
+			pmd_control.u64 = cvmx_read_csr_node(node,
+						CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface));
+
+			if (pmd_control.s.train_en == 0) {
+				__cvmx_bgx_start_training(node, interface, index);
+				return -1;
+			} else {
+				spu_int.u64 = cvmx_read_csr_node(node,
+						  CVMX_BGXX_SPUX_INT(index, interface));
+				if (spu_int.s.training_failure) {
+					__cvmx_bgx_restart_training(node, interface, index);
+					return -1;
+				}
+				if (!spu_int.s.training_done) {
+					cvmx_dprintf("Waiting for link training\n");
+					return -1;
+				}
 			}
 		}
 
@@ -1143,19 +1240,8 @@ static int __cvmx_helper_bgx_xaui_link_init(int index, int xiface)
 			cvmx_dprintf("ERROR: %d:BGX%d:%d: Receive fault, need to retry\n",
 					node, interface, index);
 
-			if (use_training) {
-				cvmx_bgxx_spux_br_pmd_control_t pmd_control;
-				spu_int.u64 = 0;
-				spu_int.s.training_failure = 1;
-				spu_int.s.training_done = 1;
-				cvmx_write_csr_node(node, CVMX_BGXX_SPUX_INT(index, interface), spu_int.u64);
-
-				/* Restart training */
-				pmd_control.u64 = cvmx_read_csr_node(node,
-							CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface));
-				pmd_control.s.train_restart = 1;
-				cvmx_write_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(index, interface), pmd_control.u64);
-			}
+			if (use_training)
+				__cvmx_bgx_restart_training(node, interface, index);
 			/*cvmx_dprintf("training restarting\n"); */
 			return -1;
 		}
@@ -1236,7 +1322,7 @@ int __cvmx_helper_bgx_xaui_enable(int xiface)
 			phy_pres = 1;
 		else
 			phy_pres = 0;
-		if (__cvmx_helper_bgx_port_init(xipd_port, phy_pres))
+		if (__cvmx_helper_bgx_port_init(xipd_port, phy_pres, 0))
 			return -1;
 
 		res = __cvmx_helper_bgx_xaui_link_init(index, xiface);
