@@ -2404,6 +2404,9 @@ static void __exit octeon3_eth_exit(void)
 	if (!OCTEON_IS_MODEL(OCTEON_CN78XX))
 		return;
 
+	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_0))
+		pr_err("ERROR: rmmod of this driver is not supported on CN78XX-P1.0\n");
+
 	platform_driver_unregister(&octeon3_eth_driver);
 }
 module_exit(octeon3_eth_exit);
