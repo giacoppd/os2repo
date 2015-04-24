@@ -1594,22 +1594,6 @@ static int octeon_mgmt_remove(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, NULL);
 	free_netdev(netdev);
 
-	if (p->agl_prt_ctl)
-		devm_iounmap(&pdev->dev,
-			(void __iomem *)p->agl_prt_ctl);
-	if (p->agl_prt_ctl_phys)
-		devm_release_region(&pdev->dev,
-			p->agl_prt_ctl_phys, p->agl_prt_ctl_size);
-	if (p->agl)
-		devm_iounmap(&pdev->dev,
-			(void __iomem *)p->agl);
-	if (p->agl_phys)
-		devm_release_region(&pdev->dev, p->agl_phys, p->agl_size);
-	if (p->mix)
-		devm_iounmap(&pdev->dev,
-			(void __iomem *)p->mix);
-	if (p->mix_phys)
-		devm_release_region(&pdev->dev, p->mix_phys, p->mix_size);
 	return 0;
 }
 
