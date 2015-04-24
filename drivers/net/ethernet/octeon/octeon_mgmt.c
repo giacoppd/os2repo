@@ -46,8 +46,10 @@
 /* 14 bits of length */
 #define OCTEON_MGMT_RE_LEN_MASK 0x3fffULL
 
-/* 7 or 8 bits of code. 8th bit is always zero, so just look at 7 bits. */
-#define OCTEON_MGMT_RE_CODE_MASK 0x7fULL
+/* 6 or 8 bits of code. 7th and 8th bits are always zero, so just look
+ * at 6 bits.
+ */
+#define OCTEON_MGMT_RE_CODE_MASK 0x3fULL
 
 #define RING_ENTRY_CODE_DONE 0xf
 #define RING_ENTRY_CODE_MORE 0x10
