@@ -35,6 +35,7 @@
 #include <linux/platform_device.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
+#include <linux/if_vlan.h>
 
 #include <asm/octeon/octeon.h>
 #include <asm/octeon/cvmx-helper-cfg.h>
@@ -1302,6 +1303,52 @@ static const struct ethtool_ops octeon3_ethtool_ops = {
 	.get_link = ethtool_op_get_link,
 };
 
+static int octeon3_eth_ndo_change_mtu(struct net_device *netdev, int new_mtu)
+{
+	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
+		int fifo_size;
+		int max_mtu = 1500;
+		struct octeon3_ethernet *priv = netdev_priv(netdev);
+
+		/* On 78XX-Pass1 the mtu must be limited.  The PKO may
+		 * to lock up when calculating the L4 checksum for
+		 * large packets. How large the packets can be depends
+		 * on the amount of pko fifo assigned to the port.
+		 *
+		 *   FIFO size                Max frame size
+		 *	2.5 KB				1920
+		 *	5.0 KB				4480
+		 *     10.0 KB				9600
+		 *
+		 * The maximum mtu is set to the largest frame size minus the
+		 * l2 header.
+		 */
+		fifo_size = cvmx_pko3_port_fifo_size(priv->xiface, priv->port_index);
+
+		switch (fifo_size) {
+		case 2560:
+			max_mtu = 1920 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
+			break;
+
+		case 5120:
+			max_mtu = 4480 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
+			break;
+
+		case 10240:
+			max_mtu = 9600 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
+			break;
+
+		default:
+			break;
+		}
+		if (new_mtu > max_mtu) {
+			netdev_warn(netdev, "Maximum MTU supported is %d", max_mtu);
+			return -EINVAL;
+		}
+	}
+	return bgx_port_change_mtu(netdev, new_mtu);
+}
+
 static int octeon3_eth_ndo_init(struct net_device *netdev)
 {
 	struct octeon3_ethernet *priv = netdev_priv(netdev);
@@ -1499,7 +1546,7 @@ static int octeon3_eth_ndo_init(struct net_device *netdev)
 		eth_hw_addr_random(netdev);
 	}
 	bgx_port_set_rx_filtering(netdev);
-	bgx_port_change_mtu(netdev, netdev->mtu);
+	octeon3_eth_ndo_change_mtu(netdev, netdev->mtu);
 
 	octeon3_napi_init_node(priv->numa_node, netdev);
 
@@ -2016,7 +2063,7 @@ static const struct net_device_ops octeon3_eth_netdev_ops = {
 	.ndo_get_stats64	= octeon3_eth_ndo_get_stats64,
 	.ndo_set_rx_mode	= bgx_port_set_rx_filtering,
 	.ndo_set_mac_address	= octeon3_eth_set_mac_address,
-	.ndo_change_mtu		= bgx_port_change_mtu,
+	.ndo_change_mtu		= octeon3_eth_ndo_change_mtu,
 	.ndo_do_ioctl		= bgx_port_do_ioctl,
 };
 

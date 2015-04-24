@@ -34,7 +34,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <linux/if_vlan.h>
 
 #include <asm/octeon/cvmx-helper.h>
 #include <asm/octeon/cvmx-helper-util.h>
@@ -411,46 +410,6 @@ int bgx_port_disable(struct net_device *netdev)
 }
 EXPORT_SYMBOL(bgx_port_disable);
 
-static int get_max_78xx_pass1_x_mtu(int xiface, int index)
-{
-	int	fifo_size;
-	int	max_mtu = 1500;
-
-	/* Due to errata PKO-20096, the mtu must be limited.
-	 * PKO-20096 causes PKO to lock up when calculating the L4
-	 * checksum for large packets. How large the packets can be
-	 * depends on the amount of pko fifo assigned to the port.
-	 *
-	 *   FIFO size                Max frame size
-	 *	2.5 KB				1920
-	 *	5.0 KB				4480
-	 *     10.0 KB				9600
-	 *
-	 * The maximum mtu is set to the largest frame size minus the
-	 * l2 header.
-	 */
-	fifo_size = cvmx_pko3_port_fifo_size(xiface, index);
-
-	switch (fifo_size) {
-	case 2560:
-		max_mtu = 1920 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
-		break;
-
-	case 5120:
-		max_mtu = 4480 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
-		break;
-
-	case 10240:
-		max_mtu = 9600 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
-		break;
-
-	default:
-		break;
-	}
-
-	return max_mtu;
-}
-
 int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 {
 	union cvmx_bgxx_cmrx_config cfg;
@@ -459,17 +418,6 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 
 	if (new_mtu < 60 || new_mtu > 65392)
 		return -EINVAL;
-
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
-		int	max_mtu;
-
-		max_mtu = get_max_78xx_pass1_x_mtu(priv->xiface, priv->index);
-		if (new_mtu > max_mtu) {
-			new_mtu = max_mtu;
-			netdev_warn(netdev, "Maximum MTU supported is %d",
-				    max_mtu);
-		}
-	}
 
 	netdev->mtu = new_mtu;
 
@@ -484,7 +432,6 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 		cvmx_write_csr_node(priv->numa_node,		/* 10G or higher */
 				    CVMX_BGXX_SMUX_RX_JABBER(priv->index, priv->bgx_interface),
 				    max_frame);
-
 
 	return 0;
 }
