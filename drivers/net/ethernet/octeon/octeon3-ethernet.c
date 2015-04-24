@@ -1799,7 +1799,7 @@ static int octeon3_eth_ndo_start_xmit(struct sk_buff *skb, struct net_device *ne
 	}
 
 	/* SSO can only fall behind when the skb is not recycled */
-	if (can_recycle_skb == false) {
+	if (!can_recycle_skb) {
 		oen = octeon3_eth_node + priv->numa_node;
 		aq_cnt.u64 = cvmx_read_csr_node(oen->numa_node,
 				CVMX_SSO_GRPX_AQ_CNT(oen->tx_complete_grp));
@@ -1807,8 +1807,8 @@ static int octeon3_eth_ndo_start_xmit(struct sk_buff *skb, struct net_device *ne
 
 	/* Drop the packet if pko or sso are not keeping up */
 	backlog = atomic64_inc_return(&priv->tx_backlog);
-	if (unlikely(backlog > MAX_TX_QUEUE_DEPTH) ||
-	    (can_recycle_skb == false && aq_cnt.s.aq_cnt > 100000)) {
+	if (unlikely(backlog > MAX_TX_QUEUE_DEPTH ||
+		     (!can_recycle_skb && aq_cnt.s.aq_cnt > 100000))) {
 		if (use_tx_queues) {
 			netif_stop_queue(netdev);
 		} else {
