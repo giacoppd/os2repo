@@ -2202,7 +2202,7 @@ static struct irq_chip octeon_irq_chip_ciu3 = {
 	.irq_unmask = octeon_irq_ciu3_enable,
 #ifdef CONFIG_SMP
 	.irq_set_affinity = octeon_irq_ciu3_set_affinity,
-/*	.irq_cpu_offline = octeon_irq_cpu_offline_ciu,*/
+	.irq_cpu_offline = octeon_irq_cpu_offline_ciu,
 #endif
 };
 
