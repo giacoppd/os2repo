@@ -2690,7 +2690,7 @@ int octeon_ciu3_errbits_enable_intsn(int node, int intsn)
 	if (isc_ctl.s.en) {
 		union cvmx_ciu3_iscx_w1c isc_w1c;
 		u64 isc_w1c_addr = ciu3_addr + CIU3_ISC_W1C(intsn);
-		pr_info("Already enabled intsn: 0x%x\n", intsn);
+		pr_debug("Already enabled intsn: 0x%x\n", intsn);
 		isc_w1c.u64 = 0;
 		isc_w1c.s.en = 1;
 		cvmx_write_csr(isc_w1c_addr, isc_w1c.u64);
