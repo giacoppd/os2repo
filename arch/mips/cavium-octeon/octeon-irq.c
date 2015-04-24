@@ -3029,8 +3029,6 @@ static void octeon_irq_ciu3_disable_gpio(struct irq_data *data)
 	struct octeon_ciu_chip_data *cd;
 	cd = irq_data_get_irq_chip_data(data);
 
-	cvmx_write_csr_node(cd->ciu_node, CVMX_GPIO_BIT_CFGX(cd->gpio_line), 0);
-
 	octeon_irq_ciu3_disable(data);
 }
 
@@ -3063,7 +3061,6 @@ void octeon_irq_ciu3_gpio_mask_ack(struct irq_data *data)
 	cvmx_write_csr(isc_w1c_addr, isc_w1c.u64);
 	cvmx_read_csr(isc_w1c_addr);
 }
-
 
 static struct irq_chip octeon_irq_chip_ciu3_gpio = {
 	.name = "CIU3-GPIO",
