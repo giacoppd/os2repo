@@ -1,5 +1,5 @@
 /***********************license start***************
- * Copyright (c) 2003-2014  Cavium, Inc. <support@cavium.com>.  All rights
+ * Copyright (c) 2003-2015  Cavium, Inc. <support@cavium.com>.  All rights
  * reserved.
  *
  *
@@ -42,7 +42,7 @@
  *
  * Interface to PCIe as a host(RC) or target(EP)
  *
- * <hr>$Revision: 108660 $<hr>
+ * <hr>$Revision: 114009 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -113,6 +113,16 @@
 #define CVMX_WRITE_CSR(addr,val)	cvmx_write_csr_node(node,addr,val)
 #define CVMX_PCIE_CFGX_READ(p,addr)	cvmx_pcie_cfgx_read_node(node,p,addr)
 #define CVMX_PCIE_CFGX_WRITE(p,addr,val)	cvmx_pcie_cfgx_write_node(node,p,addr,val)
+
+#ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+extern int cvmx_primary_pcie_bus_number;
+#else
+# ifdef OCTEON_FIRST_PCIE_BUSNO /* Defined in u-boot config files */
+int cvmx_primary_pcie_bus_number = OCTEON_FIRST_PCIE_BUSNO;
+# else
+int cvmx_primary_pcie_bus_number = 0;
+# endif
+#endif
 
 /**
  * Return the Core virtual base address for PCIe IO access. IOs are
@@ -299,9 +309,9 @@ static void __cvmx_pcie_rc_initialize_config_space(int node, int pcie_port)
 		 */
 		cvmx_pciercx_cfg006_t pciercx_cfg006;
 		pciercx_cfg006.u32 = 0;
-		pciercx_cfg006.s.pbnum = 1;
-		pciercx_cfg006.s.sbnum = 1;
-		pciercx_cfg006.s.subbnum = 1;
+		pciercx_cfg006.s.pbnum = cvmx_primary_pcie_bus_number;
+		pciercx_cfg006.s.sbnum = cvmx_primary_pcie_bus_number;
+		pciercx_cfg006.s.subbnum = cvmx_primary_pcie_bus_number;
 		CVMX_PCIE_CFGX_WRITE(pcie_port, CVMX_PCIERCX_CFG006(pcie_port),
 				     pciercx_cfg006.u32);
 	}
@@ -1769,7 +1779,11 @@ static uint64_t __cvmx_pcie_build_config_addr(int node, int port, int bus,
 	pcie_addr.config.node = node;
 	pcie_addr.config.es = _CVMX_PCIE_ES;
 	pcie_addr.config.port = port;
-	pcie_addr.config.ty = (bus > pciercx_cfg006.s.pbnum);
+	/* Always use config type 0 */
+	if (pciercx_cfg006.s.pbnum == 0)
+		pcie_addr.config.ty = (bus > pciercx_cfg006.s.pbnum + 1);
+	else
+		pcie_addr.config.ty = (bus > pciercx_cfg006.s.pbnum);
 	pcie_addr.config.bus = bus;
 	pcie_addr.config.dev = dev;
 	pcie_addr.config.func = fn;
