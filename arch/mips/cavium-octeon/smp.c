@@ -272,6 +272,14 @@ static void octeon_init_secondary(void)
 	octeon_irq_setup_secondary();
 }
 
+static irqreturn_t octeon_78xx_smp_dump_interrupt(int irq, void *dev_id)
+{
+#ifdef CONFIG_KEXEC
+	octeon_crash_dump();
+#endif
+	return IRQ_HANDLED;
+}
+
 /**
  * Callout to firmware before smp_init
  *
@@ -483,6 +491,11 @@ static void octeon_78xx_prepare_cpus(unsigned int max_cpus)
 			IRQF_PERCPU | IRQF_NO_THREAD, "ICache-Flush",
 			octeon_78xx_icache_flush_interrupt)) {
 		panic("Cannot request_irq for ICache-Flush");
+	}
+	if (request_irq(OCTEON_IRQ_MBOX0 + 3, octeon_78xx_smp_dump_interrupt,
+			IRQF_PERCPU | IRQF_NO_THREAD, "SMP-Dump",
+			octeon_78xx_smp_dump_interrupt)) {
+		panic("Cannot request_irq for SMP-Dump");
 	}
 }
 
