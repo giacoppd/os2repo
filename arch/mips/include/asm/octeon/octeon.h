@@ -423,12 +423,17 @@ struct irq_domain *octeon_irq_get_block_domain(int node, uint8_t block);
 #if IS_ENABLED(CONFIG_CAVIUM_OCTEON_ERROR_TREE)
 int octeon_error_tree_enable(enum cvmx_error_groups group, int unit);
 int octeon_error_tree_disable(enum cvmx_error_groups group, int unit);
+int octeon_error_tree_shutdown(void);
 #else
 static inline int octeon_error_tree_enable(enum cvmx_error_groups group, int unit)
 {
 	return 0;
 }
 static inline int octeon_error_tree_disable(enum cvmx_error_groups group, int unit)
+{
+	return 0;
+}
+static inline int octeon_error_tree_shutdown(void)
 {
 	return 0;
 }

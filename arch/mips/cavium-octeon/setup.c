@@ -146,6 +146,7 @@ static void octeon_generic_shutdown(void)
 static void octeon_shutdown(void)
 {
 	octeon_generic_shutdown();
+	octeon_error_tree_shutdown();
 #ifdef CONFIG_SMP
 	smp_call_function(octeon_kexec_smp_down, NULL, 0);
 	smp_wmb();
@@ -159,6 +160,7 @@ static void octeon_shutdown(void)
 static void octeon_crash_shutdown(struct pt_regs *regs)
 {
 	octeon_generic_shutdown();
+	octeon_error_tree_shutdown();
 	default_machine_crash_shutdown(regs);
 }
 
