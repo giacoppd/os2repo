@@ -1558,6 +1558,14 @@ static const struct net_device_ops octeon_mgmt_ops = {
 #endif
 };
 
+static const struct ethtool_ops octeon_mgmt_o3_ethtool_ops = {
+	.get_drvinfo = octeon_mgmt_get_drvinfo,
+	.get_settings = bgx_port_ethtool_get_settings,
+	.set_settings = bgx_port_ethtool_set_settings,
+	.nway_reset = bgx_port_ethtool_nway_reset,
+	.get_link = ethtool_op_get_link,
+};
+
 static const struct net_device_ops octeon_mgmt_o3_ops = {
 	.ndo_init		= octeon_mgmt_o3_init,
 	.ndo_open		= octeon_mgmt_o3_open,
@@ -1659,6 +1667,7 @@ static int octeon_mgmt_o3_probe(struct platform_device *pdev)
 	p->port = pd->port;
 	p->numa_node = pd->numa_node;
 	netdev->netdev_ops = &octeon_mgmt_o3_ops;
+	SET_ETHTOOL_OPS(netdev, &octeon_mgmt_o3_ethtool_ops);
 
 	p->mix_phys = 0x1070000100000ull + 0x800 * p->port + (1ull << 36) * p->numa_node;
 	p->mix_size = 0x100;
@@ -1789,7 +1798,7 @@ static int octeon_mgmt_probe(struct platform_device *pdev)
 	p->agl_prt_ctl = (u64)devm_ioremap(&pdev->dev, p->agl_prt_ctl_phys,
 					   p->agl_prt_ctl_size);
 	netdev->netdev_ops = &octeon_mgmt_ops;
-	netdev->ethtool_ops = &octeon_mgmt_ethtool_ops;
+	SET_ETHTOOL_OPS(netdev, &octeon_mgmt_ethtool_ops);
 
 	mac = of_get_mac_address(pdev->dev.of_node);
 
