@@ -14,3 +14,4 @@ kvm_mipste-objs		:= kvm_mips_emul.o kvm_locore.o kvm_mips_int.o \
 obj-$(CONFIG_KVM)		+= $(common-objs) kvm_mips.o
 obj-$(CONFIG_KVM_MIPS_TE)	+= kvm_mipste.o
 obj-$(CONFIG_KVM_MIPS_VZ)	+= kvm_mipsvz.o kvm_mipsvz_guest.o
+				$(addprefix ../../../virt/kvm/, irqchip.o eventfd.o)
