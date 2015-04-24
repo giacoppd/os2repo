@@ -31,7 +31,7 @@
 static int pcie_disable;
 module_param(pcie_disable, int, S_IRUGO);
 
-int cvmx_primary_pcie_bus_number = 0;
+int cvmx_primary_pcie_bus_number = 1;
 module_param(cvmx_primary_pcie_bus_number, int, S_IRUGO);
 
 static int enable_pcie_14459_war;
@@ -270,7 +270,7 @@ static int octeon_pcie_read_config(struct pci_bus *bus, unsigned int devfn,
 {
 	union octeon_cvmemctl cvmmemctl;
 	union octeon_cvmemctl cvmmemctl_save;
-	int bus_number = cvmx_primary_pcie_bus_number;
+	int bus_number = bus->number;
 	int cfg_retry = 0;
 	int retry_cnt = 0;
 	int max_retry_cnt = 10;

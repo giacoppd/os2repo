@@ -42,7 +42,7 @@
  *
  * Interface to PCIe as a host(RC) or target(EP)
  *
- * <hr>$Revision: 114009 $<hr>
+ * <hr>$Revision: 114248 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -117,11 +117,7 @@
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 extern int cvmx_primary_pcie_bus_number;
 #else
-# ifdef OCTEON_FIRST_PCIE_BUSNO /* Defined in u-boot config files */
-int cvmx_primary_pcie_bus_number = OCTEON_FIRST_PCIE_BUSNO;
-# else
-int cvmx_primary_pcie_bus_number = 0;
-# endif
+int cvmx_primary_pcie_bus_number = 1;
 #endif
 
 /**
