@@ -441,6 +441,24 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 }
 EXPORT_SYMBOL(bgx_port_change_mtu);
 
+void bgx_port_mix_assert_reset(struct net_device *netdev, int mix, bool v)
+{
+	u64 global_config;
+	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
+	u64 mask = 1ull << (3 + (mix & 1));
+
+	global_config = cvmx_read_csr_node(priv->numa_node,
+					   CVMX_BGXX_CMR_GLOBAL_CONFIG(priv->bgx_interface));
+
+	if (v)
+		global_config |= mask;
+	else
+		global_config &= ~mask;
+
+	cvmx_write_csr_node(priv->numa_node, CVMX_BGXX_CMR_GLOBAL_CONFIG(priv->bgx_interface), global_config);
+}
+EXPORT_SYMBOL(bgx_port_mix_assert_reset);
+
 static int bgx_port_probe(struct platform_device *pdev)
 {
 	u64 addr;
