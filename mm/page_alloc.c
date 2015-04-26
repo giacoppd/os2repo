@@ -768,9 +768,9 @@ static void free_one_page(struct zone *zone,
 				int migratetype)
 {
 	unsigned long flags;
+	unsigned long nr_scanned;
 
 	spin_lock_irqsave(&zone->lock, flags);
-	unsigned long nr_scanned;
 	nr_scanned = zone_page_state(zone, NR_PAGES_SCANNED);
 	if (nr_scanned)
 		__mod_zone_page_state(zone, NR_PAGES_SCANNED, -nr_scanned);
