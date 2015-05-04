@@ -27,6 +27,9 @@
 #define cpu_has_segments	(cpu_data[0].options & MIPS_CPU_SEGMENTS)
 #endif
 
+#ifndef cpu_has_saa
+#define cpu_has_saa              0
+#endif
 
 /*
  * For the moment we don't consider R6000 and R8000 so we can assume that
