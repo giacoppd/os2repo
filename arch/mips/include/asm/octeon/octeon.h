@@ -323,9 +323,9 @@ struct octeon_ciu_chip_data {
 		struct {		/* only used for ciu/ciu2 */
 			u8 line;
 			u8 bit;
-			u8 gpio_line;
 		};
 	};
+	int gpio_line;
 	int current_cpu;	/* Next CPU expected to take this irq */
 	int ciu_node; /* NUMA node number of the CIU */
 };
@@ -423,12 +423,17 @@ struct irq_domain *octeon_irq_get_block_domain(int node, uint8_t block);
 #if IS_ENABLED(CONFIG_CAVIUM_OCTEON_ERROR_TREE)
 int octeon_error_tree_enable(enum cvmx_error_groups group, int unit);
 int octeon_error_tree_disable(enum cvmx_error_groups group, int unit);
+int octeon_error_tree_shutdown(void);
 #else
 static inline int octeon_error_tree_enable(enum cvmx_error_groups group, int unit)
 {
 	return 0;
 }
 static inline int octeon_error_tree_disable(enum cvmx_error_groups group, int unit)
+{
+	return 0;
+}
+static inline int octeon_error_tree_shutdown(void)
 {
 	return 0;
 }
@@ -463,7 +468,7 @@ int unregister_co_cache_error_notifier(struct notifier_block *nb);
 #define CO_CACHE_ERROR_WB_PARITY 2
 #define CO_CACHE_ERROR_TLB_PARITY 3
 
-extern unsigned long long cache_err_dcache[NR_CPUS];
+extern unsigned long long cache_err_dcache[];
 
 /* Octeon multiplier save/restore routines from octeon_switch.S */
 void octeon_mult_save(void);

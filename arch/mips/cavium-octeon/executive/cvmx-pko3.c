@@ -711,7 +711,6 @@ static int cvmx_pko_setup_macs(int node)
 			pko_mac_cfg.u64);
 	}
 
-
 	/* Setup PKO MCI0/MCI1/SKID credits */
 	for(mac_num = 0; mac_num < CVMX_PKO_MAX_MACS; mac_num++) {
 		cvmx_pko_mci0_max_credx_t pko_mci0_max_cred;
@@ -771,7 +770,10 @@ static int cvmx_pko_setup_macs(int node)
 			pko_mci0_max_cred.s.max_cred_lim = 0xfff;
 		}
 
-		cvmx_write_csr_node(node, CVMX_PKO_MCI0_MAX_CREDX(mac_num),
+		/* Pass 2 PKO hardware does not use the MCI0 credits */
+		if(OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
+			cvmx_write_csr_node(node,
+					CVMX_PKO_MCI0_MAX_CREDX(mac_num),
 					pko_mci0_max_cred.u64);
 
 		/* The original CSR formula is the correct one after all */

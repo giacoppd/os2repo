@@ -38,11 +38,14 @@ static DEFINE_PER_CPU(struct octeon_ciu3_info *, octeon_ciu3_info);
  */
 #define MAX_CIU3_DOMAINS		256
 
+typedef irq_hw_number_t (*octeon_ciu3_intsn2hw_t)(struct irq_domain *, unsigned int);
+
 /* Information for each ciu3 in the system */
 struct octeon_ciu3_info {
 	u64			ciu3_addr;
 	int			node;
 	struct irq_domain	*domain[MAX_CIU3_DOMAINS];
+	octeon_ciu3_intsn2hw_t	intsn2hw[MAX_CIU3_DOMAINS];
 };
 
 /* Each ciu3 in the system uses its own data (one ciu3 per node) */
@@ -2202,7 +2205,7 @@ static struct irq_chip octeon_irq_chip_ciu3 = {
 	.irq_unmask = octeon_irq_ciu3_enable,
 #ifdef CONFIG_SMP
 	.irq_set_affinity = octeon_irq_ciu3_set_affinity,
-/*	.irq_cpu_offline = octeon_irq_cpu_offline_ciu,*/
+	.irq_cpu_offline = octeon_irq_cpu_offline_ciu,
 #endif
 };
 
@@ -2301,11 +2304,19 @@ static void octeon_irq_ciu3_ip2(void)
 
 	if (likely(dest_pp_int.s.intr)) {
 		irq_hw_number_t intsn = dest_pp_int.s.intsn;
+		irq_hw_number_t hw;
+		struct irq_domain *domain;
 		/* Get the domain to use from the major block */
 		int block = intsn >> 12;
 		int ret;
 
-		ret = handle_domain_irq(ciu3_info->domain[block], intsn, NULL);
+		domain = ciu3_info->domain[block];
+		if (ciu3_info->intsn2hw[block])
+			hw = ciu3_info->intsn2hw[block](domain, intsn);
+		else
+			hw = intsn;
+
+		ret = handle_domain_irq(domain, hw, NULL);
 		if (ret < 0) {
 			union cvmx_ciu3_iscx_w1c isc_w1c;
 			u64 isc_w1c_addr = ciu3_addr + CIU3_ISC_W1C(intsn);
@@ -2690,7 +2701,7 @@ int octeon_ciu3_errbits_enable_intsn(int node, int intsn)
 	if (isc_ctl.s.en) {
 		union cvmx_ciu3_iscx_w1c isc_w1c;
 		u64 isc_w1c_addr = ciu3_addr + CIU3_ISC_W1C(intsn);
-		pr_info("Already enabled intsn: 0x%x\n", intsn);
+		pr_debug("Already enabled intsn: 0x%x\n", intsn);
 		isc_w1c.u64 = 0;
 		isc_w1c.s.en = 1;
 		cvmx_write_csr(isc_w1c_addr, isc_w1c.u64);
@@ -3018,8 +3029,6 @@ static void octeon_irq_ciu3_disable_gpio(struct irq_data *data)
 	struct octeon_ciu_chip_data *cd;
 	cd = irq_data_get_irq_chip_data(data);
 
-	cvmx_write_csr_node(cd->ciu_node, CVMX_GPIO_BIT_CFGX(cd->gpio_line), 0);
-
 	octeon_irq_ciu3_disable(data);
 }
 
@@ -3053,7 +3062,6 @@ void octeon_irq_ciu3_gpio_mask_ack(struct irq_data *data)
 	cvmx_read_csr(isc_w1c_addr);
 }
 
-
 static struct irq_chip octeon_irq_chip_ciu3_gpio = {
 	.name = "CIU3-GPIO",
 	.irq_enable	= octeon_irq_ciu3_enable_gpio,
@@ -3083,6 +3091,7 @@ static int octeon_irq_gpio78_map(struct irq_domain *d,
 		return -ENOMEM;
 
 	cd->intsn = gpiod->base_hwirq + hw;
+	cd->gpio_line = hw;
 	cd->current_cpu = -1;
 	cd->ciu3_addr = ciu3_info->ciu3_addr;
 	cd->ciu_node = ciu3_info->node;
@@ -3098,6 +3107,14 @@ static struct irq_domain_ops octeon_irq_domain_gpio78_ops = {
 	.unmap = octeon_irq_free_cd,
 	.xlate = octeon_irq_gpio_xlat,
 };
+
+static irq_hw_number_t octeon_irq_ciu3_intsn2hw(struct irq_domain *d,
+						unsigned int intsn)
+{
+	struct octeon_irq_gpio_domain_data *gpiod = d->host_data;
+
+	return intsn - gpiod->base_hwirq;
+}
 
 static int __init octeon_irq_init_gpio78(struct device_node *gpio_node,
 					 struct device_node *parent)
@@ -3116,9 +3133,20 @@ static int __init octeon_irq_init_gpio78(struct device_node *gpio_node,
 
 	gpiod = kzalloc(sizeof(*gpiod), GFP_KERNEL);
 	if (gpiod) {
+		struct octeon_ciu3_info *ciu3_info;
+		struct irq_domain *domain;
+		int block = (base_hwirq >> 12) & 0xff;
+		int node = of_node_to_nid(gpio_node);
+
 		/* gpio domain host_data is the base hwirq number. */
 		gpiod->base_hwirq = base_hwirq;
-		irq_domain_add_tree(gpio_node, &octeon_irq_domain_gpio78_ops, gpiod);
+		domain = irq_domain_add_tree(gpio_node, &octeon_irq_domain_gpio78_ops, gpiod);
+		if (node < 0)
+			node = 0;
+		ciu3_info = octeon_ciu3_info_per_node[node];
+		ciu3_info->domain[block] = domain;
+		ciu3_info->intsn2hw[block] = octeon_irq_ciu3_intsn2hw;
+
 	} else {
 		pr_warn("Cannot allocate memory for GPIO irq_domain.\n");
 		return -ENOMEM;

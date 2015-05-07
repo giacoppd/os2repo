@@ -43,7 +43,7 @@
  * Simple allocate only memory allocator.  Used to allocate memory at
  * application start time.
  *
- * <hr>$Revision: 106502 $<hr>
+ * <hr>$Revision: 113619 $<hr>
  *
  */
 
@@ -496,7 +496,8 @@ static int __cvmx_validate_mem_range(uint64_t *min_addr_ptr,
 #elif !defined(__linux__)
 #if CVMX_USE_1_TO_1_TLB_MAPPINGS
 	{
-		uint64_t max_phys = 0x7FFFFFFFFULL;
+		extern uint64_t __cvmx_max_1_to_1_mapped;
+		uint64_t max_phys = __cvmx_max_1_to_1_mapped;
 		*min_addr_ptr = MIN(MAX(*min_addr_ptr, 0x0), max_phys);
 		if (!*max_addr_ptr)
 			*max_addr_ptr = max_phys;
@@ -591,11 +592,16 @@ void *cvmx_bootmem_alloc_named_range_once(uint64_t size, uint64_t min_addr,
 		return NULL;
 	}
 	ptr = cvmx_phys_to_ptr(addr);
+
 	if (init)
 		init(ptr);
+	else
+		memset(ptr, 0, size);
+
 	__cvmx_bootmem_unlock(0);
 	return ptr;
 }
+EXPORT_SYMBOL(cvmx_bootmem_alloc_named_range_once);
 
 void *cvmx_bootmem_alloc_named_range_flags(uint64_t size, uint64_t min_addr,
 					   uint64_t max_addr, uint64_t align,
@@ -1362,7 +1368,7 @@ frees_done:
 	cvmx_dprintf("cvmx_bootmem_phy_mem_list_init: named_block_array_addr:"
 		     "0x%llx)\n", CAST_ULL(addr));
 #endif
-	if (!addr) {
+	if (addr < 0) {
 		cvmx_dprintf("FATAL ERROR: unable to allocate memory for "
 			     "bootmem descriptor!\n");
 		return 0;
@@ -1495,7 +1501,7 @@ int64_t cvmx_bootmem_phy_mem_list_init_multi(uint8_t node_mask,
 	cvmx_dprintf("cvmx_bootmem_phy_mem_list_init: named_block_array_addr:"
 		     "0x%llx)\n", CAST_ULL(addr));
 #endif
-	if (!addr) {
+	if (addr < 0) {
 		cvmx_dprintf("FATAL ERROR: unable to allocate memory for "
 			     "bootmem descriptor!\n");
 		return 0;
