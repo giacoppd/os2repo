@@ -1267,6 +1267,7 @@ int cvmx_helper_pko3_shut_interface(int xiface)
 
 	return 0;
 }
+EXPORT_SYMBOL(cvmx_helper_pko3_shut_interface);
 
 /**
  * Shutdown PKO3
@@ -1307,3 +1308,4 @@ int cvmx_helper_pko3_shutdown(unsigned int node)
 #endif /* CVMX_BUILD_FOR_LINUX_KERNEL */
 	return res;
 }
+EXPORT_SYMBOL(cvmx_helper_pko3_shutdown);

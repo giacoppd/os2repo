@@ -644,7 +644,7 @@ static int __init octeon_wdt_init(void)
 
 	if (OCTEON_IS_MODEL(OCTEON_CN68XX))
 		counter_shift = 9;
-	else if (OCTEON_IS_MODEL(OCTEON_CN78XX))
+	else if (octeon_has_feature(OCTEON_FEATURE_CIU3))
 		counter_shift = 10;
 	else
 		counter_shift = 8;

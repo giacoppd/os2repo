@@ -134,8 +134,11 @@ static void octeon_generic_shutdown(void)
 	secondary_kexec_args[2] = 0UL; /* running on secondary cpu */
 	secondary_kexec_args[3] = (unsigned long)octeon_boot_desc_ptr;
 	/* disable watchdogs */
-	for_each_online_cpu(cpu)
-		cvmx_write_csr(CVMX_CIU_WDOGX(cpu_logical_map(cpu)), 0);
+	for_each_online_cpu(cpu) {
+		int node = cpu_to_node(cpu);
+		unsigned int core = cpu_logical_map(cpu) & 0x3f;
+		cvmx_write_csr_node(node, CVMX_CIU_WDOGX(core), 0);
+	}
 #else
 	cvmx_write_csr(CVMX_CIU_WDOGX(cvmx_get_core_num()), 0);
 #endif
@@ -146,6 +149,7 @@ static void octeon_generic_shutdown(void)
 static void octeon_shutdown(void)
 {
 	octeon_generic_shutdown();
+	octeon_error_tree_shutdown();
 #ifdef CONFIG_SMP
 	smp_call_function(octeon_kexec_smp_down, NULL, 0);
 	smp_wmb();
@@ -159,6 +163,7 @@ static void octeon_shutdown(void)
 static void octeon_crash_shutdown(struct pt_regs *regs)
 {
 	octeon_generic_shutdown();
+	octeon_error_tree_shutdown();
 	default_machine_crash_shutdown(regs);
 }
 

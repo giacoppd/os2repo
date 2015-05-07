@@ -104,6 +104,11 @@ config CS4318_PHY
 	  Currently supports only the Cortina cs4318 PHY.  This may be
 	  configured as either a quad-RXAUI or dual-XAUI device.
 
+config MARVELL_88X3120_PHY
+	tristate "Driver for Marvell 88X3120/88X3140 10GBase-T PHYs"
+	help
+	  Currently supports the 88X3120 PHY.
+
 config ICPLUS_PHY
 	tristate "Drivers for ICPlus PHYs"
 	---help---

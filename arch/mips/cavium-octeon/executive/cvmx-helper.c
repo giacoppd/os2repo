@@ -2496,9 +2496,17 @@ void *cvmx_helper_mem_alloc(int node, uint64_t alloc_size, uint64_t align)
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 	return kmalloc(alloc_size, GFP_NOIO | GFP_DMA);
 #else
-	return cvmx_phys_to_ptr(cvmx_bootmem_phy_alloc_range(alloc_size, align,
-							     cvmx_addr_on_node(node, 0ull),
-							     cvmx_addr_on_node(node, 0xffffffffff)));
+	int64_t paddr;
+
+	paddr = cvmx_bootmem_phy_alloc_range(alloc_size, align,
+				     cvmx_addr_on_node(node, 0ull),
+				     cvmx_addr_on_node(node, 0xffffffffff));
+	if (paddr <= 0ll) {
+		cvmx_printf("ERROR: %s failed size %u\n",
+			__func__, (unsigned) alloc_size);
+		return NULL;
+	}
+	return cvmx_phys_to_ptr(paddr);
 #endif
 }
 
