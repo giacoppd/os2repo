@@ -106,9 +106,9 @@ void cvmx_ipd_convert_to_newcfg(cvmx_ipd_config_t ipd_config)
 			ipd_config.port_config.tag_fields.ipv4_dst_ip;
 	pki_dflt_style[node].tag_cfg.tag_fields.ip_prot_nexthdr = ipd_config.port_config.tag_fields.ipv6_next_header |
 			ipd_config.port_config.tag_fields.ipv4_protocol;
-	pki_dflt_style[node].tag_cfg.tag_fields.layer_d_src = ipd_config.port_config.tag_fields.ipv6_src_port |
+	pki_dflt_style[node].tag_cfg.tag_fields.layer_f_src = ipd_config.port_config.tag_fields.ipv6_src_port |
 			ipd_config.port_config.tag_fields.ipv4_src_port;
-	pki_dflt_style[node].tag_cfg.tag_fields.layer_d_dst = ipd_config.port_config.tag_fields.ipv6_dst_port |
+	pki_dflt_style[node].tag_cfg.tag_fields.layer_f_dst = ipd_config.port_config.tag_fields.ipv6_dst_port |
 			ipd_config.port_config.tag_fields.ipv4_dst_port;
 	pki_dflt_style[node].tag_cfg.tag_fields.input_port = ipd_config.port_config.tag_fields.input_port;
 
