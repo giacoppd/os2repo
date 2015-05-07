@@ -31,6 +31,9 @@
 static int pcie_disable;
 module_param(pcie_disable, int, S_IRUGO);
 
+int cvmx_primary_pcie_bus_number = 1;
+module_param(cvmx_primary_pcie_bus_number, int, S_IRUGO);
+
 static int enable_pcie_14459_war;
 static int enable_pcie_bus_num_war[CVMX_PCIE_MAX_PORTS];
 
@@ -288,7 +291,8 @@ static int octeon_pcie_read_config(struct pci_bus *bus, unsigned int devfn,
 			union cvmx_pciercx_cfg006 pciercx_cfg006;
 			pciercx_cfg006.u32 = cvmx_pcie_cfgx_read_node(pi->node, pi->pem,
 					     CVMX_PCIERCX_CFG006(pi->pem));
-			if (pciercx_cfg006.s.pbnum != bus_number) {
+			if (pciercx_cfg006.s.pbnum
+			    && pciercx_cfg006.s.pbnum != bus_number) {
 				pciercx_cfg006.s.pbnum = bus_number;
 				pciercx_cfg006.s.sbnum = bus_number;
 				pciercx_cfg006.s.subbnum = bus_number;
