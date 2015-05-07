@@ -315,6 +315,24 @@ static void octeon_error_tree_handler78(int node, int intsn)
 	}
 }
 
+int octeon_error_tree_shutdown(void)
+{
+	int i, node;
+
+	if (disable || !octeon_has_feature(OCTEON_FEATURE_CIU3))
+		return 0;
+
+	for_each_online_node(node) {
+		for (i = 0; error_array_cn78xxp1[i].intsn < 0xfffff; i++) {
+			if (error_array_cn78xxp1[i].error_group != CVMX_ERROR_GROUP_ETHERNET)
+				octeon_ciu3_errbits_disable_intsn(node, error_array_cn78xxp1[i].intsn);
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(octeon_error_tree_shutdown);
+
 static int __init octeon_error_tree_init78(void)
 {
 	int i, node;

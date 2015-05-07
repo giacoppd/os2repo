@@ -42,7 +42,7 @@
  *
  * Helper utilities for qlm.
  *
- * <hr>$Revision: 107050 $<hr>
+ * <hr>$Revision: 113334 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/cvmx.h>
@@ -1286,9 +1286,21 @@ void __cvmx_qlm_set_mult(int qlm, int baud_mhz, int old_multiplier)
 enum cvmx_qlm_mode cvmx_qlm_get_mode_cn78xx(int node, int qlm)
 {
 	cvmx_gserx_cfg_t gserx_cfg;
+#ifdef CVMX_BUILD_FOR_UBOOT
+	int qlm_mode[2][9] = {
+		{-1, -1, -1, -1, -1, -1, -1, -1},
+		{-1, -1, -1, -1, -1, -1, -1, -1} };
+#else
+	static int qlm_mode[2][9] = {
+		{-1, -1, -1, -1, -1, -1, -1, -1},
+		{-1, -1, -1, -1, -1, -1, -1, -1} };
+#endif
 
 	if (qlm >= 8)
 		return CVMX_QLM_MODE_OCI;
+
+	if (qlm_mode[node][qlm] != -1)
+		return qlm_mode[node][qlm];
 
 	gserx_cfg.u64 = cvmx_read_csr_node(node, CVMX_GSERX_CFG(qlm));
 	if (gserx_cfg.s.pcie) {
@@ -1299,47 +1311,52 @@ enum cvmx_qlm_mode cvmx_qlm_get_mode_cn78xx(int node, int qlm)
 			cvmx_pemx_cfg_t pemx_cfg;
 			pemx_cfg.u64 = cvmx_read_csr_node(node, CVMX_PEMX_CFG(0));
 			if (pemx_cfg.cn78xx.lanes8)
-				return CVMX_QLM_MODE_PCIE_1X8; /* PEM0 x8 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE_1X8; /* PEM0 x8 */
 			else
-				return CVMX_QLM_MODE_PCIE;     /* PEM0 x4 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE;     /* PEM0 x4 */
+			break;
 		}
 		case 2: /* Either PEM2 x4 or PEM2 x8 */
 		{
 			cvmx_pemx_cfg_t pemx_cfg;
 			pemx_cfg.u64 = cvmx_read_csr_node(node, CVMX_PEMX_CFG(2));
 			if (pemx_cfg.cn78xx.lanes8)
-				return CVMX_QLM_MODE_PCIE_1X8;  /* PEM2 x8 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE_1X8;  /* PEM2 x8 */
 			else
-				return CVMX_QLM_MODE_PCIE;      /* PEM2 x4 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE;      /* PEM2 x4 */
+			break;
 		}
 		case 3: /* Either PEM2 x8 or PEM3 x4 or PEM3 x8 */
 		{
 			cvmx_pemx_cfg_t pemx_cfg;
 			pemx_cfg.u64 = cvmx_read_csr_node(node, CVMX_PEMX_CFG(2));
 			if (pemx_cfg.cn78xx.lanes8)
-				return CVMX_QLM_MODE_PCIE_1X8;  /* PEM2 x8 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE_1X8;  /* PEM2 x8 */
 
 			/* Can be first 4 lanes of PEM3 */
 			pemx_cfg.u64 = cvmx_read_csr_node(node, CVMX_PEMX_CFG(3));
 			if (pemx_cfg.cn78xx.lanes8)
-				return CVMX_QLM_MODE_PCIE_1X8;  /* PEM3 x8 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE_1X8;  /* PEM3 x8 */
 			else
-				return CVMX_QLM_MODE_PCIE; /* PEM2 x4 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE; /* PEM2 x4 */
+			break;
 		}
 		case 4: /* Either PEM3 x8 or PEM3 x4 */
 		{
 			cvmx_pemx_cfg_t pemx_cfg;
 			pemx_cfg.u64 = cvmx_read_csr_node(node, CVMX_PEMX_CFG(3));
 			if (pemx_cfg.cn78xx.lanes8)
-				return CVMX_QLM_MODE_PCIE_1X8; /* PEM3 x8 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE_1X8; /* PEM3 x8 */
 			else
-				return CVMX_QLM_MODE_PCIE; /* PEM3 x4 */
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_PCIE; /* PEM3 x4 */
+			break;
 		}
 		default:
-			return CVMX_QLM_MODE_DISABLED;
+			qlm_mode[node][qlm] = CVMX_QLM_MODE_DISABLED;
+			break;
 		}
 	} else if (gserx_cfg.s.ila) {
-		return CVMX_QLM_MODE_ILK;
+		qlm_mode[node][qlm] = CVMX_QLM_MODE_ILK;
 	} else if (gserx_cfg.s.bgx) {
 		cvmx_bgxx_cmrx_config_t cmr_config;
 		cvmx_bgxx_spux_br_pmd_control_t pmd_control;
@@ -1349,25 +1366,43 @@ enum cvmx_qlm_mode cvmx_qlm_get_mode_cn78xx(int node, int qlm)
 		pmd_control.u64 = cvmx_read_csr_node(node, CVMX_BGXX_SPUX_BR_PMD_CONTROL(0, bgx));
 		
 		switch(cmr_config.s.lmac_type) {
-		case 0: return CVMX_QLM_MODE_SGMII;
-		case 1:	return CVMX_QLM_MODE_XAUI;
-		case 2:	return CVMX_QLM_MODE_RXAUI;
+		case 0:
+			qlm_mode[node][qlm] = CVMX_QLM_MODE_SGMII;
+			break;
+		case 1:
+			qlm_mode[node][qlm] = CVMX_QLM_MODE_XAUI;
+			break;
+		case 2:
+			qlm_mode[node][qlm] = CVMX_QLM_MODE_RXAUI;
+			break;
 		case 3:	
 			/* Use training to determine if we're in 10GBASE-KR or XFI */
 			if (pmd_control.s.train_en)
-				return CVMX_QLM_MODE_10G_KR;
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_10G_KR;
 			else
-				return CVMX_QLM_MODE_XFI;
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_XFI;
+			pmd_control.s.train_en = 0;
+			cvmx_write_csr_node(node,
+				CVMX_BGXX_SPUX_BR_PMD_CONTROL(0, bgx), pmd_control.u64);
+			break;
 		case 4:	
 			/* Use training to determine if we're in 10GBASE-KR or XFI */
 			if (pmd_control.s.train_en)
-				return CVMX_QLM_MODE_40G_KR4;
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_40G_KR4;
 			else
-				return CVMX_QLM_MODE_XLAUI;
-		default: return CVMX_QLM_MODE_DISABLED;
+				qlm_mode[node][qlm] = CVMX_QLM_MODE_XLAUI;
+			pmd_control.s.train_en = 0;
+			cvmx_write_csr_node(node,
+				CVMX_BGXX_SPUX_BR_PMD_CONTROL(0, bgx), pmd_control.u64);
+			break;
+		default:
+			qlm_mode[node][qlm] = CVMX_QLM_MODE_DISABLED;
+			break;
 		}
 	} else
-		return CVMX_QLM_MODE_DISABLED;
+		qlm_mode[node][qlm] = CVMX_QLM_MODE_DISABLED;
+
+	return qlm_mode[node][qlm];
 }
 
 /*

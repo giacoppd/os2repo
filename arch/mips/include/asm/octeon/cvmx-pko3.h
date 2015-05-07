@@ -57,6 +57,7 @@ extern "C" {
 #include <asm/octeon/cvmx-helper.h>
 #include <asm/octeon/cvmx-pko3-queue.h>
 #include <asm/octeon/cvmx-ilk.h>
+#include <asm/octeon/cvmx-pow.h>
 #include <asm/octeon/cvmx-scratch.h>
 #include <asm/octeon/cvmx-atomic.h>
 #else
@@ -64,6 +65,7 @@ extern "C" {
 #include "cvmx-pko3-queue.h"
 #include "cvmx-helper.h"
 #include "cvmx-ilk.h"
+#include "cvmx-pow.h"
 #include "cvmx-scratch.h"
 #include "cvmx-atomic.h"
 #endif
@@ -439,7 +441,7 @@ cvmx_pko3_cvmseg_addr(void)
  * NOTE: Internal use only.
  */
 static inline cvmx_pko_query_rtn_t
-__cvmx_pko3_lmtdma(uint8_t node, uint16_t dq, unsigned numwords)
+__cvmx_pko3_lmtdma(uint8_t node, uint16_t dq, unsigned numwords, bool tag_wait)
 {
 	const enum cvmx_pko_dqop dqop = CVMX_PKO_DQ_SEND;
 	cvmx_pko_query_rtn_t pko_status;
@@ -499,6 +501,10 @@ __cvmx_pko3_lmtdma(uint8_t node, uint16_t dq, unsigned numwords)
 
 	/* Barrier: make sure all prior writes complete before the following */
 	CVMX_SYNCWS;
+
+	/* Wait to finish tag switch just before issueing LMTDMA */
+	if (tag_wait)
+		cvmx_pow_tag_sw_wait();
 
 	/* issue PKO DMA */
 	cvmx_write64_uint64(dma_addr, pko_send_dma_data.u64);
@@ -704,7 +710,7 @@ cvmx_pko3_xmit_link_buf(int dq,cvmx_buf_ptr_pki_t pki_ptr,
 	}
 
 	/* Do LMTDMA */
-	pko_status = __cvmx_pko3_lmtdma(node, dq, nwords);
+	pko_status = __cvmx_pko3_lmtdma(node, dq, nwords, false);
 
 	if (cvmx_likely(pko_status.s.dqstatus == PKO_DQSTATUS_PASS))
 		return 0;
