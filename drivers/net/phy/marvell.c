@@ -1016,6 +1016,7 @@ static struct phy_driver marvell_drivers[] = {
 		.read_status = &genphy_read_status,
 		.ack_interrupt = &marvell_ack_interrupt,
 		.config_intr = &marvell_config_intr,
+		.did_interrupt = m88e1121_did_interrupt,
 		.resume = &genphy_resume,
 		.suspend = &genphy_suspend,
 		.driver = { .owner = THIS_MODULE },

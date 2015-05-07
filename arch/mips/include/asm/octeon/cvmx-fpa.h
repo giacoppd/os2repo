@@ -42,7 +42,7 @@
  *
  * Interface to the hardware Free Pool Allocator.
  *
- * <hr>$Revision: 107050 $<hr>
+ * <hr>$Revision: 113671 $<hr>
  *
  */
 
@@ -292,6 +292,8 @@ extern int cvmx_fpa_is_pool_available(int pool_num);
 extern uint64_t cvmx_fpa_get_pool_owner(int pool_num);
 extern int cvmx_fpa_get_max_pools(void);
 extern int cvmx_fpa_get_current_count(int pool_num);
+extern int cvmx_fpa_validate_pool(int pool);
+
 
 #ifdef	__cplusplus
 /* *INDENT-OFF* */

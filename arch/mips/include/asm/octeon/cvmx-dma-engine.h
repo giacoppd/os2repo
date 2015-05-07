@@ -1,5 +1,5 @@
 /***********************license start***************
- * Copyright (c) 2003-2014  Cavium Inc. (support@cavium.com). All rights
+ * Copyright (c) 2003-2015  Cavium Inc. (support@cavium.com). All rights
  * reserved.
  *
  *
@@ -43,7 +43,7 @@
  * Interface to the PCI / PCIe DMA engines. These are only avialable
  * on chips with PCI / PCIe.
  *
- * <hr>$Revision: 103822 $<hr>
+ * <hr>$Revision: 113328 $<hr>
  */
 
 #ifndef __CVMX_DMA_ENGINES_H__
@@ -539,7 +539,7 @@ static inline int cvmx_dma_engine_memcpy(int engine, void *dest, void *source, i
 {
 	cvmx_dma_engine_header_t header;
 	header.word0.u64 = 0;
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
+	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		header.word1.u64 = 0;
 		header.word0.cn78xx.type = CVMX_DMA_ENGINE_TRANSFER_INTERNAL;
 		header.word0.cn78xx.aura = cvmx_fpa_get_dma_pool(); /* FIXME: get aura from resources */
@@ -568,7 +568,7 @@ static inline int cvmx_dma_engine_memcpy(int engine, void *dest, void *source, i
 {
 	cvmx_dma_engine_header_t header;
 	header.word0.u64 = 0;
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
+	if (octeon_has_feature(OCTEON_FEATURE_CN78XX_WQE)) {
 		header.word1.u64 = 0;
 		header.word0.cn78xx.type = CVMX_DMA_ENGINE_TRANSFER_INTERNAL;
 	} else
