@@ -818,6 +818,7 @@ config MIPS_PARAVIRT
 	select SYS_HAS_CPU_CAVIUM_OCTEON
 	select HW_HAS_PCI
 	select SWAP_IO_SPACE
+	select ARCH_SUPPORTS_MSI
 	help
 	 This option supports guest running under ????
 

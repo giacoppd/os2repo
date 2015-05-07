@@ -43,7 +43,7 @@
  * File defining functions for working with different Octeon
  * models.
  *
- * <hr>$Revision: 105060 $<hr>
+ * <hr>$Revision: 113335 $<hr>
  */
 #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
 #include <asm/octeon/octeon.h>
@@ -440,6 +440,8 @@ const char *octeon_model_get_string_buffer(uint32_t chip_id, char *buffer)
 			suffix = "AAP";
 		break;
 	case 0x95:		/* CN78XX */
+		if (num_cores == 6)	/* Other core counts match generic */
+			core_model = "35";
 		if (OCTEON_IS_MODEL(OCTEON_CN76XX))
 			family = "76";
 		else

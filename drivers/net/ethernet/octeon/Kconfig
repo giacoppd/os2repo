@@ -59,6 +59,7 @@ config OCTEON_MGMT_ETHERNET
 	select MDIO_OCTEON
 	select NET_VENDOR_OCTEON
 	select OCTEON_ETHERNET_COMMON
+	select OCTEON_BGX_PORT
 	default y
 	---help---
 	  This option enables the ethernet driver for the management

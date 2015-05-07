@@ -43,7 +43,7 @@
  * Implementation of the Level 2 Cache (L2C) control,
  * measurement, and debugging facilities.
  *
- * <hr>$Revision: 106657 $<hr>
+ * <hr>$Revision: 113624 $<hr>
  *
  */
 
@@ -114,13 +114,15 @@ int cvmx_l2c_set_core_way_partition(uint32_t core, uint32_t mask)
 	uint32_t valid_mask;
 	int node = cvmx_get_node_num();
 
-	valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
+	if (OCTEON_IS_OCTEON1PLUS()) {
+		valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
 
-	mask &= valid_mask;
+		mask &= valid_mask;
 
-	/* A UMSK setting which blocks all L2C Ways is an error on some chips */
-	if (mask == valid_mask && (OCTEON_IS_OCTEON1PLUS()))
-		return -1;
+		/* A UMSK setting which blocks all L2C Ways is an error on some chips */
+		if (mask == valid_mask)
+			return -1;
+	}
 
 	/* Validate the core number */
 	if (core >= cvmx_octeon_num_cores())
@@ -164,12 +166,14 @@ int cvmx_l2c_set_hw_way_partition(uint32_t mask)
 	uint32_t valid_mask;
 	int node = cvmx_get_node_num();
 
-	valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
-	mask &= valid_mask;
+	if (OCTEON_IS_OCTEON1PLUS()) {
+		valid_mask = (0x1 << cvmx_l2c_get_num_assoc()) - 1;
+		mask &= 0xffff;
 
-	/* A UMSK setting which blocks all L2C Ways is an error on some chips */
-	if (mask == valid_mask && OCTEON_IS_OCTEON1PLUS())
-		return -1;
+		/* A UMSK setting which blocks all L2C Ways is an error on some chips */
+		if (mask == valid_mask)
+			return -1;
+	}
 
 	if (OCTEON_IS_OCTEON2() || OCTEON_IS_OCTEON3())
 		cvmx_write_csr_node(node, CVMX_L2C_WPAR_IOBX(0), mask);
@@ -1102,8 +1106,10 @@ int cvmx_l2c_get_num_assoc(void)
 	/* Check to see if part of the cache is disabled */
 	if (OCTEON_IS_OCTEON2() || OCTEON_IS_MODEL(OCTEON_CN78XX)) {
 		union cvmx_mio_fus_dat3 mio_fus_dat3;
+		union cvmx_l2c_wpar_iobx l2c_wpar_iob;
 
 		mio_fus_dat3.u64 = cvmx_read_csr(CVMX_MIO_FUS_DAT3);
+		l2c_wpar_iob.u64 = cvmx_read_csr(CVMX_L2C_WPAR_IOBX(0));
 		/*
 		 * cvmx_mio_fus_dat3.s.l2c_crip fuses map as follows
 		 * <2> will be not used for 63xx
@@ -1123,6 +1129,8 @@ int cvmx_l2c_get_num_assoc(void)
 			l2_assoc = 8;
 		else if (mio_fus_dat3.cn63xx.l2c_crip == 1)
 			l2_assoc = 12;
+		else if (l2c_wpar_iob.s.mask)
+			l2_assoc = cvmx_dpop(~(l2c_wpar_iob.s.mask) & 0xffff);
 	} else if (!OCTEON_IS_OCTEON3()) {
 		union cvmx_l2d_fus3 val;
 		val.u64 = cvmx_read_csr(CVMX_L2D_FUS3);
