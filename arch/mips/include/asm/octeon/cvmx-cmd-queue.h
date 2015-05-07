@@ -82,11 +82,13 @@
  * internal cycle counter to completely eliminate any causes of
  * bus traffic.
  *
- * <hr> $Revision: 103822 $ <hr>
+ * <hr> $Revision: 113619 $ <hr>
  */
 
 #ifndef __CVMX_CMD_QUEUE_H__
 #define __CVMX_CMD_QUEUE_H__
+
+#include "cvmx-atomic.h"
 
 #ifdef	__cplusplus
 /* *INDENT-OFF* */
@@ -102,6 +104,8 @@ extern "C" {
 #ifndef CVMX_CMD_QUEUE_ENABLE_MAX_DEPTH
 #define CVMX_CMD_QUEUE_ENABLE_MAX_DEPTH 0
 #endif
+
+#define	NUM_ELEMENTS(arr) (sizeof(arr)/sizeof((arr)[0]))
 
 /**
  * Enumeration representing all hardware blocks that use command
@@ -124,6 +128,9 @@ typedef enum {
 	CVMX_CMD_QUEUE_END = 0x70000,
 } cvmx_cmd_queue_id_t;
 
+#define CVMX_CMD_QUEUE_ZIP3_QUE(node,queue) \
+  ((cvmx_cmd_queue_id_t)((node) << 24 | CVMX_CMD_QUEUE_ZIP | (0xffff&(queue))))
+
 /**
  * Command write operations can fail if the command queue needs
  * a new buffer and the associated FPA pool is empty. It can also
@@ -140,29 +147,37 @@ typedef enum {
 
 typedef struct {
 #ifdef __BIG_ENDIAN_BITFIELD
-	uint32_t now_serving;	    /**< You have lock when this is your ticket */
-	uint32_t max_depth;	    /**< Maximum outstanding command words */
-
-	uint64_t fpa_pool:3;	    /**< FPA pool buffers come from */
-	uint64_t base_ptr_div128:33;
-				    /**< Top of command buffer pointer shifted 7 */
-	uint64_t unused2:2;
-	uint64_t pool_size_m1:13;
-				    /**< FPA buffer size in 64bit words minus 1 */
-	uint64_t index:13;	    /**< Number of commands already used in buffer */
+	/* First 64-bit word: */
+	uint64_t fpa_pool:16;		/**< FPA1:POOL/FPA3:GAURA for buffers */
+	uint64_t base_paddr:48;		/**< command buffer physical address */
+	/* Second 64-bit word: */
+	int32_t index;			/**< Number of cmd words in buffer */
+	uint16_t max_depth;		/**< Maximum outstanding blocks */
+	uint16_t pool_size_m1;		/**< FPA buffer size in dwords - 1 */
 #else
-	uint32_t max_depth;
-	uint32_t now_serving;
-
-	uint64_t index:13;
-	uint64_t pool_size_m1:13;
-	uint64_t unused2:2;
-	uint64_t base_ptr_div128:33;
-	uint64_t fpa_pool:3;
+	/* First 64-bit word: */
+	uint64_t base_paddr:48;
+	uint64_t fpa_pool:16;
+	/* Second 64-bit word: */
+	uint16_t pool_size_m1;
+	uint16_t max_depth;
+	int32_t index;
 #endif
 } __cvmx_cmd_queue_state_t;
 
 /**
+ * command-queue locking uses a fair ticket spinlock algo,
+ * with 64-bit tickets for endianness-neutrality and
+ * counter overflow protection.
+ * Lock is free when both counters are of equal value.
+ */
+typedef struct {
+	uint64_t ticket;
+	uint64_t now_serving;
+} __cvmx_cmd_queue_lock_t;
+
+/**
+ * @INTERNAL
  * This structure contains the global state of all command queues.
  * It is stored in a bootmem named block and shared by all
  * applications running on Octeon. Tickets are stored in a different
@@ -171,9 +186,24 @@ typedef struct {
  * of queue state causes the ll/sc to fail quite often.
  */
 typedef struct {
-	uint64_t ticket[(CVMX_CMD_QUEUE_END >> 16) * 256];
+	__cvmx_cmd_queue_lock_t lock[(CVMX_CMD_QUEUE_END >> 16) * 256];
 	__cvmx_cmd_queue_state_t state[(CVMX_CMD_QUEUE_END >> 16) * 256];
 } __cvmx_cmd_queue_all_state_t;
+
+extern CVMX_SHARED __cvmx_cmd_queue_all_state_t *
+__cvmx_cmd_queue_state_ptrs[CVMX_MAX_NODES];
+
+/**
+ * @INTERNAL
+ * Internal function to handle the corner cases
+ * of adding command words to a queue when the current
+ * block is getting full.
+ */
+extern cvmx_cmd_queue_result_t
+		__cvmx_cmd_queue_write_raw(cvmx_cmd_queue_id_t queue_id,
+			__cvmx_cmd_queue_state_t *qptr,
+			int cmd_count, const uint64_t *cmds);
+
 
 /**
  * Initialize a command queue for use. The initial FPA buffer is
@@ -226,13 +256,19 @@ void *cvmx_cmd_queue_buffer(cvmx_cmd_queue_id_t queue_id);
 
 /**
  * @INTERNAL
+ * Retreive or allocate command queue state named block
+ */
+extern cvmx_cmd_queue_result_t __cvmx_cmd_queue_init_state_ptr(unsigned node);
+
+/**
+ * @INTERNAL
  * Get the index into the state arrays for the supplied queue id.
  *
  * @param queue_id Queue ID to get an index for
  *
  * @return Index into the state arrays
  */
-static inline int __cvmx_cmd_queue_get_index(cvmx_cmd_queue_id_t queue_id)
+static inline unsigned __cvmx_cmd_queue_get_index(cvmx_cmd_queue_id_t queue_id)
 {
 	/* Warning: This code currently only works with devices that have 256
 	 * queues or less.  Devices with more than 16 queues are laid out in
@@ -240,10 +276,16 @@ static inline int __cvmx_cmd_queue_get_index(cvmx_cmd_queue_id_t queue_id)
 	 * cache thrashing when you are running 16 queues per port to support
 	 * lockless operation
 	 */
-	int unit = queue_id >> 16;
-	int q = (queue_id >> 4) & 0xf;
-	int core = queue_id & 0xf;
-	return unit * 256 + core * 16 + q;
+	unsigned unit = (queue_id >> 16) & 0xff;
+	unsigned q = (queue_id >> 4) & 0xf;
+	unsigned core = queue_id & 0xf;
+	return (unit << 8) | (core << 4) | q;
+}
+
+static inline int __cvmx_cmd_queue_get_node(cvmx_cmd_queue_id_t queue_id)
+{
+	unsigned node = queue_id >> 24;
+	return node;
 }
 
 /**
@@ -254,41 +296,39 @@ static inline int __cvmx_cmd_queue_get_index(cvmx_cmd_queue_id_t queue_id)
  * @param queue_id Queue ID to lock
  * @param qptr     Pointer to the queue's global state
  */
-static inline void __cvmx_cmd_queue_lock(cvmx_cmd_queue_id_t queue_id,
-					 __cvmx_cmd_queue_state_t *qptr)
+static inline void __cvmx_cmd_queue_lock(cvmx_cmd_queue_id_t queue_id)
 {
 #ifndef __U_BOOT__
-	extern CVMX_SHARED __cvmx_cmd_queue_all_state_t *__cvmx_cmd_queue_state_ptr;
-	int tmp;
-	int my_ticket;
-	CVMX_PREFETCH(qptr, 0);
+	__cvmx_cmd_queue_lock_t *lock_ptr;
+	unsigned node;
+	uint64_t tmp;
+	uint64_t my_ticket;
+
+	tmp = __cvmx_cmd_queue_get_index(queue_id);
+	node = __cvmx_cmd_queue_get_node(queue_id);
+	lock_ptr = &__cvmx_cmd_queue_state_ptrs[node]->lock[tmp];
+
 	asm volatile (".set push\n"
 		      ".set noreorder\n"
+		      /* Atomic incremebt of 'ticket' with LL/SC */
 		      "1:\n"
 		      "lld     %[my_ticket], %[ticket_ptr]\n"
-		      /* Atomic add one to ticket_ptr 64-bit operation for
-		       * endian nutral access.
-		       */
 		      "daddiu  %[ticket], %[my_ticket], 1\n"
-		      /*    and store the original value  in my_ticket */
 		      "scd     %[ticket], %[ticket_ptr]\n"
-		      "beqz   %[ticket], 1b\n"
-		      " sll	%[my_ticket],%[my_ticket],0\n"        /* truncate to 32 bits */
-		      "lw    %[ticket], %[now_serving]\n"	/* Load the current now_serving ticket */
+		      "beqz    %[ticket], 1b\n"
+		      " lld    %[ticket], %[now_serving]\n"
 		      "2:\n"
-		      "beq    %[ticket], %[my_ticket], 4f\n"	/* Jump out if now_serving == my_ticket */
-		      " subu   %[ticket], %[my_ticket], %[ticket]\n"	/* Find out how many tickets are in front of me */
-		      "subu  %[ticket], 1\n"	/* Use tickets in front of me minus one to delay */
-		      "sll   %[ticket], %[ticket], 5\n"	/* Delay will be ((tickets in front)-1)*32 loops */
-		      "3:\n"
-		      "bnez   %[ticket], 3b\n"	/* Loop here until our ticket might be up */
-		      " subu  %[ticket], 1\n"
-		      "b      2b\n"	/* Jump back up to check out ticket again */
-		      " lw    %[ticket], %[now_serving]\n"	/* Load the current now_serving ticket */
-		      "4:\n"
+                      /* Wait until 'now_serving == ticket' with LL/PAUSE */
+                      "beq    %[ticket], %[my_ticket], 3f\n"
+                      " nop\n pause\n"  /* PAUSE is not allowed in delay slot */
+                      "b      2b\n"     /* check now_serving again */
+                      " lld    %[ticket], %[now_serving]\n"
+	              "3:\n"
 		      ".set pop\n"
-		      : [ticket_ptr] "=m"(__cvmx_cmd_queue_state_ptr->ticket[__cvmx_cmd_queue_get_index(queue_id)]),
-		      [now_serving] "=m"(qptr->now_serving),[ticket] "=&r"(tmp),[my_ticket] "=&r"(my_ticket)
+                      : [ticket_ptr] "=m"(lock_ptr->ticket),
+                      [now_serving] "=m"(lock_ptr->now_serving),
+                      [ticket] "=&r"(tmp),
+                      [my_ticket] "=&r"(my_ticket)
 	    );
 #endif
 }
@@ -299,16 +339,43 @@ static inline void __cvmx_cmd_queue_lock(cvmx_cmd_queue_id_t queue_id,
  *
  * @param qptr   Queue to unlock
  */
-static inline void __cvmx_cmd_queue_unlock(__cvmx_cmd_queue_state_t *qptr)
+static inline void __cvmx_cmd_queue_unlock(cvmx_cmd_queue_id_t queue_id)
 {
 #ifndef __U_BOOT__
-	uint32_t ns;
+	__cvmx_cmd_queue_lock_t *lock_ptr;
+	uint64_t *ns_ptr;
+	uint64_t ns;
+	unsigned node;
+	int tmp;
 
-	ns = qptr->now_serving + 1;
-	CVMX_SYNCWS;		/* Order queue manipulation with respect to the unlock.  */
-	qptr->now_serving = ns;
-	CVMX_SYNCWS;		/* nudge out the unlock. */
+	/* Order queue manipulation with respect to the unlock.  */
+	CVMX_SYNCWS;
+
+	tmp = __cvmx_cmd_queue_get_index(queue_id);
+	node = __cvmx_cmd_queue_get_node(queue_id);
+
+	lock_ptr = &__cvmx_cmd_queue_state_ptrs[node]->lock[tmp];
+	ns_ptr = &lock_ptr->now_serving;
+
+	/* Incremebt 'now_sercving to allow next contender in */
+	ns = (*ns_ptr) + 1;
+	(*ns_ptr) = ns;
 #endif
+	CVMX_SYNCWS;            /* nudge out the unlock. */
+}
+
+/**
+ * @INTERNAL
+ * Initialize a command-queue lock to "unlocked" state.
+ */
+static inline void __cvmx_cmd_queue_lock_init(cvmx_cmd_queue_id_t queue_id)
+{
+	unsigned index = __cvmx_cmd_queue_get_index(queue_id);
+	unsigned node = __cvmx_cmd_queue_get_node(queue_id);
+
+	__cvmx_cmd_queue_state_ptrs[node]->lock[index] =
+			(__cvmx_cmd_queue_lock_t){0, 0};
+	CVMX_SYNCWS;
 }
 
 /**
@@ -322,21 +389,24 @@ static inline void __cvmx_cmd_queue_unlock(__cvmx_cmd_queue_state_t *qptr)
 static inline __cvmx_cmd_queue_state_t *
 __cvmx_cmd_queue_get_state(cvmx_cmd_queue_id_t queue_id)
 {
-	extern CVMX_SHARED __cvmx_cmd_queue_all_state_t *__cvmx_cmd_queue_state_ptr;
+	unsigned index;
+	unsigned node;
+	__cvmx_cmd_queue_state_t *qptr;
+
 	if (CVMX_ENABLE_PARAMETER_CHECKING) {
 		if (cvmx_unlikely(queue_id >= CVMX_CMD_QUEUE_END))
 			return NULL;
 		if (cvmx_unlikely((queue_id & 0xffff) >= 256))
 			return NULL;
 	}
-	return &__cvmx_cmd_queue_state_ptr->state[__cvmx_cmd_queue_get_index(queue_id)];
-}
+	node = __cvmx_cmd_queue_get_node(queue_id);
+	index = __cvmx_cmd_queue_get_index(queue_id);
 
-static inline uint64_t *__cvmx_cmd_queue_alloc_buffer(int pool)
-{
-	uint64_t *new_buffer;
-	new_buffer = cvmx_fpa_alloc(pool);
-	return new_buffer;
+	if (cvmx_unlikely(__cvmx_cmd_queue_state_ptrs[node] == NULL))
+		__cvmx_cmd_queue_init_state_ptr(node);
+
+	qptr = &__cvmx_cmd_queue_state_ptrs[node]->state[index];
+	return qptr;
 }
 
 /**
@@ -355,9 +425,12 @@ static inline uint64_t *__cvmx_cmd_queue_alloc_buffer(int pool)
  * @return CVMX_CMD_QUEUE_SUCCESS or a failure code
  */
 static inline cvmx_cmd_queue_result_t
-cvmx_cmd_queue_write(cvmx_cmd_queue_id_t queue_id, int use_locking,
-		     int cmd_count, uint64_t *cmds)
+cvmx_cmd_queue_write(cvmx_cmd_queue_id_t queue_id, bool use_locking,
+		    int cmd_count, const uint64_t *cmds)
 {
+	cvmx_cmd_queue_result_t ret = CVMX_CMD_QUEUE_SUCCESS;
+	uint64_t *cmd_ptr;
+
 	__cvmx_cmd_queue_state_t *qptr = __cvmx_cmd_queue_get_state(queue_id);
 
 	if (CVMX_ENABLE_PARAMETER_CHECKING) {
@@ -371,68 +444,34 @@ cvmx_cmd_queue_write(cvmx_cmd_queue_id_t queue_id, int use_locking,
 
 	/* Make sure nobody else is updating the same queue */
 	if (cvmx_likely(use_locking))
-		__cvmx_cmd_queue_lock(queue_id, qptr);
+		__cvmx_cmd_queue_lock(queue_id);
 
-	/* If a max queue length was specified then make sure we don't
-	   exceed it. If any part of the command would be below the limit
-	   we allow it */
-	if (CVMX_CMD_QUEUE_ENABLE_MAX_DEPTH && cvmx_unlikely(qptr->max_depth)) {
-		if (cvmx_unlikely(cvmx_cmd_queue_length(queue_id) > (int)qptr->max_depth)) {
-			if (cvmx_likely(use_locking))
-				__cvmx_cmd_queue_unlock(qptr);
-			return CVMX_CMD_QUEUE_FULL;
-		}
-	}
-
-	/* Normally there is plenty of room in the current buffer for the command */
-	if (cvmx_likely(qptr->index + cmd_count < qptr->pool_size_m1)) {
-		uint64_t *ptr = (uint64_t *) cvmx_phys_to_ptr((uint64_t) qptr->base_ptr_div128 << 7);
-		ptr += qptr->index;
-		qptr->index += cmd_count;
-		while (cmd_count--)
-			*ptr++ = *cmds++;
+	/* Most of the time there is lots of free words in current block */
+	if (cvmx_unlikely(
+	    (qptr->index + cmd_count) >= qptr->pool_size_m1)) {
+		/* The rare case when nearing end of block */
+		ret = __cvmx_cmd_queue_write_raw(queue_id, qptr,
+			cmd_count, cmds);
 	} else {
-		uint64_t *ptr;
-		int count;
-		/* We need a new command buffer. Fail if there isn't one available */
-		uint64_t *new_buffer = __cvmx_cmd_queue_alloc_buffer(qptr->fpa_pool);
-		if (cvmx_unlikely(new_buffer == NULL)) {
-			if (cvmx_likely(use_locking))
-				__cvmx_cmd_queue_unlock(qptr);
-			return CVMX_CMD_QUEUE_NO_MEMORY;
+		cmd_ptr = cvmx_phys_to_ptr((uint64_t) qptr->base_paddr);
+		/* Loop easy for compiler to unroll for the likely case */
+		while (cmd_count > 0) {
+			cmd_ptr[ qptr->index ++ ] = *cmds++;
+			cmd_count --;
 		}
-		ptr = (uint64_t *) cvmx_phys_to_ptr((uint64_t) qptr->base_ptr_div128 << 7);
-		/* Figure out how many command words will fit in this buffer.
-		 * One location will be needed for the next buffer pointer
-		 */
-		count = qptr->pool_size_m1 - qptr->index;
-		ptr += qptr->index;
-		cmd_count -= count;
-		while (count--)
-			*ptr++ = *cmds++;
-		*ptr = cvmx_ptr_to_phys(new_buffer);
-		/* The current buffer is full and has a link to the next buffer.
-		 * Time to write the rest of the commands into the new buffer
-		 */
-		qptr->base_ptr_div128 = *ptr >> 7;
-		qptr->index = cmd_count;
-		ptr = new_buffer;
-		while (cmd_count--)
-			*ptr++ = *cmds++;
 	}
 
 	/* All updates are complete. Release the lock and return */
 	if (cvmx_likely(use_locking))
-		__cvmx_cmd_queue_unlock(qptr);
-#ifdef __U_BOOT__
-	CVMX_SYNCWS;
-#endif
-	return CVMX_CMD_QUEUE_SUCCESS;
+		__cvmx_cmd_queue_unlock(queue_id);
+	else
+		CVMX_SYNCWS;
+
+	return ret;
 }
 
 /**
- * Simple function to write two command words to a command
- * queue.
+ * Simple function to write two command words to a command queue.
  *
  * @param queue_id Hardware command queue to write to
  * @param use_locking
@@ -445,9 +484,12 @@ cvmx_cmd_queue_write(cvmx_cmd_queue_id_t queue_id, int use_locking,
  * @return CVMX_CMD_QUEUE_SUCCESS or a failure code
  */
 static inline cvmx_cmd_queue_result_t
-cvmx_cmd_queue_write2(cvmx_cmd_queue_id_t queue_id, int use_locking,
+cvmx_cmd_queue_write2(cvmx_cmd_queue_id_t queue_id, bool use_locking,
 		      uint64_t cmd1, uint64_t cmd2)
 {
+	cvmx_cmd_queue_result_t ret = CVMX_CMD_QUEUE_SUCCESS;
+	uint64_t *cmd_ptr;
+
 	__cvmx_cmd_queue_state_t *qptr = __cvmx_cmd_queue_get_state(queue_id);
 
 	if (CVMX_ENABLE_PARAMETER_CHECKING) {
@@ -457,64 +499,34 @@ cvmx_cmd_queue_write2(cvmx_cmd_queue_id_t queue_id, int use_locking,
 
 	/* Make sure nobody else is updating the same queue */
 	if (cvmx_likely(use_locking))
-		__cvmx_cmd_queue_lock(queue_id, qptr);
+		__cvmx_cmd_queue_lock(queue_id);
 
-	/* If a max queue length was specified then make sure we don't
-	   exceed it. If any part of the command would be below the limit
-	   we allow it */
-	if (CVMX_CMD_QUEUE_ENABLE_MAX_DEPTH && cvmx_unlikely(qptr->max_depth)) {
-		if (cvmx_unlikely(cvmx_cmd_queue_length(queue_id) > (int)qptr->max_depth)) {
-			if (cvmx_likely(use_locking))
-				__cvmx_cmd_queue_unlock(qptr);
-			return CVMX_CMD_QUEUE_FULL;
-		}
-	}
-
-	/* Normally there is plenty of room in the current buffer for the command */
-	if (cvmx_likely(qptr->index + 2 < qptr->pool_size_m1)) {
-		uint64_t *ptr = (uint64_t *) cvmx_phys_to_ptr((uint64_t) qptr->base_ptr_div128 << 7);
-		ptr += qptr->index;
-		qptr->index += 2;
-		ptr[0] = cmd1;
-		ptr[1] = cmd2;
+	if (cvmx_unlikely((qptr->index + 2) >= qptr->pool_size_m1)) {
+		/* The rare case when nearing end of block */
+		uint64_t cmds[2];
+		cmds[0] = cmd1;
+		cmds[1] = cmd2;
+		ret = __cvmx_cmd_queue_write_raw(queue_id, qptr, 2, cmds);
 	} else {
-		uint64_t *ptr;
-		/* Figure out how many command words will fit in this buffer. One
-		   location will be needed for the next buffer pointer */
-		int count = qptr->pool_size_m1 - qptr->index;
-		/* We need a new command buffer. Fail if there isn't one available */
-		uint64_t *new_buffer = __cvmx_cmd_queue_alloc_buffer(qptr->fpa_pool);
-		if (cvmx_unlikely(new_buffer == NULL)) {
-			if (cvmx_likely(use_locking))
-				__cvmx_cmd_queue_unlock(qptr);
-			return CVMX_CMD_QUEUE_NO_MEMORY;
-		}
-		count--;
-		ptr = (uint64_t *) cvmx_phys_to_ptr((uint64_t) qptr->base_ptr_div128 << 7);
-		ptr += qptr->index;
-		*ptr++ = cmd1;
-		if (cvmx_likely(count))
-			*ptr++ = cmd2;
-		*ptr = cvmx_ptr_to_phys(new_buffer);
-		/* The current buffer is full and has a link to the next buffer. Time
-		   to write the rest of the commands into the new buffer */
-		qptr->base_ptr_div128 = *ptr >> 7;
-		qptr->index = 0;
-		if (cvmx_unlikely(count == 0)) {
-			qptr->index = 1;
-			new_buffer[0] = cmd2;
-		}
+		/* Likely case to work fast */
+		cmd_ptr = cvmx_phys_to_ptr((uint64_t) qptr->base_paddr);
+		cmd_ptr += qptr->index;
+		qptr->index += 2;
+		cmd_ptr[0] = cmd1;
+		cmd_ptr[1] = cmd2;
 	}
 
 	/* All updates are complete. Release the lock and return */
 	if (cvmx_likely(use_locking))
-		__cvmx_cmd_queue_unlock(qptr);
-	return CVMX_CMD_QUEUE_SUCCESS;
+		__cvmx_cmd_queue_unlock(queue_id);
+	else
+		CVMX_SYNCWS;
+
+	return ret;
 }
 
 /**
- * Simple function to write three command words to a command
- * queue.
+ * Simple function to write three command words to a command queue.
  *
  * @param queue_id Hardware command queue to write to
  * @param use_locking
@@ -528,9 +540,12 @@ cvmx_cmd_queue_write2(cvmx_cmd_queue_id_t queue_id, int use_locking,
  * @return CVMX_CMD_QUEUE_SUCCESS or a failure code
  */
 static inline cvmx_cmd_queue_result_t
-cvmx_cmd_queue_write3(cvmx_cmd_queue_id_t queue_id, int use_locking,
+cvmx_cmd_queue_write3(cvmx_cmd_queue_id_t queue_id, bool use_locking,
 		      uint64_t cmd1, uint64_t cmd2, uint64_t cmd3)
 {
+	cvmx_cmd_queue_result_t ret = CVMX_CMD_QUEUE_SUCCESS;
+	uint64_t *cmd_ptr;
+
 	__cvmx_cmd_queue_state_t *qptr = __cvmx_cmd_queue_get_state(queue_id);
 
 	if (CVMX_ENABLE_PARAMETER_CHECKING) {
@@ -540,70 +555,31 @@ cvmx_cmd_queue_write3(cvmx_cmd_queue_id_t queue_id, int use_locking,
 
 	/* Make sure nobody else is updating the same queue */
 	if (cvmx_likely(use_locking))
-		__cvmx_cmd_queue_lock(queue_id, qptr);
+		__cvmx_cmd_queue_lock(queue_id);
 
-	/* If a max queue length was specified then make sure we don't
-	   exceed it. If any part of the command would be below the limit
-	   we allow it */
-	if (CVMX_CMD_QUEUE_ENABLE_MAX_DEPTH && cvmx_unlikely(qptr->max_depth)) {
-		if (cvmx_unlikely(cvmx_cmd_queue_length(queue_id) > (int)qptr->max_depth)) {
-			if (cvmx_likely(use_locking))
-				__cvmx_cmd_queue_unlock(qptr);
-			return CVMX_CMD_QUEUE_FULL;
-		}
-	}
-
-	/* Normally there is plenty of room in the current buffer for the command */
-	if (cvmx_likely(qptr->index + 3 < qptr->pool_size_m1)) {
-		uint64_t *ptr = (uint64_t *) cvmx_phys_to_ptr((uint64_t) qptr->base_ptr_div128 << 7);
-		ptr += qptr->index;
-		qptr->index += 3;
-		ptr[0] = cmd1;
-		ptr[1] = cmd2;
-		ptr[2] = cmd3;
+	if (cvmx_unlikely((qptr->index + 3) >= qptr->pool_size_m1)) {
+	/* Most of the time there is lots of free words in current block */
+		uint64_t cmds[3];
+		cmds[0] = cmd1;
+		cmds[1] = cmd2;
+		cmds[2] = cmd3;
+		ret = __cvmx_cmd_queue_write_raw(queue_id, qptr, 3, cmds);
 	} else {
-		uint64_t *ptr;
-		/* Figure out how many command words will fit in this buffer.
-		 * One location will be needed for the next buffer pointer
-		 */
-		int count = qptr->pool_size_m1 - qptr->index;
-		/* We need a new command buffer. Fail if there isn't one available */
-		uint64_t *new_buffer = __cvmx_cmd_queue_alloc_buffer(qptr->fpa_pool);
-		if (cvmx_unlikely(new_buffer == NULL)) {
-			if (cvmx_likely(use_locking))
-				__cvmx_cmd_queue_unlock(qptr);
-			return CVMX_CMD_QUEUE_NO_MEMORY;
-		}
-		count--;
-		ptr = (uint64_t *) cvmx_phys_to_ptr((uint64_t) qptr->base_ptr_div128 << 7);
-		ptr += qptr->index;
-		*ptr++ = cmd1;
-		if (count) {
-			*ptr++ = cmd2;
-			if (count > 1)
-				*ptr++ = cmd3;
-		}
-		*ptr = cvmx_ptr_to_phys(new_buffer);
-		/* The current buffer is full and has a link to the next buffer.
-		 * Time to write the rest of the commands into the new buffer
-		 */
-		qptr->base_ptr_div128 = *ptr >> 7;
-		qptr->index = 0;
-		ptr = new_buffer;
-		if (count == 0) {
-			*ptr++ = cmd2;
-			qptr->index++;
-		}
-		if (count < 2) {
-			*ptr++ = cmd3;
-			qptr->index++;
-		}
+		cmd_ptr = cvmx_phys_to_ptr((uint64_t) qptr->base_paddr);
+		cmd_ptr += qptr->index;
+		qptr->index += 3;
+		cmd_ptr[0] = cmd1;
+		cmd_ptr[1] = cmd2;
+		cmd_ptr[2] = cmd3;
 	}
 
 	/* All updates are complete. Release the lock and return */
 	if (cvmx_likely(use_locking))
-		__cvmx_cmd_queue_unlock(qptr);
-	return CVMX_CMD_QUEUE_SUCCESS;
+		__cvmx_cmd_queue_unlock(queue_id);
+	else
+		CVMX_SYNCWS;
+
+	return ret;
 }
 
 #ifdef	__cplusplus
