@@ -598,7 +598,7 @@ ioeventfd_release(struct _ioeventfd *p)
 static bool
 ioeventfd_in_range(struct _ioeventfd *p, gpa_t addr, int len, const void *val)
 {
-	u64 _val;
+	u64 _val = 0;
 
 	if (!(addr == p->addr && len == p->length))
 		/* address-range must be precise for a hit */
@@ -617,19 +617,19 @@ ioeventfd_in_range(struct _ioeventfd *p, gpa_t addr, int len, const void *val)
 		_val = *(u8 *)val;
 		break;
 	case 2:
-		_val = *(u16 *)val;
+		_val = le16_to_cpu(*(u16 *)val);
 		break;
 	case 4:
-		_val = *(u32 *)val;
+		_val = le32_to_cpu(*(u32 *)val);
 		break;
 	case 8:
-		_val = *(u64 *)val;
+		_val = le64_to_cpu(*(u64 *)val);
 		break;
 	default:
 		return false;
 	}
 
-	return _val == p->datamatch ? true : false;
+	return _val == le64_to_cpu(p->datamatch) ? true : false;
 }
 
 /* MMIO/PIO writes trigger an event if the addr/val match */
