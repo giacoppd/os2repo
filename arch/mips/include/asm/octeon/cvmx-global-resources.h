@@ -11,6 +11,7 @@
 #define CVMX_GR_TAG_PKO_IPORTS cvmx_get_gr_tag('c','v','m','_','p','k','o','_','i','p','o','r','t','.','.','.')
 #define CVMX_GR_TAG_FPA        cvmx_get_gr_tag('c','v','m','_','f','p','a','.','.','.','.','.','.','.','.','.')
 #define CVMX_GR_TAG_FAU        cvmx_get_gr_tag('c','v','m','_','f','a','u','.','.','.','.','.','.','.','.','.')
+#define CVMX_GR_TAG_SSO_GRP(n) cvmx_get_gr_tag('c','v','m','_','s','s','o','_','0',(n)+'0','.','.','.','.','.','.');
 #define CVMX_GR_TAG_TIM(n)     cvmx_get_gr_tag('c','v','m','_','t','i','m','_',(n)+'0','.','.','.','.','.','.','.')
 #define CVMX_GR_TAG_CLUSTERS(x)	    cvmx_get_gr_tag('c','v','m','_','c','l','u','s','t','e','r','_',(x+'0'),'.','.','.')
 #define CVMX_GR_TAG_CLUSTER_GRP(x)  cvmx_get_gr_tag('c','v','m','_','c','l','g','r','p','_',(x+'0'),'.','.','.','.','.')
@@ -56,6 +57,11 @@ cvmx_get_gr_tag(char a, char b, char c, char d, char e, char f, char g, char h,
 	tag.lo =  TAG_INIT_PART(a,b,c,d,e,f,g,h);
 	tag.hi =  TAG_INIT_PART(i,j,k,l,m,n,o,p);
 	return tag;
+}
+
+static inline int cvmx_gr_same_tag(struct global_resource_tag gr1, struct global_resource_tag gr2)
+{
+	return (gr1.hi == gr2.hi) && (gr1.lo == gr2.lo);
 }
 
 /*

@@ -42,7 +42,7 @@
  * Simple allocate only memory allocator.  Used to allocate memory at application
  * start time.
  *
- * <hr>$Revision: 96253 $<hr>
+ * <hr>$Revision: 113619 $<hr>
  *
  */
 
@@ -328,6 +328,9 @@ extern void *cvmx_bootmem_alloc_named_range(uint64_t size, uint64_t min_addr,
  * @param align  Alignment of memory to be allocated. (must be a power of 2)
  * @param name   name of block - must be less than CVMX_BOOTMEM_NAME_LEN bytes
  * @param init   Initialization function
+ *
+ * The initialization function is optional, if omitted the named block
+ * is initialized to all zeros when it is created, i.e. once.
  *
  * @return pointer to block of memory, NULL on error
  */

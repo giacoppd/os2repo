@@ -34,7 +34,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <linux/if_vlan.h>
 
 #include <asm/octeon/cvmx-helper.h>
 #include <asm/octeon/cvmx-helper-util.h>
@@ -55,11 +54,12 @@ struct bgx_port_priv {
 	struct phy_device *phydev;
 	struct device_node *phy_np;
 	struct net_device *netdev;
-	spinlock_t lock;
+	struct mutex lock;
 	unsigned int last_duplex;
 	unsigned int last_link;
 	unsigned int last_speed;
 	struct delayed_work dwork;
+	bool work_queued;
 };
 
 static struct workqueue_struct *check_state_wq;
@@ -73,9 +73,13 @@ static struct bgx_port_priv *bgx_port_netdev2priv(struct net_device *netdev)
 
 void bgx_port_set_netdev(struct device *dev, struct net_device *netdev)
 {
-	struct bgx_port_netdev_priv *nd_priv = netdev_priv(netdev);
 	struct bgx_port_priv *priv = dev_get_drvdata(dev);
-	nd_priv->bgx_priv = priv;
+
+	if (netdev) {
+		struct bgx_port_netdev_priv *nd_priv = netdev_priv(netdev);
+		nd_priv->bgx_priv = priv;
+	}
+
 	priv->netdev = netdev;
 }
 EXPORT_SYMBOL(bgx_port_set_netdev);
@@ -224,9 +228,8 @@ static void bgx_port_adjust_link(struct net_device *netdev)
 	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
 	int link_changed = 0;
 	unsigned int link, speed, duplex;
-	unsigned long flags;
 
-	spin_lock_irqsave(&p->lock, flags);
+	mutex_lock(&p->lock);
 
 	if (!p->phydev->link && p->last_link)
 		link_changed = -1;
@@ -242,7 +245,7 @@ static void bgx_port_adjust_link(struct net_device *netdev)
 	speed = p->last_speed = p->phydev->speed;
 	duplex = p->last_duplex = p->phydev->duplex;
 
-	spin_unlock_irqrestore(&p->lock, flags);
+	mutex_unlock(&p->lock);
 
 	if (link_changed != 0) {
 		cvmx_helper_link_info_t link_info;
@@ -286,7 +289,10 @@ static void bgx_port_check_state(struct work_struct *work)
 			pr_info("%s: Link is down\n", priv->netdev->name);
 	}
 
-	queue_delayed_work(check_state_wq, &priv->dwork, HZ);
+	mutex_lock(&priv->lock);
+	if (priv->work_queued)
+		queue_delayed_work(check_state_wq, &priv->dwork, HZ);
+	mutex_unlock(&priv->lock);
 }
 
 int bgx_port_enable(struct net_device *netdev)
@@ -368,8 +374,12 @@ int bgx_port_enable(struct net_device *netdev)
 		if (!check_state_wq)
 			return -ENOMEM;
 
+		mutex_lock(&priv->lock);
 		INIT_DELAYED_WORK(&priv->dwork, bgx_port_check_state);
 		queue_delayed_work(check_state_wq, &priv->dwork, 0);
+		priv->work_queued = true;
+		mutex_unlock(&priv->lock);
+
 		pr_info("%s: Link is not ready\n", netdev->name);
 
 		return 0;
@@ -404,52 +414,16 @@ int bgx_port_disable(struct net_device *netdev)
 	priv->last_link = 0;
 	cvmx_helper_link_set(priv->ipd_port, link_info);
 
-	if (priv->phy_np == NULL)
+	mutex_lock(&priv->lock);
+	if (priv->work_queued) {
 		cancel_delayed_work_sync(&priv->dwork);
+		priv->work_queued = false;
+	}
+	mutex_unlock(&priv->lock);
 
 	return 0;
 }
 EXPORT_SYMBOL(bgx_port_disable);
-
-static int get_max_78xx_pass1_x_mtu(int xiface, int index)
-{
-	int	fifo_size;
-	int	max_mtu = 1500;
-
-	/* Due to errata PKO-20096, the mtu must be limited.
-	 * PKO-20096 causes PKO to lock up when calculating the L4
-	 * checksum for large packets. How large the packets can be
-	 * depends on the amount of pko fifo assigned to the port.
-	 *
-	 *   FIFO size                Max frame size
-	 *	2.5 KB				1920
-	 *	5.0 KB				4480
-	 *     10.0 KB				9600
-	 *
-	 * The maximum mtu is set to the largest frame size minus the
-	 * l2 header.
-	 */
-	fifo_size = cvmx_pko3_port_fifo_size(xiface, index);
-
-	switch (fifo_size) {
-	case 2560:
-		max_mtu = 1920 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
-		break;
-
-	case 5120:
-		max_mtu = 4480 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
-		break;
-
-	case 10240:
-		max_mtu = 9600 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
-		break;
-
-	default:
-		break;
-	}
-
-	return max_mtu;
-}
 
 int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 {
@@ -459,17 +433,6 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 
 	if (new_mtu < 60 || new_mtu > 65392)
 		return -EINVAL;
-
-	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
-		int	max_mtu;
-
-		max_mtu = get_max_78xx_pass1_x_mtu(priv->xiface, priv->index);
-		if (new_mtu > max_mtu) {
-			new_mtu = max_mtu;
-			netdev_warn(netdev, "Maximum MTU supported is %d",
-				    max_mtu);
-		}
-	}
 
 	netdev->mtu = new_mtu;
 
@@ -485,10 +448,27 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
 				    CVMX_BGXX_SMUX_RX_JABBER(priv->index, priv->bgx_interface),
 				    max_frame);
 
-
 	return 0;
 }
 EXPORT_SYMBOL(bgx_port_change_mtu);
+
+void bgx_port_mix_assert_reset(struct net_device *netdev, int mix, bool v)
+{
+	u64 global_config;
+	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
+	u64 mask = 1ull << (3 + (mix & 1));
+
+	global_config = cvmx_read_csr_node(priv->numa_node,
+					   CVMX_BGXX_CMR_GLOBAL_CONFIG(priv->bgx_interface));
+
+	if (v)
+		global_config |= mask;
+	else
+		global_config &= ~mask;
+
+	cvmx_write_csr_node(priv->numa_node, CVMX_BGXX_CMR_GLOBAL_CONFIG(priv->bgx_interface), global_config);
+}
+EXPORT_SYMBOL(bgx_port_mix_assert_reset);
 
 static int bgx_port_probe(struct platform_device *pdev)
 {
@@ -513,7 +493,7 @@ static int bgx_port_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
-	spin_lock_init(&priv->lock);
+	mutex_init(&priv->lock);
 	priv->numa_node = numa_node;
 	priv->bgx_interface = (addr >> 24) & 0xf;
 	priv->index = index;
@@ -590,7 +570,8 @@ module_init(bgx_port_driver_init);
 static void __exit bgx_port_driver_exit(void)
 {
 	platform_driver_unregister(&bgx_port_driver);
-	destroy_workqueue(check_state_wq);
+	if (check_state_wq)
+		destroy_workqueue(check_state_wq);
 }
 module_exit(bgx_port_driver_exit);
 
