@@ -3231,8 +3231,12 @@ extern int cvmx_pow_get_dump_size(void);
  * @param count  The number of consecutive groups to allocate.
  * @return 0 on success and -1 on failure.
  */
-int cvmx_sso_allocate_group_range(int node, int *base_group, int count);
-int cvmx_sso_allocate_group(int node);
+int cvmx_sso_reserve_group_range(int node, int *base_group, int count);
+#define cvmx_sso_allocate_group_range cvmx_sso_reserve_group_range
+int cvmx_sso_reserve_group(int node);
+#define cvmx_sso_allocate_group cvmx_sso_reserve_group
+int cvmx_sso_release_group_range(int node, int base_group, int count);
+int cvmx_sso_release_group(int node, int group);
 
 #ifdef  __cplusplus
 /* *INDENT-OFF* */

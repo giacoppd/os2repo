@@ -271,7 +271,7 @@ int cvmx_lap_init(int lap_num, cvmx_lap_config_t *lap_config)
 		if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
 			/* Apply workaround for Errata (LAP-20300) */
 			que_cfg.u64 = cvmx_read_csr(CVMX_LAPX_QUEX_CFG(lap_num, itr));
-			que_cfg.s.max_labs = lap_config->max_labs[CVMX_LAP_QUEUES_PER_LAP-itr];
+			que_cfg.s.max_labs = lap_config->max_labs[CVMX_LAP_QUEUES_PER_LAP-1-itr];
 			cvmx_write_csr(CVMX_LAPX_QUEX_CFG(lap_num, itr),que_cfg.u64); 
 		} else {
 			que_cfg.u64 = cvmx_read_csr(CVMX_LAPX_QUEX_CFG(lap_num, itr));
