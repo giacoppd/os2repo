@@ -2022,6 +2022,14 @@ static void gfar_configure_serdes(struct net_device *dev)
 		return;
 	}
 
+	/* If the link is already up, we must already be ok, and don't need to
+	 * configure and reset the TBI<->SerDes link.  Maybe U-Boot configured
+	 * everything for us?  Resetting it takes the link down and requires
+	 * several seconds for it to come back.
+	 */
+	if (phy_read(tbiphy, MII_BMSR) & BMSR_LSTATUS)
+		return;
+
 	/* Single clk mode, mii mode off(for serdes communication) */
 	phy_write(tbiphy, MII_TBICON, TBICON_CLK_SELECT);
 
@@ -2378,7 +2386,9 @@ int startup_gfar(struct net_device *ndev)
 	/* Start Rx/Tx DMA and enable the interrupts */
 	gfar_start(priv);
 
-	phy_start(priv->phydev);
+	/* MJ: Do not call phy_start if fixed link - tmp workaround as fixed-link did not work as is when set in dts */
+	if(priv->phydev != 0)
+		phy_start(priv->phydev);
 
 	if (test_bit(GFAR_RESETTING, &priv->state))
 		netif_device_attach(ndev);
@@ -2680,13 +2690,14 @@ dma_map_err:
 	if (do_tstamp)
 		txbdp = next_txbd(txbdp, base, tx_queue->tx_ring_size);
 	for (i = 0; i < nr_frags; i++) {
-		lstatus = txbdp->lstatus;
+		lstatus = be32_to_cpu(txbdp->lstatus);
 		if (!(lstatus & BD_LFLAG(TXBD_READY)))
 			break;
 
-		txbdp->lstatus = lstatus & ~BD_LFLAG(TXBD_READY);
-		bufaddr = txbdp->bufPtr;
-		dma_unmap_page(priv->dev, bufaddr, txbdp->length,
+		lstatus &= ~BD_LFLAG(TXBD_READY);
+		txbdp->lstatus = cpu_to_be32(lstatus);
+		bufaddr = be32_to_cpu(txbdp->bufPtr);
+		dma_unmap_page(priv->dev, bufaddr, be16_to_cpu(txbdp->length),
 			       DMA_TO_DEVICE);
 		txbdp = next_txbd(txbdp, base, tx_queue->tx_ring_size);
 	}
@@ -3191,7 +3202,7 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 
 			if (unlikely(!newskb)) {
 				newskb = skb;
-				bufaddr = bdp->bufPtr;
+				bufaddr = be32_to_cpu(bdp->bufPtr);
 			} else if (skb)
 				dev_kfree_skb(skb);
 		} else {
