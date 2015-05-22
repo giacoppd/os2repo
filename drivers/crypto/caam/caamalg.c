@@ -2948,6 +2948,11 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 					 DMA_FROM_DEVICE, dst_chained);
 	}
 
+	iv_dma = dma_map_single(jrdev, req->iv, ivsize, DMA_TO_DEVICE);
+	if (dma_mapping_error(jrdev, iv_dma)) {
+		dev_err(jrdev, "unable to map IV\n");
+		return ERR_PTR(-ENOMEM);
+	}
 	if (((ctx->class1_alg_type & OP_ALG_ALGSEL_MASK) ==
 	      OP_ALG_ALGSEL_AES) &&
 	    ((ctx->class1_alg_type & OP_ALG_AAI_MASK) == OP_ALG_AAI_GCM))
@@ -3000,10 +3005,10 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	if (!all_contig) {
 		if (!is_gcm && assoc_nents) {
 			sg_to_sec4_sg(req->assoc,
-				      (assoc_nents ? : 1),
-				      edesc->sec4_sg +
-				      sec4_sg_index, 0);
-			sec4_sg_index += assoc_nents ? : 1;
+				      assoc_nents,
+				      edesc->sec4_sg + sec4_sg_index,
+				      0);
+			sec4_sg_index += assoc_nents;
 		}
 
 		dma_to_sec4_sg_one(edesc->sec4_sg + sec4_sg_index,
@@ -3012,10 +3017,10 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 
 		if (is_gcm && assoc_nents) {
 			sg_to_sec4_sg(req->assoc,
-				      (assoc_nents ? : 1),
-				      edesc->sec4_sg +
-				      sec4_sg_index, 0);
-			sec4_sg_index += assoc_nents ? : 1;
+				      assoc_nents,
+				      edesc->sec4_sg + sec4_sg_index,
+				      0);
+			sec4_sg_index += assoc_nents;
 		}
 
 		sg_to_sec4_sg_last(req->src,
