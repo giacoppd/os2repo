@@ -1811,7 +1811,7 @@ static unsigned int serial8250_tx_empty(struct uart_port *port)
 	return (lsr & BOTH_EMPTY) == BOTH_EMPTY ? TIOCSER_TEMT : 0;
 }
 
-static unsigned int serial8250_get_mctrl(struct uart_port *port)
+unsigned int serial8250_do_get_mctrl(struct uart_port *port)
 {
 	struct uart_8250_port *up =
 		container_of(port, struct uart_8250_port, port);
@@ -1830,6 +1830,14 @@ static unsigned int serial8250_get_mctrl(struct uart_port *port)
 	if (status & UART_MSR_CTS)
 		ret |= TIOCM_CTS;
 	return ret;
+}
+EXPORT_SYMBOL_GPL(serial8250_do_get_mctrl);
+
+static unsigned int serial8250_get_mctrl(struct uart_port *port)
+{
+	if (port->get_mctrl)
+		return port->get_mctrl(port);
+	return serial8250_do_get_mctrl(port);
 }
 
 static void serial8250_set_mctrl(struct uart_port *port, unsigned int mctrl)
@@ -3307,6 +3315,8 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
 		/*  Possibly override set_termios call */
 		if (up->port.set_termios)
 			uart->port.set_termios = up->port.set_termios;
+		if (up->port.get_mctrl)
+			uart->port.get_mctrl = up->port.get_mctrl;
 		if (up->port.pm)
 			uart->port.pm = up->port.pm;
 		if (up->port.handle_break)

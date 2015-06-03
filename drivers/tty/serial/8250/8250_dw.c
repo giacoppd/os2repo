@@ -66,6 +66,7 @@ struct dw8250_data {
 struct dw8250_acpi_desc {
 	void (*set_termios)(struct uart_port *p, struct ktermios *termios,
 			    struct ktermios *old);
+	unsigned int (*get_mctrl)(struct uart_port *port);
 };
 
 #define BYT_PRV_CLK			0x800
@@ -131,6 +132,17 @@ static void byt_set_termios(struct uart_port *p, struct ktermios *termios,
 	writel(reg | LPSS_TX_INT_MASK, p->membase + LPSS_TX_INT);
 
 	serial8250_do_set_termios(p, termios, old);
+}
+
+static unsigned int
+byt_get_mctrl(struct uart_port *port)
+{
+	unsigned int ret = serial8250_do_get_mctrl(port);
+
+	/* Override the status of DCD and DSR */
+	ret = ret | TIOCM_CAR | TIOCM_DSR;
+
+	return ret;
 }
 
 static inline int dw8250_modify_msr(struct uart_port *p, int offset, int value)
@@ -393,6 +405,9 @@ static int dw8250_probe_acpi(struct uart_8250_port *up,
 	if (acpi_desc->set_termios)
 		p->set_termios = acpi_desc->set_termios;
 
+	if (acpi_desc->get_mctrl)
+		p->get_mctrl = acpi_desc->get_mctrl;
+
 	return 0;
 }
 
@@ -543,6 +558,7 @@ MODULE_DEVICE_TABLE(of, dw8250_of_match);
 
 static struct dw8250_acpi_desc byt_8250_desc = {
 	.set_termios = byt_set_termios,
+	.get_mctrl = byt_get_mctrl,
 };
 
 static const struct acpi_device_id dw8250_acpi_match[] = {
