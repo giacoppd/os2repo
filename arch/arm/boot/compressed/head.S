@@ -143,6 +143,7 @@ start:
 		mov	r7, r1			@ save architecture ID
 		mov	r8, r2			@ save atags pointer
 
+#ifndef __ARM_ARCH_2__
 		/*
 		 * Booting from Angel - need to enter SVC mode and disable
 		 * FIQs/IRQs (numeric definitions from angel arm.h source).
@@ -157,7 +158,11 @@ start:
 not_angel:
 		safe_svcmode_maskall r0
 		msr	spsr_cxsf, r9		@ Save the CPU boot mode in
-						@ SPSR
+
+#else
+		teqp	pc, #0x0c000003		@ turn off interrupts
+#endif
+
 		/*
 		 * Note that some cache flushing and other stuff may
 		 * be needed here - is there an Angel SWI call for this?
@@ -174,7 +179,12 @@ not_angel:
 		@ determine final kernel image address
 		mov	r4, pc
 		and	r4, r4, #0xf8000000
+#ifdef CONFIG_ARCH_AXXIA
+		ldr	r3, =TEXT_OFFSET
+		add	r4, r4, r3
+#else
 		add	r4, r4, #TEXT_OFFSET
+#endif
 #else
 		ldr	r4, =zreladdr
 #endif
@@ -284,7 +294,12 @@ restart:	adr	r0, LC0
 		 * of RAM and hope for the best.
 		 */
 		cmp	r0, #1
+#ifdef CONFIG_ARCH_AXXIA
+		ldr	r1, =TEXT_OFFSET
+		sub	r0, r4, r1
+#else
 		sub	r0, r4, #TEXT_OFFSET
+#endif
 		bic	r0, r0, #1
 		add	r0, r0, #0x100
 		mov	r1, r6
