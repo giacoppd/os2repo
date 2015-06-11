@@ -19,7 +19,7 @@
 #include <linux/aio.h>
 
 #include <linux/uaccess.h>
-#include <asm/system.h>
+/* #include <asm/system.h> */
 #include <linux/version.h>
 
 #include "vmfsno.h"
@@ -381,17 +381,12 @@ vmfs_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	if (result)
 		goto out;
 
-	if (iocb->ki_left > 0) {
-		DEBUG1("1\n");
+	result = generic_file_aio_write(iocb, iov, nr_segs, pos);
+	VERBOSE("pos=%ld, size=%ld, mtime=%ld, atime=%ld\n",
+		(long)file->f_pos, (long)dentry->d_inode->i_size,
+		dentry->d_inode->i_mtime.tv_sec,
+		dentry->d_inode->i_atime.tv_sec);
 
-		result = generic_file_aio_write(iocb, iov, nr_segs, pos);
-		VERBOSE("pos=%ld, size=%ld, mtime=%ld, atime=%ld\n",
-			(long)file->f_pos, (long)dentry->d_inode->i_size,
-			dentry->d_inode->i_mtime.tv_sec,
-			dentry->d_inode->i_atime.tv_sec);
-
-		DEBUG1("2\n");
-	}
 out:
 	DEBUG1("return\n");
 	return result;

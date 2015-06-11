@@ -140,7 +140,7 @@ out_unlock:
  * Create dentry/inode for this file and add it to the dircache.
  */
 int
-vmfs_fill_cache(struct file *filp, void *dirent, filldir_t filldir,
+vmfs_fill_cache(struct file *filp, struct dir_context *dirent,
 		struct vmfs_cache_control *ctrl, struct qstr *qname,
 		struct vmfs_fattr *entry)
 {
@@ -216,13 +216,13 @@ vmfs_fill_cache(struct file *filp, void *dirent, filldir_t filldir,
 end_advance:
 	if (!valid)
 		ctl.valid = 0;
-	if (!ctl.filled && (ctl.fpos == filp->f_pos)) {
+	if (!ctl.filled && (ctl.fpos == dirent->pos)) {
 		if (!ino)
 			ino = iunique(inode->i_sb, 2);
-		ctl.filled = filldir(dirent, qname->name, qname->len,
-				     filp->f_pos, ino, DT_UNKNOWN);
+		ctl.filled = !dir_emit(dirent, qname->name, qname->len,
+				ino, DT_UNKNOWN);
 		if (!ctl.filled)
-			filp->f_pos += 1;
+			dirent->pos += 1;
 	}
 	ctl.fpos += 1;
 	ctl.idx += 1;
