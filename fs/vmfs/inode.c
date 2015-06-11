@@ -26,6 +26,8 @@
 #include <linux/highuid.h>
 #include <linux/sched.h>
 #include <linux/version.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include "vmfs_fs.h"
 #include "vmfsno.h"
 #include "vmfs_mount.h"
@@ -326,6 +328,7 @@ static void vmfs_delete_inode(struct inode *ino)
 {
 	DEBUG1("ino=%ld\n", ino->i_ino);
 	truncate_inode_pages(&ino->i_data, 0);
+	clear_inode(ino);
 	mutex_lock(&vmfs_mutex);
 	if (vmfs_close(ino))
 		PARANOIA("could not close inode %ld\n", ino->i_ino);
@@ -486,25 +489,13 @@ int vmfs_notify_change(struct dentry *dentry, struct iattr *attr)
 		goto out;
 
 	error = -EPERM;
-#ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
 	if ((attr->ia_valid & ATTR_UID) &&
 	    (attr->ia_uid.val != (server->mnt->uid).val))
 		goto out;
-#else
-	if ((attr->ia_valid & ATTR_UID) &&
-	    (attr->ia_uid != server->mnt->uid))
-		goto out;
-#endif
 
-#ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
 	if ((attr->ia_valid & ATTR_GID) &&
 	    ((attr->ia_gid).val != (server->mnt->gid).val))
 		goto out;
-#else
-	if ((attr->ia_valid & ATTR_GID) &&
-	    (attr->ia_gid != server->mnt->gid))
-		goto out;
-#endif
 
 	if ((attr->ia_valid & ATTR_MODE) && (attr->ia_mode & ~mask))
 		goto out;
@@ -616,6 +607,8 @@ static struct file_system_type vmfs_fs_type = {
 
 static int __init init_vmfs_fs(void)
 {
+	phys_addr_t dev_base = CONFIG_VMFS_DEV_BASE;
+	uint32_t dev_irq = -1;
 	int err;
 	DEBUG1("registering ...\n");
 
@@ -623,9 +616,21 @@ static int __init init_vmfs_fs(void)
 	if (err)
 		goto out_inode;
 
+	if (IS_ENABLED(CONFIG_OF)) {
+		struct device_node *np;
+
+		np = of_find_compatible_node(NULL, NULL, "arm,messagebox");
+		if (np) {
+			struct resource res;
+
+			if (of_address_to_resource(np, 0, &res) == 0)
+				dev_base = res.start;
+		}
+	}
+
 	/* map the message box device into memory */
 
-	mbox = mb_new(CONFIG_VMFS_DEV_BASE, CONFIG_VMFS_IRQ);
+	mbox = mb_new(dev_base, dev_irq);
 
 	if (mbox == NULL) {
 		err = -1;

@@ -87,7 +87,7 @@ struct vmfs_ops {
 		     char *data);
 	int (*write)(struct inode *inode, loff_t offset, int count, const
 		      char *data);
-	int (*readdir)(struct file *filp, void *dirent, filldir_t filldir,
+	int (*readdir)(struct file *filp, void *dirent,
 			struct vmfs_cache_control *ctl);
 
 	int (*getattr)(struct vmfs_sb_info *server, struct dentry *dir,

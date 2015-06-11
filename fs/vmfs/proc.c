@@ -25,7 +25,7 @@
 #include "vmfsno.h"
 #include "vmfs_mount.h"
 
-#include <asm/string.h>
+#include <linux/string.h>
 #include <asm/div64.h>
 
 #include "vmfs_debug.h"
@@ -688,7 +688,7 @@ vmfs_init_root_dirent(struct vmfs_sb_info *server, struct vmfs_fattr *fattr,
  * read in directory entries into the dentry cache
  */
 static int
-vmfs_proc_readdir_long(struct file *filp, void *dirent, filldir_t filldir,
+vmfs_proc_readdir_long(struct file *filp, void *dirent,
 		       struct vmfs_cache_control *ctl)
 {
 	struct dentry *dir = filp->f_path.dentry;
@@ -793,7 +793,7 @@ vmfs_proc_readdir_long(struct file *filp, void *dirent, filldir_t filldir,
 		vmfs_finish_dirent(server, &fattr);
 
 		if (!vmfs_fill_cache
-		    (filp, dirent, filldir, ctl, &qname, &fattr)) {
+				(filp, dirent, ctl, &qname, &fattr)) {
 			/* smbfs carries on here... */
 		}
 	}

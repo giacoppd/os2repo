@@ -40,7 +40,7 @@ extern const struct inode_operations vmfs_dir_inode_operations_unix;
 extern void vmfs_new_dentry(struct dentry *dentry);
 extern void vmfs_renew_times(struct dentry *dentry);
 /* cache.c */
-extern int vmfs_fill_cache(struct file *filp, void *dirent, filldir_t filldir,
+extern int vmfs_fill_cache(struct file *filp, struct dir_context *dirent,
 			   struct vmfs_cache_control *ctrl, struct qstr *qname,
 			   struct vmfs_fattr *entry);
 extern void vmfs_invalid_dir_cache(struct inode *dir);
