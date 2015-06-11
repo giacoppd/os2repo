@@ -46,7 +46,7 @@ dev_t ROOT_DEV;
 
 static int __init load_ramdisk(char *str)
 {
-	rd_doload = simple_strtol(str,NULL,0) & 3;
+	rd_doload = simple_strtol(str, NULL, 0) & 3;
 	return 1;
 }
 __setup("load_ramdisk=", load_ramdisk);
@@ -366,7 +366,7 @@ static int __init do_mount_root(char *name, char *fs, int flags, void *data)
 	sys_chdir("/root");
 	s = current->fs->pwd.dentry->d_sb;
 	ROOT_DEV = s->s_dev;
-	printk(KERN_INFO
+	pr_info(
 	       "VFS: Mounted root (%s filesystem)%s on device %u:%u.\n",
 	       s->s_type->name,
 	       s->s_flags & MS_RDONLY ?  " readonly" : "",
@@ -391,15 +391,15 @@ retry:
 	for (p = fs_names; *p; p += strlen(p)+1) {
 		int err = do_mount_root(name, p, flags, root_mount_data);
 		switch (err) {
-			case 0:
-				goto out;
-			case -EACCES:
-				flags |= MS_RDONLY;
-				goto retry;
-			case -EINVAL:
-				continue;
+		case 0:
+			goto out;
+		case -EACCES:
+			flags |= MS_RDONLY;
+			goto retry;
+		case -EINVAL:
+			continue;
 		}
-	        /*
+		/*
 		 * Allow the user to distinguish between failed sys_open
 		 * and bad superblock on root device.
 		 * and give them a list of the available devices
@@ -407,36 +407,36 @@ retry:
 #ifdef CONFIG_BLOCK
 		__bdevname(ROOT_DEV, b);
 #endif
-		printk("VFS: Cannot open root device \"%s\" or %s: error %d\n",
+		pr_info("VFS: Cannot open root device \"%s\" or %s: error %d\n",
 				root_device_name, b, err);
-		printk("Please append a correct \"root=\" boot option; here are the available partitions:\n");
+		pr_info("Please append a correct \"root=\" boot option; here are the available partitions:\n");
 
 		printk_all_partitions();
 #ifdef CONFIG_DEBUG_BLOCK_EXT_DEVT
-		printk("DEBUG_BLOCK_EXT_DEVT is enabled, you need to specify "
+		pr_info("DEBUG_BLOCK_EXT_DEVT is enabled, you need to specify "
 		       "explicit textual name for \"root=\" boot option.\n");
 #endif
-		printk(KERN_EMERG "VFS: Unable to mount root fs on %s\n", b);
-		printk(KERN_EMERG "User configuration error - no valid root filesystem found\n");
+		pr_emerg("VFS: Unable to mount root fs on %s\n", b);
+		pr_emerg("User configuration error - no valid root filesystem found\n");
 		panic("Invalid configuration from end user prevents continuing");
 	}
 
-	printk("List of all partitions:\n");
+	pr_info("List of all partitions:\n");
 	printk_all_partitions();
-	printk("No filesystem could mount root, tried: ");
+	pr_info("No filesystem could mount root, tried: ");
 	for (p = fs_names; *p; p += strlen(p)+1)
-		printk(" %s", p);
-	printk("\n");
+		pr_info(" %s", p);
+	pr_info("\n");
 #ifdef CONFIG_BLOCK
 	__bdevname(ROOT_DEV, b);
 #endif
-	printk(KERN_EMERG "VFS: Unable to mount root fs on %s\n", b);
-	printk(KERN_EMERG "User configuration error - no valid root filesystem found\n");
+	pr_emerg("VFS: Unable to mount root fs on %s\n", b);
+	pr_emerg("User configuration error - no valid root filesystem found\n");
 	panic("Invalid configuration from end user prevents continuing");
 out:
 	put_page(page);
 }
- 
+
 #ifdef CONFIG_ROOT_NFS
 
 #define NFSROOT_TIMEOUT_MIN	5
@@ -493,7 +493,7 @@ void __init change_floppy(char *fmt, ...)
 		sys_ioctl(fd, FDEJECT, 0);
 		sys_close(fd);
 	}
-	printk(KERN_NOTICE "VFS: Insert %s and press ENTER\n", buf);
+	pr_notice("VFS: Insert %s and press ENTER\n", buf);
 	fd = sys_open("/dev/console", O_RDWR, 0);
 	if (fd >= 0) {
 		sys_ioctl(fd, TCGETS, (long)&termios);
@@ -514,14 +514,14 @@ void __init mount_root(void)
 		if (mount_nfs_root())
 			return;
 
-		printk(KERN_ERR "VFS: Unable to mount root fs via NFS, trying floppy.\n");
+		pr_err("VFS: Unable to mount root fs via NFS, trying floppy.\n");
 		ROOT_DEV = Root_FD0;
 	}
 #endif
 #ifdef CONFIG_BLK_DEV_FD
 	if (MAJOR(ROOT_DEV) == FLOPPY_MAJOR) {
 		/* rd_doload is 2 for a dual initrd/ramload setup */
-		if (rd_doload==2) {
+		if (rd_doload == 2) {
 			if (rd_load_disk(1)) {
 				ROOT_DEV = Root_RAM1;
 				root_device_name = NULL;
@@ -544,7 +544,7 @@ void __init prepare_namespace(void)
 	int is_floppy;
 
 	if (root_delay) {
-		printk(KERN_INFO "Waiting %d sec before mounting root device...\n",
+		pr_info("Waiting %d sec before mounting root device...\n",
 		       root_delay);
 		ssleep(root_delay);
 	}
@@ -577,7 +577,7 @@ void __init prepare_namespace(void)
 
 	/* wait for any asynchronous scanning to complete */
 	if ((ROOT_DEV == 0) && root_wait) {
-		printk(KERN_INFO "Waiting for root device %s...\n",
+		pr_info("Waiting for root device %s...\n",
 			saved_root_name);
 		while (driver_probe_done() != 0 ||
 			(ROOT_DEV = name_to_dev_t(saved_root_name)) == 0)
@@ -636,6 +636,7 @@ int __init init_rootfs(void)
 
 	if (err)
 		unregister_filesystem(&rootfs_fs_type);
+
 
 	return err;
 }

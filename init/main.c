@@ -355,8 +355,8 @@ static void __init setup_command_line(char *command_line)
 	initcall_command_line =
 		memblock_virt_alloc(strlen(boot_command_line) + 1, 0);
 	static_command_line = memblock_virt_alloc(strlen(command_line) + 1, 0);
-	strcpy (saved_command_line, boot_command_line);
-	strcpy (static_command_line, command_line);
+	strcpy(saved_command_line, boot_command_line);
+	strcpy(static_command_line, command_line);
 }
 
 /*
@@ -424,7 +424,7 @@ void __init parse_early_options(char *cmdline)
 /* Arch code calls this early on, or if not, just before other parsing. */
 void __init parse_early_param(void)
 {
-	static __initdata int done = 0;
+	static __initdata int done;
 	static __initdata char tmp_cmdline[COMMAND_LINE_SIZE];
 
 	if (done)
@@ -479,8 +479,19 @@ static void __init mm_init(void)
 
 asmlinkage void __init start_kernel(void)
 {
-	char * command_line;
+	char *command_line;
 	extern const struct kernel_param __start___param[], __stop___param[];
+
+#if defined(CONFIG_ARCH_AXXIA) && defined(DEBUG_LL)
+	{
+		*(unsigned long *)(0xf0080000 + 0x24) = 13;
+		*(unsigned long *)(0xf0080000 + 0x28) = 1;
+		*(unsigned long *)(0xf0080000 + 0x2c) = 0x70;
+		*(unsigned long *)(0xf0080000 + 0x30) = 0x301;
+		*(unsigned long *)(0xf0080000 + 0x34) = 0;
+		*(unsigned long *)(0xf0080000 + 0x38) = 0x700;
+	}
+#endif	/* CONFIG_ARCH_AXXIA && DEBUG_LL */
 
 	/*
 	 * Need to run as early as possible, to initialize the
