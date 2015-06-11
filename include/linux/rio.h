@@ -25,6 +25,12 @@
 #include <linux/dmaengine.h>
 #endif
 
+#if defined(CONFIG_3_LEVEL_PGTABLES) && !defined(CONFIG_64BIT)
+typedef unsigned long long phys_t;
+#else
+typedef unsigned long phys_t;
+#endif
+
 #define RIO_NO_HOPCOUNT		-1
 #define RIO_INVALID_DESTID	0xffff
 

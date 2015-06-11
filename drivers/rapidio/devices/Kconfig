@@ -16,3 +16,4 @@ config RAPIDIO_CN6XXX
 	  Includes support for Cavium Networks CN6XXX family of serial RapidIO
 	  devices.
 
+source "drivers/rapidio/devices/lsi/Kconfig"
