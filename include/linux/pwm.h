@@ -89,6 +89,8 @@ struct pwm_device {
 
 	unsigned int		period; 	/* in nanoseconds */
 	unsigned int		duty_cycle;	/* in nanoseconds */
+	unsigned int		freq_hz;	/* in Hertz       */
+	unsigned int		duty_percent;	/* in percentage  */
 	enum pwm_polarity	polarity;
 };
 
@@ -114,10 +116,58 @@ static inline unsigned int pwm_get_duty_cycle(struct pwm_device *pwm)
 	return pwm ? pwm->duty_cycle : 0;
 }
 
+static inline void pwm_set_freq_hz(struct pwm_device *pwm,
+				   unsigned int freq_hz)
+{
+	if (pwm)
+		pwm->freq_hz = freq_hz;
+}
+
+static inline unsigned int pwm_get_freq_hz(struct pwm_device *pwm)
+{
+	return pwm ? pwm->freq_hz : 0;
+}
+
+static inline void pwm_set_duty_percent(struct pwm_device *pwm,
+					unsigned int duty_percent)
+{
+	if (pwm)
+		pwm->duty_percent = duty_percent;
+}
+
+static inline unsigned int pwm_get_duty_percent(struct pwm_device *pwm)
+{
+	return pwm ? pwm->duty_percent : 0;
+}
+
 /*
  * pwm_set_polarity - configure the polarity of a PWM signal
  */
 int pwm_set_polarity(struct pwm_device *pwm, enum pwm_polarity polarity);
+
+/*
+ * pwm_freq_hz_to_period() - convert duration unit to ns
+ */
+unsigned int pwm_freq_hz_to_period(struct pwm_device *pwm,
+				   unsigned int freq_hz);
+
+/*
+ * pwm_period_to_freq_hz() - convert duration unit to Hertz
+ */
+unsigned int pwm_period_to_freq_hz(struct pwm_device *pwm,
+				   unsigned int period_ns);
+
+/*
+ * pwm_duty_percent_to_duty_cycle() - convert "on" time unit to ns
+ */
+unsigned int pwm_duty_percent_to_duty_cycle(struct pwm_device *pwm,
+					    unsigned int duty_percent);
+
+/*
+ * pwm_duty_cycle_to_duty_percent() - convert "on" time unit to percentage
+ */
+unsigned int pwm_duty_cycle_to_duty_percent(struct pwm_device *pwm,
+					    unsigned int duty_cycle);
 
 /**
  * struct pwm_ops - PWM controller operations

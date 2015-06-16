@@ -62,6 +62,10 @@ static ssize_t pwm_period_store(struct device *child,
 		return ret;
 
 	ret = pwm_config(pwm, pwm->duty_cycle, val);
+	if (0 == ret) {
+		val = pwm_period_to_freq_hz(pwm, val);
+		pwm_set_freq_hz(pwm, val);
+	}
 
 	return ret ? : size;
 }
@@ -88,6 +92,10 @@ static ssize_t pwm_duty_cycle_store(struct device *child,
 		return ret;
 
 	ret = pwm_config(pwm, val, pwm->period);
+	if (0 == ret) {
+		val = pwm_duty_cycle_to_duty_percent(pwm, val);
+		pwm_set_duty_percent(pwm, val);
+	}
 
 	return ret ? : size;
 }
@@ -157,16 +165,79 @@ static ssize_t pwm_polarity_store(struct device *child,
 	return ret ? : size;
 }
 
+static ssize_t pwm_freq_hz_show(struct device *child,
+				struct device_attribute *attr,
+				char *buf)
+{
+	const struct pwm_device *pwm = child_to_pwm_device(child);
+
+	return sprintf(buf, "%u\n", pwm->freq_hz);
+}
+
+static ssize_t pwm_freq_hz_store(struct device *child,
+				 struct device_attribute *attr,
+				 const char *buf, size_t size)
+{
+	struct pwm_device *pwm = child_to_pwm_device(child);
+	unsigned int val, tmp_val;
+	int ret;
+
+	ret = kstrtouint(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	tmp_val = pwm_freq_hz_to_period(pwm, val);
+	ret = pwm_config(pwm, pwm->duty_cycle, tmp_val);
+	if (0 == ret)
+		pwm_set_freq_hz(pwm, val);
+
+	return ret ? : size;
+}
+
+static ssize_t pwm_duty_percent_show(struct device *child,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	const struct pwm_device *pwm = child_to_pwm_device(child);
+
+	return sprintf(buf, "%u\n", pwm->duty_percent);
+}
+
+static ssize_t pwm_duty_percent_store(struct device *child,
+				      struct device_attribute *attr,
+				      const char *buf, size_t size)
+{
+	struct pwm_device *pwm = child_to_pwm_device(child);
+	unsigned int val, tmp_val;
+	int ret;
+
+	ret = kstrtouint(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	tmp_val = pwm_duty_percent_to_duty_cycle(pwm, val);
+	ret = pwm_config(pwm, tmp_val, pwm->period);
+	if (0 == ret)
+		pwm_set_duty_percent(pwm, val);
+
+	return ret ? : size;
+}
+
 static DEVICE_ATTR(period, 0644, pwm_period_show, pwm_period_store);
 static DEVICE_ATTR(duty_cycle, 0644, pwm_duty_cycle_show, pwm_duty_cycle_store);
 static DEVICE_ATTR(enable, 0644, pwm_enable_show, pwm_enable_store);
 static DEVICE_ATTR(polarity, 0644, pwm_polarity_show, pwm_polarity_store);
+static DEVICE_ATTR(freq_hz, 0644, pwm_freq_hz_show, pwm_freq_hz_store);
+static DEVICE_ATTR(duty_percent, 0644, pwm_duty_percent_show,
+		   pwm_duty_percent_store);
 
 static struct attribute *pwm_attrs[] = {
 	&dev_attr_period.attr,
 	&dev_attr_duty_cycle.attr,
 	&dev_attr_enable.attr,
 	&dev_attr_polarity.attr,
+	&dev_attr_freq_hz.attr,
+	&dev_attr_duty_percent.attr,
 	NULL
 };
 ATTRIBUTE_GROUPS(pwm);

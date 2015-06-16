@@ -32,7 +32,8 @@
 
 #include <dt-bindings/pwm/pwm.h>
 
-#define MAX_PWMS 1024
+#define MAX_PWMS	1024
+#define NSECS_PER_SEC	1000000000UL
 
 static DEFINE_MUTEX(pwm_lookup_lock);
 static LIST_HEAD(pwm_lookup_list);
@@ -195,6 +196,98 @@ static void of_pwmchip_remove(struct pwm_chip *chip)
 	if (chip->dev && chip->dev->of_node)
 		of_node_put(chip->dev->of_node);
 }
+
+/**
+  * pwm_freq_hz_to_period() - convert duration unit to ns
+  * @pwm: PWM device
+  * @freq_hz: number of cycles in duration of 1 second (Hertz)
+  *
+  */
+unsigned int pwm_freq_hz_to_period(struct pwm_device *pwm,
+				   unsigned int freq_hz)
+{
+	unsigned long long period_ns = NSECS_PER_SEC;
+	int remainder;
+
+	if (!freq_hz)
+		return 0;
+
+	remainder = do_div(period_ns, freq_hz);
+	if (remainder && (remainder >= (freq_hz >> 1)))
+		period_ns++;
+
+	return period_ns;
+
+}
+EXPORT_SYMBOL_GPL(pwm_freq_hz_to_period);
+
+/**
+  * pwm_period_to_freq_hz() - convert duration unit to Hertz
+  * @pwm: PWM device
+  * @period_ns: duration (in nanoseconds) of one cycle
+  *
+  */
+unsigned int pwm_period_to_freq_hz(struct pwm_device *pwm,
+				   unsigned int period_ns)
+{
+	unsigned long long freq_hz = NSECS_PER_SEC;
+	int remainder;
+
+	if (!period_ns)
+		return 0;
+
+	remainder = do_div(freq_hz, period_ns);
+	if (remainder && (remainder >= (period_ns >> 1)))
+		freq_hz++;
+
+	return freq_hz;
+}
+EXPORT_SYMBOL_GPL(pwm_period_to_freq_hz);
+
+/**
+  * pwm_duty_percent_to_duty_cycle() - convert "on" time unit to ns
+  * @pwm: PWM device
+  * @duty_percent: "on" time (in percentage)
+  *
+  */
+unsigned int pwm_duty_percent_to_duty_cycle(struct pwm_device *pwm,
+					    unsigned int duty_percent)
+{
+	unsigned long long duty_cycle;
+	int remainder;
+
+	duty_cycle = (pwm->period) * duty_percent;
+	remainder = do_div(duty_cycle, 100);
+	if (remainder && (remainder >= 50))
+		duty_cycle++;
+
+	return duty_cycle;
+}
+EXPORT_SYMBOL_GPL(pwm_duty_percent_to_duty_cycle);
+
+/**
+  * pwm_duty_cycle_to_duty_percent() - convert "on" time unit to percentage
+  * @pwm: PWM device
+  * @duty_cycle: "on" time (in nanoseconds)
+  *
+  */
+unsigned int pwm_duty_cycle_to_duty_percent(struct pwm_device *pwm,
+					    unsigned int duty_cycle)
+{
+	unsigned long long duty_percent;
+	int remainder;
+
+	if (!pwm->period)
+		return 0;
+
+	duty_percent = duty_cycle * 100;
+	remainder = do_div(duty_percent, pwm->period);
+	if (remainder && (remainder >= (pwm->period >> 1)))
+		duty_percent++;
+
+	return duty_percent;
+}
+EXPORT_SYMBOL_GPL(pwm_duty_cycle_to_duty_percent);
 
 /**
  * pwm_set_chip_data() - set private chip data for a PWM
