@@ -676,6 +676,8 @@ int ata_sas_scsi_ioctl(struct ata_port *ap, struct scsi_device *scsidev,
 {
 	int val = -EINVAL, rc = -EINVAL;
 	unsigned long flags;
+	struct ata_device *dev = __ata_scsi_find_dev(ap, scsidev);
+	int dma;
 
 	switch (cmd) {
 	case ATA_IOC_GET_IO32:
@@ -714,6 +716,38 @@ int ata_sas_scsi_ioctl(struct ata_port *ap, struct scsi_device *scsidev,
 		if (!capable(CAP_SYS_ADMIN) || !capable(CAP_SYS_RAWIO))
 			return -EACCES;
 		return ata_task_ioctl(scsidev, arg);
+
+	case HDIO_GET_DMA:
+		return put_user(dev->xfer_mode == dev->dma_mode,
+				(long __user *) arg);
+	case HDIO_SET_DMA:
+		if (!capable(CAP_SYS_ADMIN) || !capable(CAP_SYS_RAWIO))
+			return -EACCES;
+
+		dma = !!(int)arg;
+		if (dma) {
+			if (!ata_dma_enabled(dev))
+				return -EINVAL;
+
+			dev->xfer_mode = dev->dma_mode;
+			dev->xfer_shift = ata_xfer_mode2shift(dev->dma_mode);
+			if (ap->ops->set_dmamode)
+				ap->ops->set_dmamode(ap, dev);
+		} else {
+			if (dev->pio_mode == 0xff)
+				return -EINVAL;
+
+			dev->xfer_mode = dev->pio_mode;
+			dev->xfer_shift = ATA_SHIFT_PIO;
+			if (ap->ops->set_piomode)
+				ap->ops->set_piomode(ap, dev);
+		}
+
+		ata_eh_acquire(ap);
+		rc = ata_dev_set_mode(dev);
+		ata_eh_release(ap);
+
+		return rc;
 
 	default:
 		rc = -ENOTTY;

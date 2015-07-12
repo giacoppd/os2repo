@@ -3214,7 +3214,7 @@ int ata_down_xfermask_limit(struct ata_device *dev, unsigned int sel)
 	return 0;
 }
 
-static int ata_dev_set_mode(struct ata_device *dev)
+int ata_dev_set_mode(struct ata_device *dev)
 {
 	struct ata_port *ap = dev->link->ap;
 	struct ata_eh_context *ehc = &dev->link->eh_context;
