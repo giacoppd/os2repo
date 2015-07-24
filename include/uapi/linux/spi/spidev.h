@@ -92,6 +92,8 @@ struct spi_ioc_transfer {
 	__u16		delay_usecs;
 	__u8		bits_per_word;
 	__u8		cs_change;
+	__u8		auto_pio_dma_mode;
+	__u32		auto_pio_dma_threshold;
 	__u32		pad;
 
 	/* If the contents of 'struct spi_ioc_transfer' ever change

@@ -620,6 +620,8 @@ struct spi_transfer {
 	u8		bits_per_word;
 	u16		delay_usecs;
 	u32		speed_hz;
+	u8		auto_pio_dma_mode;
+	u32		auto_pio_dma_threshold;
 
 	struct list_head transfer_list;
 };
