@@ -130,6 +130,8 @@ static int mmc_decode_csd(struct mmc_card *card)
 		csd->r2w_factor = UNSTUFF_BITS(resp, 26, 3);
 		csd->write_blkbits = UNSTUFF_BITS(resp, 22, 4);
 		csd->write_partial = UNSTUFF_BITS(resp, 21, 1);
+		csd->perm_wp = UNSTUFF_BITS(resp, 13, 1);
+		csd->temp_wp = UNSTUFF_BITS(resp, 12, 1);
 
 		if (UNSTUFF_BITS(resp, 46, 1)) {
 			csd->erase_size = 1;
@@ -170,6 +172,8 @@ static int mmc_decode_csd(struct mmc_card *card)
 		csd->r2w_factor = 4; /* Unused */
 		csd->write_blkbits = 9;
 		csd->write_partial = 0;
+		csd->perm_wp = UNSTUFF_BITS(resp, 13, 1);
+		csd->temp_wp = UNSTUFF_BITS(resp, 12, 1);
 		csd->erase_size = 1;
 		break;
 	default:

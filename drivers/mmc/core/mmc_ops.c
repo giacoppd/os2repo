@@ -13,6 +13,7 @@
 #include <linux/export.h>
 #include <linux/types.h>
 #include <linux/scatterlist.h>
+#include <linux/crc7.h>
 
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
@@ -637,3 +638,93 @@ int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)
 
 	return 0;
 }
+
+int mmc_program_csd(struct mmc_card *card, u8 *csd_128be)
+{
+	struct mmc_request mrq = {NULL};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+	void *data_buf;
+	int is_on_stack;
+	int len = 16;
+
+	is_on_stack = object_is_on_stack(csd_128be);
+	if (is_on_stack) {
+		/*
+		 * dma onto stack is unsafe/nonportable, but callers to this
+		 * routine normally provide temporary on-stack buffers ...
+		 */
+		data_buf = kmalloc(len, GFP_KERNEL);
+		if (!data_buf)
+			return -ENOMEM;
+		memcpy(data_buf, csd_128be, len);
+	} else
+		data_buf = csd_128be;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = MMC_PROGRAM_CSD;
+	cmd.arg = 0;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+
+	data.blksz = len;
+	data.blocks = 1;
+	data.flags = MMC_DATA_WRITE;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	sg_init_one(&sg, data_buf, len);
+
+	mmc_set_data_timeout(&data, card);
+
+	mmc_wait_for_req(card->host, &mrq);
+
+	if (is_on_stack)
+		kfree(data_buf);
+
+	if (cmd.error)
+		return cmd.error;
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+
+int mmc_set_card_wp(struct mmc_card *card, int wp)
+{
+	u8 csd_be128[16];
+	int i, ret;
+
+	if (card->csd.temp_wp == !!wp)
+		return 0;
+
+	for (i = 0; i < 4; i++)
+		((u32 *)csd_be128)[i] = cpu_to_be32(card->raw_csd[i]);
+
+	/* update bit 12 with new temp_wp value */
+	if (wp)
+		csd_be128[14] |= 0x10;
+	else
+		csd_be128[14] &= ~0x10;
+
+	/* set CRC7 into bits 7:1, and 1 into bit 0 */
+	csd_be128[15] = (crc7(0, csd_be128, 15) << 1) | 0x1;
+
+	ret = mmc_program_csd(card, csd_be128);
+
+	if (!ret) {
+		/* update cached csd without re-reading */
+		if (wp) {
+			card->raw_csd[3] |= BIT(12);
+			card->csd.temp_wp = 1;
+		} else {
+			card->raw_csd[3] &= ~BIT(12);
+			card->csd.temp_wp = 0;
+		}
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mmc_set_card_wp);

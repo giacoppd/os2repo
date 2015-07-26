@@ -42,7 +42,9 @@ struct mmc_csd {
 	unsigned int		read_partial:1,
 				read_misalign:1,
 				write_partial:1,
-				write_misalign:1;
+				write_misalign:1,
+				perm_wp:1,
+				temp_wp:1;
 };
 
 struct mmc_ext_csd {

@@ -106,6 +106,7 @@ struct mmc_blk_data {
 #define MMC_RO_FORCED		BIT(1)	/* read only forced */
 #define MMC_RO_BOOT_WP		BIT(2)	/* boot partitions write protected */
 #define MMC_RO_WRB		BIT(3)	/* write requests are blocked */
+#define MMC_RO_CARD_WP		BIT(4)	/* card is write protected via CSD */
 
 	unsigned int	part_type;
 	unsigned int	name_idx;
@@ -126,6 +127,7 @@ struct mmc_blk_data {
 #ifdef CONFIG_MMC_BLOCK_WRB
 	struct device_attribute block_writes;
 #endif
+	struct device_attribute card_wp;
 	int	area_type;
 };
 
@@ -366,6 +368,69 @@ static ssize_t block_writes_store(struct device *dev,
 	return count;
 }
 #endif
+
+static ssize_t card_wp_show(struct device *dev, struct device_attribute *attr,
+			     char *buf)
+{
+	int val, ret;
+	struct mmc_blk_data *md = mmc_blk_get(dev_to_disk(dev));
+	struct mmc_card *card = md->queue.card;
+
+	if (card->csd.perm_wp)
+		val = 2;
+	else if (card->csd.temp_wp)
+		val = 1;
+	else
+		val = 0;
+
+	ret = sprintf(buf, "%d\n", val);
+	mmc_blk_put(md);
+	return ret;
+}
+
+static ssize_t card_wp_store(struct device *dev, struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct mmc_blk_data *md, *part_md;
+	struct mmc_card *card;
+	unsigned long set;
+	ssize_t ret;
+
+	if (kstrtoul(buf, 0, &set) || (set != 0 && set != 1))
+		return -EINVAL;
+
+	md = mmc_blk_get(dev_to_disk(dev));
+	card = md->queue.card;
+	mmc_get_card(card);
+
+	if (card->csd.temp_wp == set)
+		goto out_ok;
+
+	ret = mmc_set_card_wp(card, set);
+	if (ret)
+		goto out;
+
+	if (card->csd.perm_wp || card->csd.temp_wp)
+		md->read_only |= MMC_RO_CARD_WP;
+	else
+		md->read_only &= ~MMC_RO_CARD_WP;
+	update_disk_ro(md);
+
+	/* propagate to all hw partitions over the same device */
+	list_for_each_entry(part_md, &md->part, part) {
+		if (card->csd.perm_wp || card->csd.temp_wp)
+			part_md->read_only |= MMC_RO_CARD_WP;
+		else
+			part_md->read_only &= ~MMC_RO_CARD_WP;
+		update_disk_ro(part_md);
+	}
+out_ok:
+	ret = count;
+out:
+	mmc_put_card(card);
+	mmc_blk_put(md);
+	return ret;
+}
 
 static int mmc_blk_open(struct block_device *bdev, fmode_t mode)
 {
@@ -2170,6 +2235,8 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 	    (card->ext_csd.boot_ro_lock & (EXT_CSD_BOOT_WP_B_PERM_WP_EN |
 					   EXT_CSD_BOOT_WP_B_PWR_WP_EN)))
 		md->read_only |= MMC_RO_BOOT_WP;
+	if (card->csd.perm_wp || card->csd.temp_wp)
+		md->read_only |= MMC_RO_CARD_WP;
 
 	md->disk = alloc_disk(perdev_minors);
 	if (md->disk == NULL) {
@@ -2353,6 +2420,7 @@ static void mmc_blk_remove_req(struct mmc_blk_data *md)
 			device_remove_file(disk_to_dev(md->disk),
 						&md->block_writes);
 #endif
+			device_remove_file(disk_to_dev(md->disk), &md->card_wp);
 			if ((md->area_type & MMC_BLK_DATA_AREA_BOOT) &&
 					card->ext_csd.boot_ro_lockable)
 				device_remove_file(disk_to_dev(md->disk),
@@ -2384,6 +2452,7 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 	struct mmc_card *card = md->queue.card;
 
 	add_disk(md->disk);
+
 	md->force_ro.show = force_ro_show;
 	md->force_ro.store = force_ro_store;
 	sysfs_attr_init(&md->force_ro.attr);
@@ -2392,6 +2461,7 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 	ret = device_create_file(disk_to_dev(md->disk), &md->force_ro);
 	if (ret)
 		goto force_ro_fail;
+
 #ifdef CONFIG_MMC_BLOCK_WRB
 	md->block_writes.show = block_writes_show;
 	md->block_writes.store = block_writes_store;
@@ -2402,6 +2472,15 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 	if (ret)
 		goto block_writes_fail;
 #endif
+
+	md->card_wp.show = card_wp_show;
+	md->card_wp.store = card_wp_store;
+	sysfs_attr_init(&md->card_wp.attr);
+	md->card_wp.attr.name = "card_wp";
+	md->card_wp.attr.mode = S_IRUGO | S_IWUSR;
+	ret = device_create_file(disk_to_dev(md->disk), &md->card_wp);
+	if (ret)
+		goto card_wp_fail;
 
 	if ((md->area_type & MMC_BLK_DATA_AREA_BOOT) &&
 	     card->ext_csd.boot_ro_lockable) {
@@ -2426,6 +2505,8 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 	return ret;
 
 power_ro_lock_fail:
+	device_remove_file(disk_to_dev(md->disk), &md->card_wp);
+card_wp_fail:
 #ifdef CONFIG_MMC_BLOCK_WRB
 	device_remove_file(disk_to_dev(md->disk), &md->block_writes);
 block_writes_fail:
