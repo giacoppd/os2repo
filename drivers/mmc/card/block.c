@@ -102,6 +102,10 @@ struct mmc_blk_data {
 
 	unsigned int	usage;
 	unsigned int	read_only;
+#define MMC_RO_DEVICE		BIT(0)	/* underlying device is read only */
+#define MMC_RO_FORCED		BIT(1)	/* read only forced */
+#define MMC_RO_BOOT_WP		BIT(2)	/* boot partitions write protected */
+
 	unsigned int	part_type;
 	unsigned int	name_idx;
 	unsigned int	reset_done;
@@ -190,6 +194,11 @@ static void mmc_blk_put(struct mmc_blk_data *md)
 	mutex_unlock(&open_lock);
 }
 
+static inline void update_disk_ro(struct mmc_blk_data *md)
+{
+	set_disk_ro(md->disk, !!md->read_only);
+}
+
 static ssize_t power_ro_lock_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -229,29 +238,41 @@ static ssize_t power_ro_lock_store(struct device *dev,
 
 	mmc_get_card(card);
 
+	if (card->ext_csd.boot_ro_lock & (EXT_CSD_BOOT_WP_B_PERM_WP_EN |
+					  EXT_CSD_BOOT_WP_B_PWR_WP_EN)) {
+		mmc_put_card(card);
+		goto out;
+	}
+
 	ret = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BOOT_WP,
 				card->ext_csd.boot_ro_lock |
 				EXT_CSD_BOOT_WP_B_PWR_WP_EN,
 				card->ext_csd.part_time);
-	if (ret)
+	if (ret) {
+		mmc_put_card(card);
 		pr_err("%s: Locking boot partition ro until next power on failed: %d\n", md->disk->disk_name, ret);
-	else
-		card->ext_csd.boot_ro_lock |= EXT_CSD_BOOT_WP_B_PWR_WP_EN;
-
-	mmc_put_card(card);
-
-	if (!ret) {
-		pr_info("%s: Locking boot partition ro until next power on\n",
-			md->disk->disk_name);
-		set_disk_ro(md->disk, 1);
-
-		list_for_each_entry(part_md, &md->part, part)
-			if (part_md->area_type == MMC_BLK_DATA_AREA_BOOT) {
-				pr_info("%s: Locking boot partition ro until next power on\n", part_md->disk->disk_name);
-				set_disk_ro(part_md->disk, 1);
-			}
+		goto out;
 	}
 
+	card->ext_csd.boot_ro_lock |= EXT_CSD_BOOT_WP_B_PWR_WP_EN;
+	mmc_put_card(card);
+
+	pr_info("%s: Locking boot partition ro until next power on\n",
+		md->disk->disk_name);
+	md->read_only |= MMC_RO_BOOT_WP;
+	update_disk_ro(md);
+
+	/* Hardware WP affects both boot partitions */
+	list_for_each_entry(part_md, &md->part, part) {
+		if (part_md->area_type == MMC_BLK_DATA_AREA_BOOT) {
+			pr_info("%s: Locking boot partition ro until "
+				"next power on\n", part_md->disk->disk_name);
+			part_md->read_only |= MMC_RO_BOOT_WP;
+			update_disk_ro(part_md);
+		}
+	}
+
+out:
 	mmc_blk_put(md);
 	return count;
 }
@@ -262,9 +283,10 @@ static ssize_t force_ro_show(struct device *dev, struct device_attribute *attr,
 	int ret;
 	struct mmc_blk_data *md = mmc_blk_get(dev_to_disk(dev));
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n",
-		       get_disk_ro(dev_to_disk(dev)) ^
-		       md->read_only);
+	/* Show 1 only if 'force_ro' is the only reason of device
+	 * being read only.
+	 */
+	ret = sprintf(buf, "%d\n", md->read_only == MMC_RO_FORCED);
 	mmc_blk_put(md);
 	return ret;
 }
@@ -272,20 +294,23 @@ static ssize_t force_ro_show(struct device *dev, struct device_attribute *attr,
 static ssize_t force_ro_store(struct device *dev, struct device_attribute *attr,
 			      const char *buf, size_t count)
 {
-	int ret;
-	char *end;
-	struct mmc_blk_data *md = mmc_blk_get(dev_to_disk(dev));
-	unsigned long set = simple_strtoul(buf, &end, 0);
-	if (end == buf) {
-		ret = -EINVAL;
-		goto out;
-	}
+	struct mmc_blk_data *md;
+	unsigned long set;
 
-	set_disk_ro(dev_to_disk(dev), set || md->read_only);
-	ret = count;
-out:
+	if (kstrtoul(buf, 0, &set))
+		return -EINVAL;
+
+	md = mmc_blk_get(dev_to_disk(dev));
+
+	if (set)
+		md->read_only |= MMC_RO_FORCED;
+	else
+		md->read_only &= ~MMC_RO_FORCED;
+
+	update_disk_ro(md);
+
 	mmc_blk_put(md);
-	return ret;
+	return count;
 }
 
 static int mmc_blk_open(struct block_device *bdev, fmode_t mode)
@@ -2036,7 +2061,7 @@ static inline int mmc_blk_readonly(struct mmc_card *card)
 static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 					      struct device *parent,
 					      sector_t size,
-					      bool default_ro,
+					      bool force_ro,
 					      const char *subname,
 					      int area_type)
 {
@@ -2073,7 +2098,14 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 	 * Set the read-only status based on the supported commands
 	 * and the write protect switch.
 	 */
-	md->read_only = mmc_blk_readonly(card);
+	if (mmc_blk_readonly(card))
+		md->read_only |= MMC_RO_DEVICE;
+	if (force_ro)
+		md->read_only |= MMC_RO_FORCED;
+	if (area_type == MMC_BLK_DATA_AREA_BOOT &&
+	    (card->ext_csd.boot_ro_lock & (EXT_CSD_BOOT_WP_B_PERM_WP_EN |
+					   EXT_CSD_BOOT_WP_B_PWR_WP_EN)))
+		md->read_only |= MMC_RO_BOOT_WP;
 
 	md->disk = alloc_disk(perdev_minors);
 	if (md->disk == NULL) {
@@ -2098,7 +2130,7 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 	md->disk->private_data = md;
 	md->disk->queue = md->queue.queue;
 	md->disk->driverfs_dev = parent;
-	set_disk_ro(md->disk, md->read_only || default_ro);
+	update_disk_ro(md);
 	if (area_type & MMC_BLK_DATA_AREA_RPMB)
 		md->disk->flags |= GENHD_FL_NO_PART_SCAN;
 
@@ -2186,14 +2218,14 @@ static int mmc_blk_alloc_part(struct mmc_card *card,
 			      struct mmc_blk_data *md,
 			      unsigned int part_type,
 			      sector_t size,
-			      bool default_ro,
+			      bool force_ro,
 			      const char *subname,
 			      int area_type)
 {
 	char cap_str[10];
 	struct mmc_blk_data *part_md;
 
-	part_md = mmc_blk_alloc_req(card, disk_to_dev(md->disk), size, default_ro,
+	part_md = mmc_blk_alloc_req(card, disk_to_dev(md->disk), size, force_ro,
 				    subname, area_type);
 	if (IS_ERR(part_md))
 		return PTR_ERR(part_md);
