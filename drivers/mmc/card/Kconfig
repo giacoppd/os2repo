@@ -50,6 +50,19 @@ config MMC_BLOCK_BOUNCE
 
 	  If unsure, say Y here.
 
+config MMC_BLOCK_WRB
+	bool "Support write request blocking on SD/MMC devices"
+	depends on MMC_BLOCK
+	default n
+	help
+	  Enabling this adds 'block_writes' sysfs attribute to SD/MMC
+	  block device. If 1 is written to that attribute, device is
+	  immediately sync'ed, and all further write requests will be
+	  errored out.
+
+	  This is unsafe, and should not be used unless you know exactly
+	  what you are doing.
+
 config SDIO_UART
 	tristate "SDIO UART/GPS class support"
 	depends on TTY

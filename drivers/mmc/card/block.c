@@ -105,6 +105,7 @@ struct mmc_blk_data {
 #define MMC_RO_DEVICE		BIT(0)	/* underlying device is read only */
 #define MMC_RO_FORCED		BIT(1)	/* read only forced */
 #define MMC_RO_BOOT_WP		BIT(2)	/* boot partitions write protected */
+#define MMC_RO_WRB		BIT(3)	/* write requests are blocked */
 
 	unsigned int	part_type;
 	unsigned int	name_idx;
@@ -122,6 +123,9 @@ struct mmc_blk_data {
 	unsigned int	part_curr;
 	struct device_attribute force_ro;
 	struct device_attribute power_ro_lock;
+#ifdef CONFIG_MMC_BLOCK_WRB
+	struct device_attribute block_writes;
+#endif
 	int	area_type;
 };
 
@@ -312,6 +316,56 @@ static ssize_t force_ro_store(struct device *dev, struct device_attribute *attr,
 	mmc_blk_put(md);
 	return count;
 }
+
+#ifdef CONFIG_MMC_BLOCK_WRB
+static ssize_t block_writes_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int ret;
+	struct mmc_blk_data *md = mmc_blk_get(dev_to_disk(dev));
+
+	ret = sprintf(buf, "%d\n", !!(md->read_only & MMC_RO_WRB));
+	mmc_blk_put(md);
+	return ret;
+}
+
+static ssize_t block_writes_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mmc_blk_data *md;
+	unsigned long set;
+
+	if (kstrtoul(buf, 0, &set))
+		return -EINVAL;
+
+	md = mmc_blk_get(dev_to_disk(dev));
+
+	if (!set)
+		md->read_only &= ~MMC_RO_WRB;
+	else {
+		struct disk_part_iter piter;
+		struct hd_struct *part;
+		struct block_device *bdev;
+
+		disk_part_iter_init(&piter, md->disk, DISK_PITER_INCL_PART0);
+		while ((part = disk_part_iter_next(&piter))) {
+			bdev = bdget(part_devt(part));
+			if (bdev) {
+				fsync_bdev(bdev);
+				bdput(bdev);
+			}
+		}
+		disk_part_iter_exit(&piter);
+
+		md->read_only |= MMC_RO_WRB;
+	}
+
+	update_disk_ro(md);
+
+	mmc_blk_put(md);
+	return count;
+}
+#endif
 
 static int mmc_blk_open(struct block_device *bdev, fmode_t mode)
 {
@@ -2006,6 +2060,16 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		/* claim host only for the first request */
 		mmc_get_card(card);
 
+#ifdef CONFIG_MMC_BLOCK_WRB
+	if (req && (md->read_only & MMC_RO_WRB) &&
+		((cmd_flags & REQ_DISCARD) || rq_data_dir(req) == WRITE)) {
+
+		blk_end_request_all(req, -EIO);
+		ret = 0;
+		goto out;
+	}
+#endif
+
 	ret = mmc_blk_part_switch(card, md);
 	if (ret) {
 		if (req) {
@@ -2285,6 +2349,10 @@ static void mmc_blk_remove_req(struct mmc_blk_data *md)
 			mmc_packed_clean(&md->queue);
 		if (md->disk->flags & GENHD_FL_UP) {
 			device_remove_file(disk_to_dev(md->disk), &md->force_ro);
+#ifdef CONFIG_MMC_BLOCK_WRB
+			device_remove_file(disk_to_dev(md->disk),
+						&md->block_writes);
+#endif
 			if ((md->area_type & MMC_BLK_DATA_AREA_BOOT) &&
 					card->ext_csd.boot_ro_lockable)
 				device_remove_file(disk_to_dev(md->disk),
@@ -2324,6 +2392,16 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 	ret = device_create_file(disk_to_dev(md->disk), &md->force_ro);
 	if (ret)
 		goto force_ro_fail;
+#ifdef CONFIG_MMC_BLOCK_WRB
+	md->block_writes.show = block_writes_show;
+	md->block_writes.store = block_writes_store;
+	sysfs_attr_init(&md->block_writes.attr);
+	md->block_writes.attr.name = "block_writes";
+	md->block_writes.attr.mode = S_IRUGO | S_IWUSR;
+	ret = device_create_file(disk_to_dev(md->disk), &md->block_writes);
+	if (ret)
+		goto block_writes_fail;
+#endif
 
 	if ((md->area_type & MMC_BLK_DATA_AREA_BOOT) &&
 	     card->ext_csd.boot_ro_lockable) {
@@ -2348,6 +2426,10 @@ static int mmc_add_disk(struct mmc_blk_data *md)
 	return ret;
 
 power_ro_lock_fail:
+#ifdef CONFIG_MMC_BLOCK_WRB
+	device_remove_file(disk_to_dev(md->disk), &md->block_writes);
+block_writes_fail:
+#endif
 	device_remove_file(disk_to_dev(md->disk), &md->force_ro);
 force_ro_fail:
 	del_gendisk(md->disk);
