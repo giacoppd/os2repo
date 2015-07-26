@@ -101,6 +101,7 @@ struct hpet_dev {
 	unsigned int hd_irq;
 #define HPET_DEV_NAME_SIZE	16
 	char hd_name[HPET_DEV_NAME_SIZE];
+	unsigned long hd_start_tick, hd_timeout_tick;
 };
 
 struct hpets {
@@ -121,6 +122,7 @@ static struct hpets *hpets;
 #define	HPET_IE			0x0002	/* interrupt enabled */
 #define	HPET_PERIODIC		0x0004
 #define	HPET_SHARED_IRQ		0x0008
+#define	HPET_STARTED		0x0010	/* started in singleshot mode */
 
 
 #ifndef readq
@@ -142,6 +144,7 @@ static irqreturn_t hpet_interrupt(int irq, void *data)
 {
 	struct hpet_dev *devp;
 	unsigned long isr;
+	unsigned long long conf;
 
 	devp = data;
 	isr = 1 << (devp - devp->hd_hpets->hp_dev);
@@ -159,7 +162,8 @@ static irqreturn_t hpet_interrupt(int irq, void *data)
 	}
 
 	/* we could race against disable ... */
-	if ((readq(&devp->hd_timer->hpet_config) & Tn_INT_ENB_CNF_MASK) == 0) {
+	conf = readq(&devp->hd_timer->hpet_config);
+	if ((conf & Tn_INT_ENB_CNF_MASK) == 0) {
 		spin_unlock(&hpet_lock);
 		return IRQ_HANDLED;
 	}
@@ -197,6 +201,10 @@ static irqreturn_t hpet_interrupt(int irq, void *data)
 		k = (mc - base + hpetp->hp_delta) / t;
 		write_counter(t * (k + 1) + base,
 			      &devp->hd_timer->hpet_compare);
+	} else if (devp->hd_flags & HPET_STARTED) {
+		conf &= ~Tn_INT_ENB_CNF_MASK;
+		writeq(conf, &devp->hd_timer->hpet_config);
+		devp->hd_flags &= ~HPET_STARTED;
 	}
 
 	spin_unlock(&hpet_lock);
@@ -304,8 +312,6 @@ hpet_read(struct file *file, char __user *buf, size_t count, loff_t * ppos)
 	struct hpet_dev *devp;
 
 	devp = file->private_data;
-	if (!devp->hd_ireqfreq)
-		return -EIO;
 
 	if (count < sizeof(unsigned long))
 		return -EINVAL;
@@ -430,7 +436,7 @@ static int hpet_release(struct inode *inode, struct file *file)
 	v &= ~(Tn_INT_ENB_CNF_MASK | Tn_TYPE_CNF_MASK);
 	writeq(v, &timer->hpet_config);
 
-	devp->hd_flags &= ~(HPET_OPEN | HPET_IE | HPET_PERIODIC);
+	devp->hd_flags &= ~(HPET_OPEN | HPET_IE | HPET_PERIODIC | HPET_STARTED);
 	spin_unlock_irq(&hpet_lock);
 
 	free_irq(devp->hd_irq, devp);
@@ -456,7 +462,7 @@ static int hpet_ioctl_ieon(struct hpet_dev *devp)
 
 	spin_lock_irq(&hpet_lock);
 
-	if (devp->hd_flags & HPET_IE) {
+	if (devp->hd_flags & (HPET_IE | HPET_STARTED)) {
 		spin_unlock_irq(&hpet_lock);
 		return -EBUSY;
 	}
@@ -508,6 +514,170 @@ static int hpet_ioctl_ieon(struct hpet_dev *devp)
 	return 0;
 }
 
+static int mul_u64_u64(u64 a, u64 b, u64 *ret)
+{
+	u64 tmp, tmp2;
+
+	if (a < b) {
+		tmp = a;
+		a = b;
+		b = tmp;
+	}
+
+	/* if lower of two does not fit in 32 bits, we have overflow */
+	if (b >= 0x100000000ull)
+		return -EOVERFLOW;
+
+	tmp = (a >> 32) * b;
+	if (tmp >= 0x100000000ull)
+		return -EOVERFLOW;
+	tmp <<= 32;
+
+	tmp2 = (a & 0xffffffff) * b;
+	if (tmp + tmp2 < tmp)
+		return -EOVERFLOW;
+
+	*ret = tmp + tmp2;
+	return 0;
+}
+
+static int hpet_ioctl_start(struct hpet_dev *devp, unsigned long arg)
+{
+	struct timespec timeout_ts;
+	struct hpet_timer __iomem *timer;
+	struct hpet __iomem *hpet;
+	struct hpets *hpetp;
+	unsigned long long timeout_ns, ticks, v;
+	unsigned long flags;
+
+	if (copy_from_user(&timeout_ts, (void __user *)arg, sizeof(timeout_ts)))
+		return -EFAULT;
+
+	timer = devp->hd_timer;
+	hpet = devp->hd_hpet;
+	hpetp = devp->hd_hpets;
+
+	timeout_ns = (unsigned long long) timeout_ts.tv_sec * NSEC_PER_SEC +
+		timeout_ts.tv_nsec;
+
+	/* NSEC_PER_SEC nanoseconds need hpetp->hp_tick_freq counter ticks.
+	 *
+	 * For timeout_ns, need hpetp->hp_tick_freq * timeout_ns / NSEC_PER_SEC
+	 * ticks.
+	 *
+	 * Need to avoid 64bit overflow when computing that:
+	 * - userspace could pass any sort of garbage,
+	 * - no guarantee that HPET freq will always stay below 2^32 Hz
+	 */
+
+	if (mul_u64_u64(timeout_ns, hpetp->hp_tick_freq, &ticks) != 0)
+		return -EINVAL;
+	do_div(ticks, NSEC_PER_SEC);
+	if (ticks >= 0x100000000ull)
+		return -EINVAL;
+
+	if (ticks < hpetp->hp_delta)
+		ticks = hpetp->hp_delta;
+
+	spin_lock_irq(&hpet_lock);
+
+	if (devp->hd_flags & (HPET_IE | HPET_PERIODIC | HPET_STARTED)) {
+		spin_unlock_irq(&hpet_lock);
+		return -EBUSY;
+	}
+
+	local_irq_save(flags);
+
+	v = read_counter(&hpet->hpet_mc);
+	devp->hd_start_tick = v;
+	v += ticks;
+	devp->hd_timeout_tick = v;
+	write_counter(v, &timer->hpet_compare);
+
+	v = readq(&timer->hpet_config);
+	v |= Tn_INT_ENB_CNF_MASK;
+	v &= ~Tn_TYPE_CNF_MASK;
+	writeq(v, &timer->hpet_config);
+
+	local_irq_restore(flags);
+
+	devp->hd_flags |= HPET_STARTED;
+
+	spin_unlock_irq(&hpet_lock);
+	return 0;
+}
+
+static int hpet_ioctl_stop(struct hpet_dev *devp)
+{
+	struct hpet_timer __iomem *timer;
+	unsigned long long v;
+
+	timer = devp->hd_timer;
+
+	spin_lock(&hpet_lock);
+
+	if (devp->hd_flags & HPET_STARTED) {
+		v = readq(&timer->hpet_config);
+		v &= ~Tn_INT_ENB_CNF_MASK;
+		writeq(v, &timer->hpet_config);
+		devp->hd_flags &= ~HPET_STARTED;
+	}
+
+	spin_unlock(&hpet_lock);
+	return 0;
+}
+
+static int hpet_ioctl_query(struct hpet_dev *devp, unsigned long arg)
+{
+	struct hpet_timer __iomem *timer;
+	struct hpet __iomem *hpet;
+	struct hpets *hpetp;
+	unsigned long m, a, b, ticks;
+	unsigned long long nsecs;
+	struct timespec res;
+
+	timer = devp->hd_timer;
+	hpet = devp->hd_hpet;
+	hpetp = devp->hd_hpets;
+
+	spin_lock(&hpet_lock);
+
+	if (!(devp->hd_flags & HPET_STARTED)) {
+		/* It is bad ideas to return error here since we could
+		 * race with irq.
+		 * Instread, return zero remaining time.
+		 */
+		res.tv_sec = res.tv_nsec = 0;
+		goto out;
+	}
+
+	m = read_counter(&hpet->hpet_mc);
+
+	/* If this value is between devp->hd_start_tick and
+	 * devp->hd_timeout_tick, then calculate remaining time,
+	 * otherwise return zero.
+	 */
+	a = devp->hd_start_tick;
+	b = devp->hd_timeout_tick;
+	if ((a < b && (a <= m && m <= b)) || ((a > b) && (a >= m || m <= b))) {
+		ticks = b - m;
+		nsecs = div64_u64((unsigned long long) ticks * NSEC_PER_SEC,
+				hpetp->hp_tick_freq);
+		res.tv_nsec = do_div(nsecs, NSEC_PER_SEC);
+		res.tv_sec = nsecs;
+	} else {
+		res.tv_sec = res.tv_nsec = 0;
+	}
+
+out:
+	spin_unlock(&hpet_lock);
+
+	if (copy_to_user((void *)arg, &res, sizeof(res)))
+		return -EFAULT;
+
+	return 0;
+}
+
 /* converts Hz to number of timer ticks */
 static inline unsigned long hpet_time_div(struct hpets *hpets,
 					  unsigned long dis)
@@ -541,6 +711,12 @@ hpet_ioctl_common(struct hpet_dev *devp, int cmd, unsigned long arg,
 		break;
 	case HPET_IE_ON:
 		return hpet_ioctl_ieon(devp);
+	case HPET_START:
+		return hpet_ioctl_start(devp, arg);
+	case HPET_STOP:
+		return hpet_ioctl_stop(devp);
+	case HPET_QUERY:
+		return hpet_ioctl_query(devp, arg);
 	default:
 		return -EINVAL;
 	}
@@ -575,6 +751,8 @@ hpet_ioctl_common(struct hpet_dev *devp, int cmd, unsigned long arg,
 		v = readq(&timer->hpet_config);
 		if ((v & Tn_PER_INT_CAP_MASK) == 0)
 			err = -ENXIO;
+		else if (devp->hd_flags & HPET_STARTED)
+			err = -EBUSY;
 		else
 			devp->hd_flags |= HPET_PERIODIC;
 		spin_unlock_irq(&hpet_lock);

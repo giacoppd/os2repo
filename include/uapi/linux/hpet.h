@@ -1,8 +1,11 @@
 #ifndef _UAPI__HPET__
 #define _UAPI__HPET__
 
-#include <linux/compiler.h>
-
+#ifdef __KERNEL__
+#include <linux/time.h>
+#else
+#include <sys/time.h>
+#endif
 
 struct hpet_info {
 	unsigned long hi_ireqfreq;	/* Hz */
@@ -19,6 +22,10 @@ struct hpet_info {
 #define	HPET_EPI	_IO('h', 0x04)	/* enable periodic */
 #define	HPET_DPI	_IO('h', 0x05)	/* disable periodic */
 #define	HPET_IRQFREQ	_IOW('h', 0x6, unsigned long)	/* IRQFREQ usec */
+
+#define HPET_START	_IOW('h', 0x7, struct timespec)
+#define HPET_STOP	_IO('h', 0x8)
+#define HPET_QUERY	_IOR('h', 0x9, struct timespec)
 
 #define MAX_HPET_TBS	8		/* maximum hpet timer blocks */
 
