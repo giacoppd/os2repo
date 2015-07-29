@@ -67,7 +67,9 @@
 #define DW_IC_CLR_GEN_CALL	0x68
 #define DW_IC_ENABLE		0x6c
 # define DW_IC_ENABLE_EN	BIT(0)
+# define DW_IC_ENABLE_ABRT	BIT(1)
 #define DW_IC_STATUS		0x70
+# define DW_IC_STATUS_MST_ACT	BIT(5)
 #define DW_IC_TXFLR		0x74
 #define DW_IC_RXFLR		0x78
 #define DW_IC_SDA_HOLD		0x7c
@@ -174,6 +176,8 @@ static char *abort_sources[] = {
 		"lost arbitration",
 };
 
+static int i2c_dw_wait_bus_not_busy(struct dw_i2c_dev *dev);
+
 u32 dw_readl(struct dw_i2c_dev *dev, int offset)
 {
 	u32 value;
@@ -262,6 +266,17 @@ static void __i2c_dw_enable(struct dw_i2c_dev *dev, bool enable)
 {
 	int timeout = 100;
 	u32 status;
+
+	if (!enable &&
+	    (dw_readl(dev, DW_IC_STATUS) & DW_IC_STATUS_MST_ACT)) {
+		/* Must abort if some activity is pending. */
+		/* Enable first before */
+		dw_writel(dev, DW_IC_ENABLE_EN, DW_IC_ENABLE);
+		/* aborting. */
+		dw_writel(dev, DW_IC_ENABLE_EN | DW_IC_ENABLE_ABRT,
+			  DW_IC_ENABLE);
+		i2c_dw_wait_bus_not_busy(dev); /* wait for abort completion */
+	}
 
 	do {
 		dw_writel(dev, enable ? DW_IC_ENABLE_EN : 0, DW_IC_ENABLE);
@@ -642,8 +657,10 @@ i2c_dw_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	dev->rx_outstanding = 0;
 
 	ret = i2c_dw_wait_bus_not_busy(dev);
-	if (ret < 0)
+	if (ret < 0) {
+		i2c_dw_disable(dev);
 		goto done;
+	}
 
 	/* start the transfers */
 	i2c_dw_xfer_init(dev);
