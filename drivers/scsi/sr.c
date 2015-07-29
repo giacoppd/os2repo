@@ -743,6 +743,14 @@ static int sr_probe(struct device *dev)
 	disk->flags |= GENHD_FL_REMOVABLE;
 	add_disk(disk);
 
+	/*
+	 * Let SCSI add change reason to uevent.
+	 * This is a custom requirement from Bay Trail customer,
+	 * to have get an event notification of media insertion
+	 * and removal.
+	 */
+	sdev->add_change_reason = 1;
+
 	sdev_printk(KERN_DEBUG, sdev,
 		    "Attached scsi CD-ROM %s\n", cd->cdi.name);
 	scsi_autopm_put_device(cd->device);
