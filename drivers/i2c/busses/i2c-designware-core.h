@@ -31,6 +31,7 @@
 #define DW_IC_CON_SPEED_MASK		0x6
 #define DW_IC_CON_SPEED_STD		0x2
 #define DW_IC_CON_SPEED_FAST		0x4
+#define DW_IC_CON_SPEED_HIGH		0x6
 #define DW_IC_CON_10BITADDR_MASTER	0x10
 #define DW_IC_CON_RESTART_EN		0x20
 #define DW_IC_CON_SLAVE_DISABLE		0x40
@@ -66,6 +67,8 @@
  * @ss_lcnt: standard speed LCNT value
  * @fs_hcnt: fast speed HCNT value
  * @fs_lcnt: fast speed LCNT value
+ * @hs_hcnt: high speed HCNT value
+ * @hs_lcnt: high speed LCNT value
  *
  * HCNT and LCNT parameters can be used if the platform knows more accurate
  * values than the one computed based only on the input clock frequency.
@@ -104,6 +107,9 @@ struct dw_i2c_dev {
 	u16			ss_lcnt;
 	u16			fs_hcnt;
 	u16			fs_lcnt;
+	u16			hs_hcnt;
+	u16			hs_lcnt;
+	bool			high_speed;
 };
 
 #define ACCESS_SWAP		0x00000001

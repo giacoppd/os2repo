@@ -46,10 +46,11 @@
 
 static char *flags;
 module_param(flags, charp, 0444);
-MODULE_PARM_DESC(flags, "colon-delimited per-channel flags: [sfp]\n"
+MODULE_PARM_DESC(flags, "colon-delimited per-channel flags: [sfph]\n"
 "	s - standard speed (100KHz)\n"
 "	f - fast speed (400KHz)\n"
-"	p - fast-plus speed (1000kHz)\n");
+"	p - fast-plus speed (1000kHz)\n"
+"	h - high speed (3.4MHz)\n");
 
 #define MAX_CHANNELS	7
 
@@ -58,6 +59,7 @@ enum i2c_speeds {
 	i2c_ss,
 	i2c_fs,
 	i2c_fplus,
+	i2c_hs
 };
 
 static struct chan_opts {
@@ -86,6 +88,9 @@ static void i2c_dw_parse_flags(char *flags)
 			break;
 		case 'p':
 			chan_opts[i].speed = i2c_fplus;
+			break;
+		case 'h':
+			chan_opts[i].speed = i2c_hs;
 			break;
 		case ':':
 			i++; /* next channel */
@@ -249,6 +254,20 @@ static int dw_i2c_probe(struct platform_device *pdev)
 	} else if (chan_opts[channel].speed == i2c_fs ||
 		chan_opts[channel].speed == i2c_fplus) {
 		dev->master_cfg |= DW_IC_CON_SPEED_FAST;
+	} else if (chan_opts[channel].speed == i2c_hs) {
+		u32 ic_clk = dev->get_clk_rate_khz(dev);
+		u32 hs_hcnt, hs_lcnt;
+		hs_hcnt = (60 * ic_clk) / 1000000;
+		hs_lcnt = (120 * ic_clk) / 1000000;
+		if (hs_hcnt < 2) {
+			dev_warn(dev->dev, "Clock rate too low for high speed!\n");
+			dev->master_cfg |= DW_IC_CON_SPEED_FAST;
+		} else {
+			dev->hs_hcnt = hs_hcnt;
+			dev->hs_lcnt = hs_lcnt;
+			dev->master_cfg |= DW_IC_CON_SPEED_HIGH;
+			dev->high_speed = true;
+		}
 	} else {
 		dev->master_cfg |= DW_IC_CON_SPEED_FAST;
 	}

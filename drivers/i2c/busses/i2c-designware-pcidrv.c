@@ -45,10 +45,11 @@
 
 static char *flags;
 module_param(flags, charp, 0444);
-MODULE_PARM_DESC(flags, "colon-delimited per-channel flags: [sfp]\n"
+MODULE_PARM_DESC(flags, "colon-delimited per-channel flags: [sfph]\n"
 "	s - standard speed (100KHz)\n"
 "	f - fast speed (400KHz)\n"
-"	p - fast-plus speed (1000kHz)\n");
+"	p - fast-plus speed (1000kHz)\n"
+"	h - high speed (3.4MHz)\n");
 
 #define MAX_CHANNELS	7
 
@@ -57,6 +58,7 @@ enum i2c_speeds {
 	i2c_ss,
 	i2c_fs,
 	i2c_fplus,
+	i2c_hs
 };
 
 static struct chan_opts {
@@ -85,6 +87,8 @@ struct dw_scl_sda_cfg {
 	u32 fs_lcnt;
 	u32 fp_hcnt;
 	u32 fp_lcnt;
+	u32 hs_hcnt;
+	u32 hs_lcnt;
 	u32 sda_hold;
 };
 
@@ -114,6 +118,8 @@ static struct dw_scl_sda_cfg byt_config = {
 	.fs_lcnt = 0x99,
 	.fp_hcnt = 0x1B,
 	.fp_lcnt = 0x3A,
+	.hs_hcnt = 0x06,
+	.hs_lcnt = 0x0C,
 	.sda_hold = 0x6,
 };
 
@@ -193,6 +199,9 @@ static void i2c_dw_parse_flags(char *flags)
 			break;
 		case 'p':
 			chan_opts[i].speed = i2c_fplus;
+			break;
+		case 'h':
+			chan_opts[i].speed = i2c_hs;
 			break;
 		case ':':
 			i++; /* next channel */
@@ -330,6 +339,9 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	} else if (chan_opts[channel].speed == i2c_fs ||
 		   chan_opts[channel].speed == i2c_fplus) {
 		mode = DW_IC_CON_SPEED_FAST;
+	} else if (chan_opts[channel].speed == i2c_hs) {
+		dev->high_speed = true;
+		mode = DW_IC_CON_SPEED_HIGH;
 	} else { /* speed not set - using default from dw_pci_controller */
 		mode = controller->bus_cfg & DW_IC_CON_SPEED_MASK;
 	}
@@ -346,6 +358,8 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 			dev->fs_hcnt = cfg->fs_hcnt;
 			dev->fs_lcnt = cfg->fs_lcnt;
 		}
+		dev->hs_hcnt = cfg->hs_hcnt;
+		dev->hs_lcnt = cfg->hs_lcnt;
 		dev->sda_hold_time = cfg->sda_hold;
 	}
 

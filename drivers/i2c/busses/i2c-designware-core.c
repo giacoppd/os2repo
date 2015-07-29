@@ -41,6 +41,7 @@
  */
 #define DW_IC_CON		0x0
 #define DW_IC_TAR		0x4
+# define DW_IC_TAR_HS_MASTER	(BIT(10) | BIT(11))
 #define DW_IC_DATA_CMD		0x10
 # define DW_IC_CMD_READ		BIT(8)
 # define DW_IC_CMD_STOP		BIT(9)
@@ -49,6 +50,8 @@
 #define DW_IC_SS_SCL_LCNT	0x18
 #define DW_IC_FS_SCL_HCNT	0x1c
 #define DW_IC_FS_SCL_LCNT	0x20
+#define DW_IC_HS_SCL_HCNT	0x24
+#define DW_IC_HS_SCL_LCNT	0x28
 #define DW_IC_INTR_STAT		0x2c
 #define DW_IC_INTR_MASK		0x30
 #define DW_IC_RAW_INTR_STAT	0x34
@@ -372,6 +375,23 @@ int i2c_dw_init(struct dw_i2c_dev *dev)
 	dw_writel(dev, lcnt, DW_IC_FS_SCL_LCNT);
 	dev_dbg(dev->dev, "Fast-mode HCNT:LCNT = %d:%d\n", hcnt, lcnt);
 
+	if ((dev->master_cfg & DW_IC_CON_SPEED_MASK) ==
+	    DW_IC_CON_SPEED_HIGH) {
+		if (((comp_param1 >> 2) & 3) != 3) {
+			dev_err(dev->dev, "High Speed not supported!\n");
+			dev->master_cfg &= ~DW_IC_CON_SPEED_MASK;
+			dev->master_cfg |= DW_IC_CON_SPEED_FAST;
+			dev->high_speed = false;
+		} else if (dev->hs_hcnt && dev->hs_lcnt) {
+			hcnt = dev->hs_hcnt;
+			lcnt = dev->hs_lcnt;
+			dw_writel(dev, hcnt, DW_IC_HS_SCL_HCNT);
+			dw_writel(dev, lcnt, DW_IC_HS_SCL_LCNT);
+			dev_dbg(dev->dev, "HighSpeed-mode HCNT:LCNT = %d:%d\n",
+				hcnt, lcnt);
+		}
+	}
+
 	/* Configure SDA Hold Time if required */
 	if (dev->sda_hold_time) {
 		reg = dw_readl(dev, DW_IC_COMP_VERSION);
@@ -437,6 +457,9 @@ static void i2c_dw_xfer_init(struct dw_i2c_dev *dev)
 	} else {
 		ic_con &= ~DW_IC_CON_10BITADDR_MASTER;
 	}
+
+	if (dev->high_speed) /* High speed */
+		ic_tar |= DW_IC_TAR_HS_MASTER; /* Send master highspeed addr */
 
 	dw_writel(dev, ic_con, DW_IC_CON);
 
