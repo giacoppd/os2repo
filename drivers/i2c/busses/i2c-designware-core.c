@@ -387,8 +387,8 @@ int i2c_dw_init(struct dw_i2c_dev *dev)
 	dev->rx_fifo_depth = ((comp_param1 >> 8) & 0xff) + 1;
 	dev_dbg(dev->dev, "Tx/Rx FIFO sizes: %d/%d\n",
 			dev->tx_fifo_depth, dev->rx_fifo_depth);
-	dw_writel(dev, dev->tx_fifo_depth - 1, DW_IC_TX_TL);
-	dw_writel(dev, 0, DW_IC_RX_TL);
+	dw_writel(dev, dev->tx_fifo_depth / 4, DW_IC_TX_TL);
+	dw_writel(dev, dev->rx_fifo_depth * 3 / 4, DW_IC_RX_TL);
 
 	/* configure the i2c master */
 	dw_writel(dev, dev->master_cfg , DW_IC_CON);
@@ -452,9 +452,8 @@ static void i2c_dw_xfer_init(struct dw_i2c_dev *dev)
 	/* Enable the adapter */
 	__i2c_dw_enable(dev, true);
 
-	/* Clear and enable interrupts */
+	/* Clear interrupts, they will be enabled in 'xfer' function */
 	i2c_dw_clear_int(dev);
-	dw_writel(dev, DW_IC_INTR_DEFAULT_MASK, DW_IC_INTR_MASK);
 }
 
 /*
@@ -511,7 +510,7 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 		}
 
 		tx_limit = dev->tx_fifo_depth - dw_readl(dev, DW_IC_TXFLR);
-		rx_limit = dev->rx_fifo_depth - dw_readl(dev, DW_IC_RXFLR);
+		rx_limit = dev->rx_fifo_depth - dev->rx_outstanding;
 
 		while (buf_len > 0 && tx_limit > 0 && rx_limit > 0) {
 			u32 cmd = 0;
@@ -532,11 +531,6 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 			}
 
 			if (msgs[dev->msg_write_idx].flags & I2C_M_RD) {
-
-				/* avoid rx buffer overrun */
-				if (rx_limit - dev->rx_outstanding <= 0)
-					break;
-
 				dw_writel(dev, cmd | DW_IC_CMD_READ,
 					  DW_IC_DATA_CMD);
 				rx_limit--;
@@ -570,11 +564,12 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 	dw_writel(dev, intr_mask,  DW_IC_INTR_MASK);
 }
 
-static void
+static int
 i2c_dw_read(struct dw_i2c_dev *dev)
 {
 	struct i2c_msg *msgs = dev->msgs;
 	int rx_valid;
+	int count = 0;
 
 	for (; dev->msg_read_idx < dev->msgs_num; dev->msg_read_idx++) {
 		u32 len;
@@ -596,16 +591,19 @@ i2c_dw_read(struct dw_i2c_dev *dev)
 		for (; len > 0 && rx_valid > 0; len--, rx_valid--) {
 			*buf++ = dw_readl(dev, DW_IC_DATA_CMD);
 			dev->rx_outstanding--;
+			count++;
 		}
 
 		if (len > 0) {
 			dev->status |= STATUS_READ_IN_PROGRESS;
 			dev->rx_buf_len = len;
 			dev->rx_buf = buf;
-			return;
+			return count;
 		} else
 			dev->status &= ~STATUS_READ_IN_PROGRESS;
 	}
+
+	return count;
 }
 
 static int i2c_dw_handle_tx_abort(struct dw_i2c_dev *dev)
@@ -665,6 +663,8 @@ i2c_dw_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	/* start the transfers */
 	i2c_dw_xfer_init(dev);
 
+	/* Fill up TX buffer and enable interrupts */
+	i2c_dw_xfer_msg(dev);
 	/* wait for tx to complete */
 	ret = wait_for_completion_timeout(&dev->cmd_complete, HZ);
 	if (ret == 0) {
@@ -781,6 +781,7 @@ irqreturn_t i2c_dw_isr(int this_irq, void *dev_id)
 {
 	struct dw_i2c_dev *dev = dev_id;
 	u32 stat, enabled;
+	int read_count = 0;
 
 	enabled = dw_readl(dev, DW_IC_ENABLE);
 	stat = dw_readl(dev, DW_IC_RAW_INTR_STAT);
@@ -803,10 +804,13 @@ irqreturn_t i2c_dw_isr(int this_irq, void *dev_id)
 		goto tx_aborted;
 	}
 
-	if (stat & DW_IC_INTR_RX_FULL)
-		i2c_dw_read(dev);
+	if ((stat & (DW_IC_INTR_RX_FULL | DW_IC_INTR_STOP_DET)) ||
+	    dev->rx_outstanding)
+		read_count = i2c_dw_read(dev);
 
-	if (stat & DW_IC_INTR_TX_EMPTY)
+	/* Allow TX_EMPTY intr if TX queue is not empty */
+	if ((read_count && dev->status & STATUS_WRITE_IN_PROGRESS) ||
+	    (stat & DW_IC_INTR_TX_EMPTY))
 		i2c_dw_xfer_msg(dev);
 
 	/*
