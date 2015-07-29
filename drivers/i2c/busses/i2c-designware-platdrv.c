@@ -205,6 +205,8 @@ static int dw_i2c_probe(struct platform_device *pdev)
 		return r;
 
 	i2c_dw_disable_int(dev);
+	i2c_dw_clear_int(dev);
+
 	r = devm_request_irq(&pdev->dev, dev->irq, i2c_dw_isr, IRQF_SHARED,
 			pdev->name, dev);
 	if (r) {
