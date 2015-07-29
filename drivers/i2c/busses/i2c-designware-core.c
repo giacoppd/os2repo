@@ -42,6 +42,9 @@
 #define DW_IC_CON		0x0
 #define DW_IC_TAR		0x4
 #define DW_IC_DATA_CMD		0x10
+# define DW_IC_CMD_READ		BIT(8)
+# define DW_IC_CMD_STOP		BIT(9)
+# define DW_IC_CMD_RESTART	BIT(10)
 #define DW_IC_SS_SCL_HCNT	0x14
 #define DW_IC_SS_SCL_LCNT	0x18
 #define DW_IC_FS_SCL_HCNT	0x1c
@@ -501,10 +504,10 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 			 */
 			if (dev->msg_write_idx == dev->msgs_num - 1 &&
 			    buf_len == 1)
-				cmd |= BIT(9);
+				cmd |= DW_IC_CMD_STOP;
 
 			if (need_restart) {
-				cmd |= BIT(10);
+				cmd |= DW_IC_CMD_RESTART;
 				need_restart = false;
 			}
 
@@ -514,7 +517,8 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 				if (rx_limit - dev->rx_outstanding <= 0)
 					break;
 
-				dw_writel(dev, cmd | 0x100, DW_IC_DATA_CMD);
+				dw_writel(dev, cmd | DW_IC_CMD_READ,
+					  DW_IC_DATA_CMD);
 				rx_limit--;
 				dev->rx_outstanding++;
 			} else
