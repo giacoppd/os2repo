@@ -44,10 +44,61 @@
 #include <linux/acpi.h>
 #include "i2c-designware-core.h"
 
+static char *flags;
+module_param(flags, charp, 0444);
+MODULE_PARM_DESC(flags, "colon-delimited per-channel flags: [sfp]\n"
+"	s - standard speed (100KHz)\n"
+"	f - fast speed (400KHz)\n"
+"	p - fast-plus speed (1000kHz)\n");
+
+#define MAX_CHANNELS	7
+
+enum i2c_speeds {
+	i2c_none = 0,
+	i2c_ss,
+	i2c_fs,
+	i2c_fplus,
+};
+
+static struct chan_opts {
+	enum i2c_speeds speed;
+} chan_opts[MAX_CHANNELS];
+
 static struct i2c_algorithm i2c_dw_algo = {
 	.master_xfer	= i2c_dw_xfer,
 	.functionality	= i2c_dw_func,
 };
+
+static void i2c_dw_parse_flags(char *flags)
+{
+	char *p = flags;
+	int i;
+
+	for (i = 0; i < MAX_CHANNELS; p++) {
+		if (!*p)
+			break;
+		switch (*p) {
+		case 's':
+			chan_opts[i].speed = i2c_ss;
+			break;
+		case 'f':
+			chan_opts[i].speed = i2c_fs;
+			break;
+		case 'p':
+			chan_opts[i].speed = i2c_fplus;
+			break;
+		case ':':
+			i++; /* next channel */
+			break;
+		default:
+			pr_err("i2c-designware-platform: invalid "
+			       "flag %c for channel %d\n", *p, i);
+		}
+	}
+}
+
+static int channel = 0;
+
 static u32 i2c_dw_get_clk_rate_khz(struct dw_i2c_dev *dev)
 {
 	return clk_get_rate(dev->clk)/1000;
@@ -99,7 +150,6 @@ static void dw_i2c_acpi_params(struct platform_device *pdev, char method[],
 static int dw_i2c_acpi_configure(struct platform_device *pdev)
 {
 	struct dw_i2c_dev *dev = platform_get_drvdata(pdev);
-	bool fs_mode = dev->master_cfg & DW_IC_CON_SPEED_FAST;
 
 	if (!ACPI_HANDLE(&pdev->dev))
 		return -ENODEV;
@@ -111,9 +161,13 @@ static int dw_i2c_acpi_configure(struct platform_device *pdev)
 	 * it exists for both supported speed modes.
 	 */
 	dw_i2c_acpi_params(pdev, "SSCN", &dev->ss_hcnt, &dev->ss_lcnt,
-			   fs_mode ? NULL : &dev->sda_hold_time);
-	dw_i2c_acpi_params(pdev, "FMCN", &dev->fs_hcnt, &dev->fs_lcnt,
-			   fs_mode ? &dev->sda_hold_time : NULL);
+			   NULL);
+	if (chan_opts[channel].speed == i2c_fplus)
+		dw_i2c_acpi_params(pdev, "FPCN", &dev->fs_hcnt, &dev->fs_lcnt,
+				   &dev->sda_hold_time);
+	else
+		dw_i2c_acpi_params(pdev, "FMCN", &dev->fs_hcnt, &dev->fs_lcnt,
+				   &dev->sda_hold_time);
 
 	return 0;
 }
@@ -182,7 +236,22 @@ static int dw_i2c_probe(struct platform_device *pdev)
 		I2C_FUNC_SMBUS_WORD_DATA |
 		I2C_FUNC_SMBUS_I2C_BLOCK;
 	dev->master_cfg =  DW_IC_CON_MASTER | DW_IC_CON_SLAVE_DISABLE |
-		DW_IC_CON_RESTART_EN | DW_IC_CON_SPEED_FAST;
+		DW_IC_CON_RESTART_EN;
+
+	if (channel >= MAX_CHANNELS) {
+		dev_warn(dev->dev, "Using default params\n");
+		channel = MAX_CHANNELS - 1;
+		memset(&chan_opts[channel], 0, sizeof(struct chan_opts));
+	}
+
+	if (chan_opts[channel].speed == i2c_ss) {
+		dev->master_cfg |= DW_IC_CON_SPEED_STD;
+	} else if (chan_opts[channel].speed == i2c_fs ||
+		chan_opts[channel].speed == i2c_fplus) {
+		dev->master_cfg |= DW_IC_CON_SPEED_FAST;
+	} else {
+		dev->master_cfg |= DW_IC_CON_SPEED_FAST;
+	}
 
 #ifdef CONFIG_ACPI
 	dw_i2c_acpi_configure(pdev);
@@ -223,6 +292,7 @@ static int dw_i2c_probe(struct platform_device *pdev)
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
+	channel++;
 	return 0;
 }
 
@@ -295,6 +365,8 @@ static struct platform_driver dw_i2c_driver = {
 
 static int __init dw_i2c_init_driver(void)
 {
+	if (flags)
+		i2c_dw_parse_flags(flags);
 	return platform_driver_register(&dw_i2c_driver);
 }
 subsys_initcall(dw_i2c_init_driver);

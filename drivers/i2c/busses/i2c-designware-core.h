@@ -28,6 +28,7 @@
 
 
 #define DW_IC_CON_MASTER		0x1
+#define DW_IC_CON_SPEED_MASK		0x6
 #define DW_IC_CON_SPEED_STD		0x2
 #define DW_IC_CON_SPEED_FAST		0x4
 #define DW_IC_CON_10BITADDR_MASTER	0x10

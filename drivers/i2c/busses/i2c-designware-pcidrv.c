@@ -43,6 +43,26 @@
 
 #define DRIVER_NAME "i2c-designware-pci"
 
+static char *flags;
+module_param(flags, charp, 0444);
+MODULE_PARM_DESC(flags, "colon-delimited per-channel flags: [sfp]\n"
+"	s - standard speed (100KHz)\n"
+"	f - fast speed (400KHz)\n"
+"	p - fast-plus speed (1000kHz)\n");
+
+#define MAX_CHANNELS	7
+
+enum i2c_speeds {
+	i2c_none = 0,
+	i2c_ss,
+	i2c_fs,
+	i2c_fplus,
+};
+
+static struct chan_opts {
+	enum i2c_speeds speed;
+} chan_opts[MAX_CHANNELS];
+
 enum dw_pci_ctl_id_t {
 	moorestown_0,
 	moorestown_1,
@@ -63,6 +83,8 @@ struct dw_scl_sda_cfg {
 	u32 fs_hcnt;
 	u32 ss_lcnt;
 	u32 fs_lcnt;
+	u32 fp_hcnt;
+	u32 fp_lcnt;
 	u32 sda_hold;
 };
 
@@ -90,6 +112,8 @@ static struct dw_scl_sda_cfg byt_config = {
 	.fs_hcnt = 0x55,
 	.ss_lcnt = 0x200,
 	.fs_lcnt = 0x99,
+	.fp_hcnt = 0x1B,
+	.fp_lcnt = 0x3A,
 	.sda_hold = 0x6,
 };
 
@@ -151,6 +175,34 @@ static struct i2c_algorithm i2c_dw_algo = {
 	.master_xfer	= i2c_dw_xfer,
 	.functionality	= i2c_dw_func,
 };
+
+static void i2c_dw_parse_flags(char *flags)
+{
+	char *p = flags;
+	int i;
+
+	for (i = 0; i < MAX_CHANNELS; p++) {
+		if (!*p)
+			break;
+		switch (*p) {
+		case 's':
+			chan_opts[i].speed = i2c_ss;
+			break;
+		case 'f':
+			chan_opts[i].speed = i2c_fs;
+			break;
+		case 'p':
+			chan_opts[i].speed = i2c_fplus;
+			break;
+		case ':':
+			i++; /* next channel */
+			break;
+		default:
+			pr_err(DRIVER_NAME ": invalid flag %c for channel %d\n",
+			       *p, i);
+		}
+	}
+}
 
 static int i2c_dw_pci_suspend(struct device *dev)
 {
@@ -227,8 +279,10 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	struct dw_i2c_dev *dev;
 	struct i2c_adapter *adap;
 	int r;
+	u32 mode;
 	struct  dw_pci_controller *controller;
 	struct dw_scl_sda_cfg *cfg;
+	static int channel = 0;
 
 	if (id->driver_data >= ARRAY_SIZE(dw_pci_controllers)) {
 		dev_err(&pdev->dev, "%s: invalid driver data %ld\n", __func__,
@@ -265,13 +319,33 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	dev->functionality = controller->functionality |
 				DW_DEFAULT_FUNCTIONALITY;
 
-	dev->master_cfg =  controller->bus_cfg;
+	if (channel >= MAX_CHANNELS) {
+		dev_warn(&pdev->dev, "Using default params\n");
+		channel = MAX_CHANNELS - 1;
+		memset(&chan_opts[channel], 0, sizeof(struct chan_opts));
+	}
+
+	if (chan_opts[channel].speed == i2c_ss) {
+		mode = DW_IC_CON_SPEED_STD;
+	} else if (chan_opts[channel].speed == i2c_fs ||
+		   chan_opts[channel].speed == i2c_fplus) {
+		mode = DW_IC_CON_SPEED_FAST;
+	} else { /* speed not set - using default from dw_pci_controller */
+		mode = controller->bus_cfg & DW_IC_CON_SPEED_MASK;
+	}
+
+	dev->master_cfg = (controller->bus_cfg & ~DW_IC_CON_SPEED_MASK) | mode;
 	if (controller->scl_sda_cfg) {
 		cfg = controller->scl_sda_cfg;
 		dev->ss_hcnt = cfg->ss_hcnt;
-		dev->fs_hcnt = cfg->fs_hcnt;
 		dev->ss_lcnt = cfg->ss_lcnt;
-		dev->fs_lcnt = cfg->fs_lcnt;
+		if (chan_opts[channel].speed == i2c_fplus) {
+			dev->fs_hcnt = cfg->fp_hcnt;
+			dev->fs_lcnt = cfg->fp_lcnt;
+		} else {
+			dev->fs_hcnt = cfg->fs_hcnt;
+			dev->fs_lcnt = cfg->fs_lcnt;
+		}
 		dev->sda_hold_time = cfg->sda_hold;
 	}
 
@@ -310,6 +384,8 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	pm_runtime_set_autosuspend_delay(&pdev->dev, 1000);
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_allow(&pdev->dev);
+
+	channel++;
 
 	return 0;
 }
@@ -362,7 +438,23 @@ static struct pci_driver dw_i2c_driver = {
 	},
 };
 
-module_pci_driver(dw_i2c_driver);
+static int __init
+i2c_dw_pci_init(void)
+{
+	if (flags)
+		i2c_dw_parse_flags(flags);
+
+	return pci_register_driver(&dw_i2c_driver);
+}
+
+static void __exit
+i2c_dw_pci_exit(void)
+{
+	pci_unregister_driver(&dw_i2c_driver);
+}
+
+module_init(i2c_dw_pci_init);
+module_exit(i2c_dw_pci_exit);
 
 MODULE_AUTHOR("Baruch Siach <baruch@tkos.co.il>");
 MODULE_DESCRIPTION("Synopsys DesignWare PCI I2C bus adapter");
