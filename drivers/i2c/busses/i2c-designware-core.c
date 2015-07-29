@@ -286,7 +286,7 @@ int i2c_dw_init(struct dw_i2c_dev *dev)
 {
 	u32 input_clock_khz;
 	u32 hcnt, lcnt;
-	u32 reg;
+	u32 reg, comp_param1;
 
 	input_clock_khz = dev->get_clk_rate_khz(dev);
 
@@ -302,6 +302,8 @@ int i2c_dw_init(struct dw_i2c_dev *dev)
 			"0x%08x\n", reg);
 		return -ENODEV;
 	}
+
+	comp_param1 = dw_readl(dev, DW_IC_COMP_PARAM_1);
 
 	/* Disable the adapter */
 	__i2c_dw_enable(dev, false);
@@ -358,6 +360,10 @@ int i2c_dw_init(struct dw_i2c_dev *dev)
 	}
 
 	/* Configure Tx/Rx FIFO threshold levels */
+	dev->tx_fifo_depth = ((comp_param1 >> 16) & 0xff) + 1;
+	dev->rx_fifo_depth = ((comp_param1 >> 8) & 0xff) + 1;
+	dev_dbg(dev->dev, "Tx/Rx FIFO sizes: %d/%d\n",
+			dev->tx_fifo_depth, dev->rx_fifo_depth);
 	dw_writel(dev, dev->tx_fifo_depth - 1, DW_IC_TX_TL);
 	dw_writel(dev, 0, DW_IC_RX_TL);
 
@@ -826,12 +832,6 @@ void i2c_dw_disable_int(struct dw_i2c_dev *dev)
 	dw_writel(dev, 0, DW_IC_INTR_MASK);
 }
 EXPORT_SYMBOL_GPL(i2c_dw_disable_int);
-
-u32 i2c_dw_read_comp_param(struct dw_i2c_dev *dev)
-{
-	return dw_readl(dev, DW_IC_COMP_PARAM_1);
-}
-EXPORT_SYMBOL_GPL(i2c_dw_read_comp_param);
 
 MODULE_DESCRIPTION("Synopsys DesignWare I2C bus adapter core");
 MODULE_LICENSE("GPL");

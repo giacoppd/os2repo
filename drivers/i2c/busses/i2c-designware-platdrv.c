@@ -105,8 +105,6 @@ static int dw_i2c_acpi_configure(struct platform_device *pdev)
 		return -ENODEV;
 
 	dev->adapter.nr = -1;
-	dev->tx_fifo_depth = 32;
-	dev->rx_fifo_depth = 32;
 
 	/*
 	 * Try to get SDA hold time and *CNT values from an ACPI method if
@@ -129,11 +127,6 @@ static const struct acpi_device_id dw_i2c_acpi_match[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(acpi, dw_i2c_acpi_match);
-#else
-static inline int dw_i2c_acpi_configure(struct platform_device *pdev)
-{
-	return -ENODEV;
-}
 #endif
 
 static int dw_i2c_probe(struct platform_device *pdev)
@@ -191,15 +184,10 @@ static int dw_i2c_probe(struct platform_device *pdev)
 	dev->master_cfg =  DW_IC_CON_MASTER | DW_IC_CON_SLAVE_DISABLE |
 		DW_IC_CON_RESTART_EN | DW_IC_CON_SPEED_FAST;
 
-	/* Try first if we can configure the device from ACPI */
-	r = dw_i2c_acpi_configure(pdev);
-	if (r) {
-		u32 param1 = i2c_dw_read_comp_param(dev);
+#ifdef CONFIG_ACPI
+	dw_i2c_acpi_configure(pdev);
+#endif
 
-		dev->tx_fifo_depth = ((param1 >> 16) & 0xff) + 1;
-		dev->rx_fifo_depth = ((param1 >> 8)  & 0xff) + 1;
-		dev->adapter.nr = pdev->id;
-	}
 	r = i2c_dw_init(dev);
 	if (r)
 		return r;

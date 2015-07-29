@@ -69,8 +69,6 @@ struct dw_scl_sda_cfg {
 struct dw_pci_controller {
 	u32 bus_num;
 	u32 bus_cfg;
-	u32 tx_fifo_depth;
-	u32 rx_fifo_depth;
 	u32 clk_khz;
 	u32 functionality;
 	struct dw_scl_sda_cfg *scl_sda_cfg;
@@ -99,71 +97,51 @@ static struct  dw_pci_controller  dw_pci_controllers[] = {
 	[moorestown_0] = {
 		.bus_num     = 0,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[moorestown_1] = {
 		.bus_num     = 1,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[moorestown_2] = {
 		.bus_num     = 2,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[medfield_0] = {
 		.bus_num     = 0,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[medfield_1] = {
 		.bus_num     = 1,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[medfield_2] = {
 		.bus_num     = 2,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[medfield_3] = {
 		.bus_num     = 3,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_STD,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[medfield_4] = {
 		.bus_num     = 4,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[medfield_5] = {
 		.bus_num     = 5,
 		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz      = 25000,
 	},
 	[baytrail] = {
 		.bus_num = -1,
 		.bus_cfg = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.clk_khz = 100000,
 		.functionality = I2C_FUNC_10BIT_ADDR,
 		.scl_sda_cfg = &byt_config,
@@ -299,8 +277,6 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 
 	pci_set_drvdata(pdev, dev);
 
-	dev->tx_fifo_depth = controller->tx_fifo_depth;
-	dev->rx_fifo_depth = controller->rx_fifo_depth;
 	r = i2c_dw_init(dev);
 	if (r)
 		return r;
