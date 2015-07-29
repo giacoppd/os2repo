@@ -66,12 +66,14 @@
 #define DW_IC_CLR_START_DET	0x64
 #define DW_IC_CLR_GEN_CALL	0x68
 #define DW_IC_ENABLE		0x6c
+# define DW_IC_ENABLE_EN	BIT(0)
 #define DW_IC_STATUS		0x70
 #define DW_IC_TXFLR		0x74
 #define DW_IC_RXFLR		0x78
 #define DW_IC_SDA_HOLD		0x7c
 #define DW_IC_TX_ABRT_SOURCE	0x80
 #define DW_IC_ENABLE_STATUS	0x9c
+# define DW_IC_ENABLE_STATUS_EN	BIT(0)
 #define DW_IC_COMP_PARAM_1	0xf4
 #define DW_IC_COMP_VERSION	0xf8
 #define DW_IC_SDA_HOLD_MIN_VERS	0x3131312A
@@ -259,10 +261,13 @@ static u32 i2c_dw_scl_lcnt(u32 ic_clk, u32 tLOW, u32 tf, int offset)
 static void __i2c_dw_enable(struct dw_i2c_dev *dev, bool enable)
 {
 	int timeout = 100;
+	u32 status;
 
 	do {
-		dw_writel(dev, enable, DW_IC_ENABLE);
-		if ((dw_readl(dev, DW_IC_ENABLE_STATUS) & 1) == enable)
+		dw_writel(dev, enable ? DW_IC_ENABLE_EN : 0, DW_IC_ENABLE);
+		status = dw_readl(dev, DW_IC_ENABLE_STATUS);
+		if ((enable && (status & DW_IC_ENABLE_STATUS_EN)) ||
+		    (!enable && !(status & DW_IC_ENABLE_STATUS_EN)))
 			return;
 
 		/*
