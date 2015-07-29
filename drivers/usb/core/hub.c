@@ -4761,6 +4761,16 @@ static void hub_events(void)
 	u16 portchange;
 	int i, ret;
 	int connect_change, wakeup_change;
+#ifdef CONFIG_USB_OC_NOTIFICATION
+	char overcurrent_event[] = "OVERCURRENT=1";
+	char overcurrent_port[10];
+	char *overcurrent_envp[] = {
+		overcurrent_event, overcurrent_port, NULL };
+	char normalcurrent_event[] = "OVERCURRENT=0";
+	char normalcurrent_port[10];
+	char *normalcurrent_envp[] = {
+		normalcurrent_event, normalcurrent_port, NULL };
+#endif
 
 	/*
 	 *  We restart the list every time to avoid a deadlock with
@@ -4888,17 +4898,68 @@ static void hub_events(void)
 			if (portchange & USB_PORT_STAT_C_OVERCURRENT) {
 				u16 status = 0;
 				u16 unused;
+#ifdef CONFIG_USB_OC_NOTIFICATION
+				int retval;
+				static int oc_flag = 0;
+#endif
 
 				dev_dbg(hub_dev, "over-current change on port "
 					"%d\n", i);
+#ifdef CONFIG_USB_OC_NOTIFICATION
+				/*
+				 * Send event to userland for port
+				 * coming back to normal current condition
+				 * from overcurrent condition.
+				 */
+				if (oc_flag & BIT(i - 1)) {
+					snprintf(normalcurrent_port,
+						sizeof(normalcurrent_port),
+						"NPORT=%d", i);
+
+					retval = kobject_uevent_env(
+						&hub->intfdev->kobj,
+						KOBJ_CHANGE,
+						normalcurrent_envp);
+					if (retval) {
+						dev_err(hub_dev,
+						"failed to send event\n");
+					}
+
+					/* Clear individual port flag. */
+					oc_flag &= ~(BIT(i - 1));
+				}
+#endif
 				usb_clear_port_feature(hdev, i,
 					USB_PORT_FEAT_C_OVER_CURRENT);
 				msleep(100);	/* Cool down */
 				hub_power_on(hub, true);
 				hub_port_status(hub, i, &status, &unused);
-				if (status & USB_PORT_STAT_OVERCURRENT)
+				if (status & USB_PORT_STAT_OVERCURRENT) {
 					dev_err(hub_dev, "over-current "
 						"condition on port %d\n", i);
+#ifdef CONFIG_USB_OC_NOTIFICATION
+					/*
+					 * Send events to userland for
+					 * overcurrent condition with
+					 * port number.
+					 */
+					snprintf(overcurrent_port,
+						sizeof(overcurrent_port),
+						"OCPORT=%d", i);
+
+					retval = kobject_uevent_env(
+						&hub->intfdev->kobj,
+						KOBJ_CHANGE,
+						overcurrent_envp);
+					if (retval) {
+						dev_err(hub_dev,
+						"failed to send OC event\n");
+					}
+
+					/* Set individual port flag. */
+					oc_flag |= BIT(i - 1);
+#endif
+				}
 			}
 
 			if (portchange & USB_PORT_STAT_C_RESET) {

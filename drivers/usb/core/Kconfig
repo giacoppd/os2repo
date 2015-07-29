@@ -89,3 +89,12 @@ config USB_OTG_BLACKLIST_HUB
 	  and software costs by not supporting external hubs.  So
 	  are "Embedded Hosts" that don't offer OTG support.
 
+config USB_OC_NOTIFICATION
+	bool "Enable Overcurrent Notification"
+	default N
+	help
+	  Say Y here if you want the send the uevents to userland
+	  for overcurrent condition on USB ports and ports coming to
+	  normal state after over current condition has occured.
+
+	  This feature was tested on platforms using Bay Trail.
