@@ -196,6 +196,7 @@ static struct {
 	{ XFER_PIO_SLOW,		"XFER_PIO_SLOW" }
 };
 ata_bitfield_name_match(xfer,ata_xfer_names)
+ata_bitfield_name_search(curr_xfer, ata_xfer_names)
 
 /*
  * ATA Port attributes
@@ -449,9 +450,9 @@ int ata_tlink_add(struct ata_link *link)
  * ATA device attributes
  */
 
-#define ata_dev_show_class(title, field)				\
+#define ata_dev_show_class(title, attrb, field)				\
 static ssize_t								\
-show_ata_dev_##field(struct device *dev,				\
+show_ata_dev_##attrb(struct device *dev,				\
 		     struct device_attribute *attr, char *buf)		\
 {									\
 	struct ata_device *ata_dev = transport_class_to_dev(dev);	\
@@ -459,15 +460,18 @@ show_ata_dev_##field(struct device *dev,				\
 	return get_ata_##title##_names(ata_dev->field, buf);		\
 }
 
+#define ata_dev_attr_ext(title, attrb, field)				\
+	ata_dev_show_class(title, attrb, field)				\
+static DEVICE_ATTR(attrb, S_IRUGO, show_ata_dev_##attrb, NULL)
+
 #define ata_dev_attr(title, field)					\
-	ata_dev_show_class(title, field)				\
-static DEVICE_ATTR(field, S_IRUGO, show_ata_dev_##field, NULL)
+	ata_dev_attr_ext(title, field, field)
 
 ata_dev_attr(class, class);
 ata_dev_attr(xfer, pio_mode);
 ata_dev_attr(xfer, dma_mode);
 ata_dev_attr(xfer, xfer_mode);
-
+ata_dev_attr_ext(curr_xfer, curr_xfer_mode, xfer_mode);
 
 #define ata_dev_show_simple(field, format_string, cast)		\
 static ssize_t								\
@@ -728,6 +732,7 @@ struct scsi_transport_template *ata_attach_transport(void)
 	SETUP_DEV_ATTRIBUTE(pio_mode);
 	SETUP_DEV_ATTRIBUTE(dma_mode);
 	SETUP_DEV_ATTRIBUTE(xfer_mode);
+	SETUP_DEV_ATTRIBUTE(curr_xfer_mode);
 	SETUP_DEV_ATTRIBUTE(spdn_cnt);
 	SETUP_DEV_ATTRIBUTE(ering);
 	SETUP_DEV_ATTRIBUTE(id);
