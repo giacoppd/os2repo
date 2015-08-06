@@ -374,6 +374,10 @@ spidev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case SPI_IOC_RD_MAX_SPEED_HZ:
 		retval = __put_user(spi->max_speed_hz, (__u32 __user *)arg);
 		break;
+	case SPI_IOC_RD_FIFO_TRIGGER_LEVEL:
+		retval = __put_user(spi->fifo_trigger_level,
+					(__u32 __user *)arg);
+		break;
 
 	/* write requests */
 	case SPI_IOC_WR_MODE:
@@ -436,6 +440,19 @@ spidev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				spi->max_speed_hz = save;
 			else
 				dev_dbg(&spi->dev, "%d Hz (max)\n", tmp);
+		}
+		break;
+	case SPI_IOC_WR_FIFO_TRIGGER_LEVEL:
+		retval = __get_user(tmp, (__u32 __user *)arg);
+		if (retval == 0) {
+			u32	save = spi->fifo_trigger_level;
+
+			spi->fifo_trigger_level = tmp;
+			retval = spi_setup(spi);
+			if (retval < 0)
+				spi->fifo_trigger_level = save;
+			else
+				dev_dbg(&spi->dev, "FIFO trigger 0x%d\n", tmp);
 		}
 		break;
 

@@ -101,6 +101,7 @@ struct spi_device {
 	void			*controller_data;
 	char			modalias[SPI_NAME_SIZE];
 	int			cs_gpio;	/* chip select gpio */
+	u32			fifo_trigger_level;
 
 	/*
 	 * likely need more hooks for more protocol options affecting how
