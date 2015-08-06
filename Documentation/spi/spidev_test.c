@@ -37,6 +37,11 @@ static uint16_t delay;
 static uint8_t auto_pio_dma_mode;
 static uint32_t auto_pio_dma_threshold;
 
+static int32_t rx_thresh = -1;
+static int32_t txlo_thresh = -1;
+static int32_t txhi_thresh = -1;
+static int32_t fifo_trigger_level;
+
 static void transfer(int fd)
 {
 	int ret;
@@ -75,7 +80,7 @@ static void transfer(int fd)
 
 static void print_usage(const char *prog)
 {
-	printf("Usage: %s [-DsbdlHOLC3]\n", prog);
+	printf("Usage: %s [-DsbdlHOLCrthPT3]\n", prog);
 	puts("  -D --device   device to use (default /dev/spidev1.1)\n"
 	     "  -s --speed    max speed (Hz)\n"
 	     "  -d --delay    delay (usec)\n"
@@ -85,6 +90,9 @@ static void print_usage(const char *prog)
 	     "  -O --cpol     clock polarity\n"
 	     "  -L --lsb      least significant bit first\n"
 	     "  -C --cs-high  chip select active high\n"
+	     "  -r --rx-thr   Rx FIFO trigger level\n"
+	     "  -t --txlo-thr Tx (low) FIFO trigger level\n"
+	     "  -h --txhi-thr Tx (high) FIFO trigger level\n"
 	     "  -P --auto-pio auto switch PIO/DMA mode\n"
 	     "  -T --thresh   auto switch PIO/DMA threshold\n"
 	     "  -3 --3wire    SI/SO signals shared\n");
@@ -104,6 +112,9 @@ static void parse_opts(int argc, char *argv[])
 			{ "cpol",    0, 0, 'O' },
 			{ "lsb",     0, 0, 'L' },
 			{ "cs-high", 0, 0, 'C' },
+			{ "rx-thr",   1, 0, 'r' },
+			{ "txlo-thr", 1, 0, 't' },
+			{ "txhi-thr", 1, 0, 'h' },
 			{ "auto-pio", 0, 0, 'P' },
 			{ "thresh",   1, 0, 'T' },
 			{ "3wire",   0, 0, '3' },
@@ -113,7 +124,8 @@ static void parse_opts(int argc, char *argv[])
 		};
 		int c;
 
-		c = getopt_long(argc, argv, "D:s:d:b:lHOLCPT:3NR", lopts, NULL);
+		c = getopt_long(argc, argv, "D:s:d:b:lHOLCr:t:h:PT:3NR",
+				lopts, NULL);
 
 		if (c == -1)
 			break;
@@ -145,6 +157,15 @@ static void parse_opts(int argc, char *argv[])
 			break;
 		case 'C':
 			mode |= SPI_CS_HIGH;
+			break;
+		case 'r':
+			rx_thresh = atoi(optarg);
+			break;
+		case 't':
+			txlo_thresh = atoi(optarg);
+			break;
+		case 'h':
+			txhi_thresh = atoi(optarg);
 			break;
 		case 'P':
 			auto_pio_dma_mode = 1;
@@ -212,9 +233,39 @@ int main(int argc, char *argv[])
 	if (ret == -1)
 		pabort("can't get max speed hz");
 
+	/*
+	 * fifo trigger level
+	 */
+	ret = ioctl(fd, SPI_IOC_RD_FIFO_TRIGGER_LEVEL, &fifo_trigger_level);
+	if (ret == -1)
+		pabort("can't get fifo trigger level");
+
+	/* use new fifo trigger value */
+	if (rx_thresh != -1)
+		fifo_trigger_level = (fifo_trigger_level & 0x00ffff)
+				| ((rx_thresh << 16) & 0xff0000);
+	if (txlo_thresh != -1)
+		fifo_trigger_level = (fifo_trigger_level & 0xff00ff)
+				| ((txlo_thresh << 8) & 0x00ff00);
+	if (txhi_thresh != -1)
+		fifo_trigger_level = (fifo_trigger_level & 0xffff00)
+				| (txhi_thresh & 0x0000ff);
+
+	ret = ioctl(fd, SPI_IOC_WR_FIFO_TRIGGER_LEVEL, &fifo_trigger_level);
+	if (ret == -1)
+		pabort("can't set fifo trigger level");
+
+	ret = ioctl(fd, SPI_IOC_RD_FIFO_TRIGGER_LEVEL, &fifo_trigger_level);
+	if (ret == -1)
+		pabort("can't get fifo trigger level");
+
 	printf("spi mode: %d\n", mode);
 	printf("bits per word: %d\n", bits);
 	printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
+	printf("fifo trigger level: RX=%d, TX_LO=%d, TX_HI=%d\n",
+		(fifo_trigger_level & 0xff0000) >> 16,
+		(fifo_trigger_level & 0x00ff00) >> 8,
+		(fifo_trigger_level & 0x0000ff));
 	printf("auto switch PIO/DMA: %s\n",
 		auto_pio_dma_mode ? "enabled" : "disabled");
 	if (auto_pio_dma_mode)
