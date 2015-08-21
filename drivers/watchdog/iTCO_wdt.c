@@ -449,11 +449,13 @@ static int iTCO_wdt_probe(struct platform_device *dev)
 			goto out;
 
 		if (!request_mem_region(iTCO_wdt_private.gcs_pmc_res->start,
-			resource_size(iTCO_wdt_private.gcs_pmc_res), dev->name)) {
+			resource_size(iTCO_wdt_private.gcs_pmc_res), dev->name)
+		) {
 			ret = -EBUSY;
 			goto out;
 		}
-		iTCO_wdt_private.gcs_pmc = ioremap(iTCO_wdt_private.gcs_pmc_res->start,
+		iTCO_wdt_private.gcs_pmc = ioremap(
+			iTCO_wdt_private.gcs_pmc_res->start,
 			resource_size(iTCO_wdt_private.gcs_pmc_res));
 		if (!iTCO_wdt_private.gcs_pmc) {
 			ret = -EIO;
