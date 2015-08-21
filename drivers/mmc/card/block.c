@@ -271,8 +271,8 @@ static ssize_t power_ro_lock_store(struct device *dev,
 	/* Hardware WP affects both boot partitions */
 	list_for_each_entry(part_md, &md->part, part) {
 		if (part_md->area_type == MMC_BLK_DATA_AREA_BOOT) {
-			pr_info("%s: Locking boot partition ro until "
-				"next power on\n", part_md->disk->disk_name);
+			pr_info("%s: Locking boot partition ro until next power on\n",
+				part_md->disk->disk_name);
 			part_md->read_only |= MMC_RO_BOOT_WP;
 			update_disk_ro(part_md);
 		}
