@@ -96,13 +96,13 @@ static void i2c_dw_parse_flags(char *flags)
 			i++; /* next channel */
 			break;
 		default:
-			pr_err("i2c-designware-platform: invalid "
-			       "flag %c for channel %d\n", *p, i);
+			pr_err("i2c-designware-platform: invalid flag %c for channel %d\n",
+				*p, i);
 		}
 	}
 }
 
-static int channel = 0;
+static int channel;
 
 static u32 i2c_dw_get_clk_rate_khz(struct dw_i2c_dev *dev)
 {

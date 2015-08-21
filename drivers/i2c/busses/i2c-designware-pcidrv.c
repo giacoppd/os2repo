@@ -291,7 +291,7 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	u32 mode;
 	struct  dw_pci_controller *controller;
 	struct dw_scl_sda_cfg *cfg;
-	static int channel = 0;
+	static int channel;
 
 	if (id->driver_data >= ARRAY_SIZE(dw_pci_controllers)) {
 		dev_err(&pdev->dev, "%s: invalid driver data %ld\n", __func__,
