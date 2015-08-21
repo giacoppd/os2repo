@@ -1015,8 +1015,7 @@ int hpet_alloc(struct hpet_data *hdp)
 	temp = hpetp->hp_tick_freq;
 	remainder = do_div(temp, 1000000);
 
-	pr_info("hpet%d: at MMIO 0x%lx, %u comparators, "
-		"%d-bit %u.%06u MHz counter\n",
+	pr_info("hpet%d: at MMIO 0x%lx, %u comparators, %d-bit %u.%06u MHz counter\n",
 		hpetp->hp_which, hdp->hd_phys_address, ntimer,
 		cap & HPET_COUNTER_SIZE_MASK ? 64 : 32,
 		(unsigned) temp, remainder);
@@ -1028,8 +1027,8 @@ int hpet_alloc(struct hpet_data *hdp)
 	if (!hdp->hd_state) {
 		conf = readq(&hpet->hpet_config);
 		if (conf & HPET_LEG_RT_CNF_MASK) {
-			pr_info("hpet%d: disabling legacy replacement "
-				"IRQ routing\n", hpetp->hp_which);
+			pr_info("hpet%d: disabling legacy replacement IRQ routing\n",
+				hpetp->hp_which);
 			conf &= ~HPET_LEG_RT_CNF_MASK;
 			writeq(conf, &hpet->hpet_config);
 		}
@@ -1052,8 +1051,8 @@ int hpet_alloc(struct hpet_data *hdp)
 		if (hdp->hd_state & (1 << i)) {
 			/* This driver does not manage platform-reserved
 			 * timers */
-			pr_info("hpet%d: comparator %d reserved for "
-				"system needs\n", hpetp->hp_which, i);
+			pr_info("hpet%d: comparator %d reserved for system needs\n",
+				hpetp->hp_which, i);
 			devp->hd_flags = HPET_OPEN;
 			continue;
 		}
@@ -1116,8 +1115,8 @@ int hpet_alloc(struct hpet_data *hdp)
 		}
 
 		/* No useable IRQ */
-		pr_warn("hpet%d: no useable IRQ for "
-			"comparator %d\n", hpetp->hp_which, i);
+		pr_warn("hpet%d: no useable IRQ for comparator %d\n",
+			hpetp->hp_which, i);
 		devp->hd_flags = HPET_OPEN;
 		continue;
 
@@ -1129,8 +1128,8 @@ setup_irq:
 		conf |= (irq << Tn_INT_ROUTE_CNF_SHIFT);
 		writeq(conf, &timer->hpet_config);
 
-		pr_info("hpet%d: comparator %d available, "
-			"using irq %d\n", hpetp->hp_which, i, gsi);
+		pr_info("hpet%d: comparator %d available, using irq %d\n",
+			hpetp->hp_which, i, gsi);
 
 		hpet_available = true;
 		init_waitqueue_head(&devp->hd_waitqueue);
