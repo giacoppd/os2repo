@@ -4900,7 +4900,7 @@ static void hub_events(void)
 				u16 unused;
 #ifdef CONFIG_USB_OC_NOTIFICATION
 				int retval;
-				static int oc_flag = 0;
+				static int oc_flag;
 #endif
 
 				dev_dbg(hub_dev, "over-current change on port "
