@@ -26,6 +26,7 @@
 #include <linux/of_irq.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
+#include <linux/irqchip/chained_irq.h>
 
 /* Register definitions */
 #define XILINX_PCIE_REG_BIR		0x00000130
@@ -599,6 +600,15 @@ static irqreturn_t xilinx_pcie_intr_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static void xilinx_pcie_intr_chain_handler(unsigned int irq, struct irq_desc *desc)
+{
+	struct irq_chip *chip = irq_get_chip(irq);
+
+	chained_irq_enter(chip, desc);
+	xilinx_pcie_intr_handler(irq, irq_get_handler_data(irq));
+	chained_irq_exit(chip, desc);
+}
+
 /**
  * xilinx_pcie_free_irq_domain - Free IRQ domain
  * @port: PCIe port information
@@ -858,13 +868,17 @@ static int xilinx_pcie_parse_dt(struct xilinx_pcie_port *port)
 		return PTR_ERR(port->reg_base);
 
 	port->irq = irq_of_parse_and_map(node, 0);
+#ifdef CONFIG_PCI_MSI
+	irq_set_handler_data(port->irq, port);
+	irq_set_chained_handler(port->irq, xilinx_pcie_intr_chain_handler);
+#else
 	err = devm_request_irq(dev, port->irq, xilinx_pcie_intr_handler,
 			       IRQF_SHARED, "xilinx-pcie", port);
 	if (err) {
 		dev_err(dev, "unable to request irq %d\n", port->irq);
 		return err;
 	}
-
+#endif
 	return 0;
 }
 
