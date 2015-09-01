@@ -79,7 +79,7 @@ static inline void cvmx_atomic_add32_nosync(int32_t * ptr, int32_t incr)
 				     :"memory");
 	}
 #else
-	if (OCTEON_IS_MODEL(OCTEON_CN3XXX)) {
+	{
 		uint32_t tmp;
 
 		__asm__ __volatile__(".set noreorder         \n"
@@ -88,10 +88,6 @@ static inline void cvmx_atomic_add32_nosync(int32_t * ptr, int32_t incr)
 				     "   sc   %[tmp], %[val] \n"
 				     "   beqz %[tmp], 1b     \n" "   nop                 \n" ".set reorder           \n":[val] "+m"(*ptr),[tmp] "=&r"(tmp)
 				     :[inc] "r"(incr)
-				     :"memory");
-	} else {
-		__asm__ __volatile__("   saa %[inc], (%[base]) \n":"+m"(*ptr)
-				     :[inc] "r"(incr),[base] "r"(ptr)
 				     :"memory");
 	}
 #endif
