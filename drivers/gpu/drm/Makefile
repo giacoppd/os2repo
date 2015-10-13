@@ -13,7 +13,8 @@ drm-y       :=	drm_auth.o drm_buffer.o drm_bufs.o drm_cache.o \
 		drm_crtc.o drm_modes.o drm_edid.o \
 		drm_info.o drm_debugfs.o drm_encoder_slave.o \
 		drm_trace_points.o drm_global.o drm_prime.o \
-		drm_rect.o drm_vma_manager.o drm_flip_work.o
+		drm_rect.o drm_vma_manager.o drm_flip_work.o \
+		drm_plane_helper.o
 
 drm-$(CONFIG_COMPAT) += drm_ioc32.o
 drm-$(CONFIG_DRM_GEM_CMA_HELPER) += drm_gem_cma_helper.o
@@ -58,8 +59,6 @@ obj-$(CONFIG_DRM_SHMOBILE) +=shmobile/
 obj-$(CONFIG_DRM_OMAP)	+= omapdrm/
 obj-$(CONFIG_DRM_TILCDC)	+= tilcdc/
 obj-$(CONFIG_DRM_QXL) += qxl/
-obj-$(CONFIG_DRM_BOCHS) += bochs/
-obj-$(CONFIG_DRM_MSM) += msm/
-obj-$(CONFIG_DRM_TEGRA) += tegra/
+obj-$(CONFIG_DRM_XILINX)	+= xilinx/
+obj-$(CONFIG_DRM_XYLON)	+= xylon/
 obj-y			+= i2c/
-obj-y			+= panel/

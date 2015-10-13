@@ -348,6 +348,13 @@ config NUC900_WATCHDOG
 	  To compile this driver as a module, choose M here: the
 	  module will be called nuc900_wdt.
 
+config CADENCE_WATCHDOG
+	tristate "Cadence Watchdog Timer"
+	depends on ARM && HAS_IOMEM
+	select WATCHDOG_CORE
+	help
+	  Say Y here if you want to include support for the watchdog
+
 config TS72XX_WATCHDOG
 	tristate "TS-72XX SBC Watchdog"
 	depends on MACH_TS72XX
@@ -1025,7 +1032,8 @@ config M54xx_WATCHDOG
 
 config XILINX_WATCHDOG
 	tristate "Xilinx Watchdog timer"
-	depends on MICROBLAZE
+	depends on MICROBLAZE || ARCH_ZYNQ
+	select WATCHDOG_CORE
 	---help---
 	  Watchdog driver for the xps_timebase_wdt ip core.
 

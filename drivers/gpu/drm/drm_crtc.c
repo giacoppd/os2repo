@@ -614,9 +614,12 @@ void drm_framebuffer_remove(struct drm_framebuffer *fb)
 EXPORT_SYMBOL(drm_framebuffer_remove);
 
 /**
- * drm_crtc_init - Initialise a new CRTC object
+ * drm_crtc_init_with_planes - Initialise a new CRTC object with
+ *    specified primary and cursor planes.
  * @dev: DRM device
  * @crtc: CRTC object to init
+ * @primary: Primary plane for CRTC
+ * @cursor: Cursor plane for CRTC
  * @funcs: callbacks for the new CRTC
  *
  * Inits a new object created as base part of a driver crtc object.
@@ -624,8 +627,10 @@ EXPORT_SYMBOL(drm_framebuffer_remove);
  * RETURNS:
  * Zero on success, error code on failure.
  */
-int drm_crtc_init(struct drm_device *dev, struct drm_crtc *crtc,
-		   const struct drm_crtc_funcs *funcs)
+int drm_crtc_init_with_planes(struct drm_device *dev, struct drm_crtc *crtc,
+			      struct drm_plane *primary,
+			      void *cursor,
+			      const struct drm_crtc_funcs *funcs)
 {
 	int ret;
 
@@ -646,12 +651,16 @@ int drm_crtc_init(struct drm_device *dev, struct drm_crtc *crtc,
 	list_add_tail(&crtc->head, &dev->mode_config.crtc_list);
 	dev->mode_config.num_crtc++;
 
+	crtc->primary = primary;
+	if (primary)
+		primary->possible_crtcs = 1 << drm_crtc_index(crtc);
+
  out:
 	drm_modeset_unlock_all(dev);
 
 	return ret;
 }
-EXPORT_SYMBOL(drm_crtc_init);
+EXPORT_SYMBOL(drm_crtc_init_with_planes);
 
 /**
  * drm_crtc_cleanup - Clean up the core crtc usage
@@ -898,25 +907,25 @@ void drm_encoder_cleanup(struct drm_encoder *encoder)
 EXPORT_SYMBOL(drm_encoder_cleanup);
 
 /**
- * drm_plane_init - Initialise a new plane object
+ * drm_universal_plane_init - Initialize a new universal plane object
  * @dev: DRM device
  * @plane: plane object to init
  * @possible_crtcs: bitmask of possible CRTCs
  * @funcs: callbacks for the new plane
  * @formats: array of supported formats (%DRM_FORMAT_*)
  * @format_count: number of elements in @formats
- * @priv: plane is private (hidden from userspace)?
+ * @type: type of plane (overlay, primary, cursor)
  *
- * Inits a new object created as base part of a driver plane object.
+ * Initializes a plane object of type @type.
  *
  * RETURNS:
  * Zero on success, error code on failure.
  */
-int drm_plane_init(struct drm_device *dev, struct drm_plane *plane,
-		   unsigned long possible_crtcs,
-		   const struct drm_plane_funcs *funcs,
-		   const uint32_t *formats, uint32_t format_count,
-		   bool priv)
+int drm_universal_plane_init(struct drm_device *dev, struct drm_plane *plane,
+			     unsigned long possible_crtcs,
+			     const struct drm_plane_funcs *funcs,
+			     const uint32_t *formats, uint32_t format_count,
+			     enum drm_plane_type type)
 {
 	int ret;
 
@@ -941,22 +950,48 @@ int drm_plane_init(struct drm_device *dev, struct drm_plane *plane,
 	memcpy(plane->format_types, formats, format_count * sizeof(uint32_t));
 	plane->format_count = format_count;
 	plane->possible_crtcs = possible_crtcs;
+	plane->type = type;
 
-	/* private planes are not exposed to userspace, but depending on
-	 * display hardware, might be convenient to allow sharing programming
-	 * for the scanout engine with the crtc implementation.
-	 */
-	if (!priv) {
-		list_add_tail(&plane->head, &dev->mode_config.plane_list);
-		dev->mode_config.num_plane++;
-	} else {
-		INIT_LIST_HEAD(&plane->head);
-	}
+	list_add_tail(&plane->head, &dev->mode_config.plane_list);
+	dev->mode_config.num_total_plane++;
+	if (plane->type == DRM_PLANE_TYPE_OVERLAY)
+		dev->mode_config.num_overlay_plane++;
 
  out:
 	drm_modeset_unlock_all(dev);
 
 	return ret;
+}
+EXPORT_SYMBOL(drm_universal_plane_init);
+
+/**
+ * drm_plane_init - Initialize a legacy plane
+ * @dev: DRM device
+ * @plane: plane object to init
+ * @possible_crtcs: bitmask of possible CRTCs
+ * @funcs: callbacks for the new plane
+ * @formats: array of supported formats (%DRM_FORMAT_*)
+ * @format_count: number of elements in @formats
+ * @is_primary: plane type (primary vs overlay)
+ *
+ * Legacy API to initialize a DRM plane.
+ *
+ * New drivers should call drm_universal_plane_init() instead.
+ *
+ * Returns:
+ * Zero on success, error code on failure.
+ */
+int drm_plane_init(struct drm_device *dev, struct drm_plane *plane,
+		   unsigned long possible_crtcs,
+		   const struct drm_plane_funcs *funcs,
+		   const uint32_t *formats, uint32_t format_count,
+		   bool is_primary)
+{
+	enum drm_plane_type type;
+
+	type = is_primary ? DRM_PLANE_TYPE_PRIMARY : DRM_PLANE_TYPE_OVERLAY;
+	return drm_universal_plane_init(dev, plane, possible_crtcs, funcs,
+					formats, format_count, type);
 }
 EXPORT_SYMBOL(drm_plane_init);
 
@@ -975,11 +1010,13 @@ void drm_plane_cleanup(struct drm_plane *plane)
 	drm_modeset_lock_all(dev);
 	kfree(plane->format_types);
 	drm_mode_object_put(dev, &plane->base);
-	/* if not added to a list, it must be a private plane */
-	if (!list_empty(&plane->head)) {
-		list_del(&plane->head);
-		dev->mode_config.num_plane--;
-	}
+
+	BUG_ON(list_empty(&plane->head));
+
+	list_del(&plane->head);
+	dev->mode_config.num_total_plane--;
+	if (plane->type == DRM_PLANE_TYPE_OVERLAY)
+		dev->mode_config.num_overlay_plane--;
 	drm_modeset_unlock_all(dev);
 }
 EXPORT_SYMBOL(drm_plane_cleanup);
@@ -1826,11 +1863,15 @@ int drm_mode_getplane_res(struct drm_device *dev, void *data,
 	 * This ioctl is called twice, once to determine how much space is
 	 * needed, and the 2nd time to fill it.
 	 */
-	if (config->num_plane &&
-	    (plane_resp->count_planes >= config->num_plane)) {
+	if (config->num_overlay_plane &&
+	    (plane_resp->count_planes >= config->num_overlay_plane)) {
 		plane_ptr = (uint32_t __user *)(unsigned long)plane_resp->plane_id_ptr;
 
 		list_for_each_entry(plane, &config->plane_list, head) {
+			/* Only advertise overlays to userspace for now. */
+			if (plane->type != DRM_PLANE_TYPE_OVERLAY)
+				continue;
+
 			if (put_user(plane->base.id, plane_ptr + copied)) {
 				ret = -EFAULT;
 				goto out;
@@ -1838,7 +1879,7 @@ int drm_mode_getplane_res(struct drm_device *dev, void *data,
 			copied++;
 		}
 	}
-	plane_resp->count_planes = config->num_plane;
+	plane_resp->count_planes = config->num_overlay_plane;
 
 out:
 	drm_modeset_unlock_all(dev);
@@ -2070,6 +2111,8 @@ int drm_mode_set_config_internal(struct drm_mode_set *set)
 
 	ret = crtc->funcs->set_config(set);
 	if (ret == 0) {
+		crtc->primary->crtc = crtc;
+
 		/* crtc->fb must be updated by ->set_config, enforces this. */
 		WARN_ON(fb != crtc->fb);
 	}
@@ -2085,14 +2128,19 @@ int drm_mode_set_config_internal(struct drm_mode_set *set)
 }
 EXPORT_SYMBOL(drm_mode_set_config_internal);
 
-/*
- * Checks that the framebuffer is big enough for the CRTC viewport
- * (x, y, hdisplay, vdisplay)
+/**
+ * drm_crtc_check_viewport - Checks that a framebuffer is big enough for the
+ *     CRTC viewport
+ * @crtc: CRTC that framebuffer will be displayed on
+ * @x: x panning
+ * @y: y panning
+ * @mode: mode that framebuffer will be displayed under
+ * @fb: framebuffer to check size of
  */
-static int drm_crtc_check_viewport(const struct drm_crtc *crtc,
-				   int x, int y,
-				   const struct drm_display_mode *mode,
-				   const struct drm_framebuffer *fb)
+int drm_crtc_check_viewport(const struct drm_crtc *crtc,
+			    int x, int y,
+			    const struct drm_display_mode *mode,
+			    const struct drm_framebuffer *fb)
 
 {
 	int hdisplay, vdisplay;
@@ -2123,6 +2171,7 @@ static int drm_crtc_check_viewport(const struct drm_crtc *crtc,
 
 	return 0;
 }
+EXPORT_SYMBOL(drm_crtc_check_viewport);
 
 /**
  * drm_mode_setcrtc - set CRTC configuration
@@ -4037,6 +4086,8 @@ void drm_mode_config_init(struct drm_device *dev)
 	dev->mode_config.num_connector = 0;
 	dev->mode_config.num_crtc = 0;
 	dev->mode_config.num_encoder = 0;
+	dev->mode_config.num_overlay_plane = 0;
+	dev->mode_config.num_total_plane = 0;
 }
 EXPORT_SYMBOL(drm_mode_config_init);
 

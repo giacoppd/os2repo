@@ -276,7 +276,6 @@ static struct tegra_fbdev *tegra_fbdev_create(struct drm_device *drm,
 					      unsigned int num_crtc,
 					      unsigned int max_connectors)
 {
-	struct drm_fb_helper *helper;
 	struct tegra_fbdev *fbdev;
 	int err;
 
@@ -286,8 +285,7 @@ static struct tegra_fbdev *tegra_fbdev_create(struct drm_device *drm,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	fbdev->base.funcs = &tegra_fb_helper_funcs;
-	helper = &fbdev->base;
+	drm_fb_helper_prepare(drm, &fbdev->base, &tegra_fb_helper_funcs);
 
 	err = drm_fb_helper_init(drm, &fbdev->base, num_crtc, max_connectors);
 	if (err < 0) {
@@ -346,11 +344,8 @@ static void tegra_fbdev_free(struct tegra_fbdev *fbdev)
 
 void tegra_fbdev_restore_mode(struct tegra_fbdev *fbdev)
 {
-	if (fbdev) {
-		drm_modeset_lock_all(fbdev->base.dev);
-		drm_fb_helper_restore_fbdev_mode(&fbdev->base);
-		drm_modeset_unlock_all(fbdev->base.dev);
-	}
+	if (fbdev)
+		drm_fb_helper_restore_fbdev_mode_unlocked(&fbdev->base);
 }
 
 static void tegra_fb_output_poll_changed(struct drm_device *drm)
