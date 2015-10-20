@@ -648,10 +648,10 @@ static void xuartps_set_termios(struct uart_port *port,
 
 	spin_lock_irqsave(&port->lock, flags);
 
-	/* Empty the receive FIFO 1st before making changes */
-	while ((xuartps_readl(XUARTPS_SR_OFFSET) &
-		 XUARTPS_SR_RXEMPTY) != XUARTPS_SR_RXEMPTY) {
-		xuartps_readl(XUARTPS_FIFO_OFFSET);
+	/* Wait for the transmit FIFO to empty before making changes */
+	if (!(xuartps_readl(XUARTPS_CR_OFFSET) & XUARTPS_CR_TX_DIS)) {
+		while (!(xuartps_readl(XUARTPS_SR_OFFSET) & XUARTPS_SR_TXEMPTY))
+			cpu_relax();
 	}
 
 	/* Disable the TX and RX to set baud rate */
