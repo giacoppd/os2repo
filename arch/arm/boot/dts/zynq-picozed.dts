@@ -259,7 +259,6 @@
 			xlnx,has-cd = <0x1>;
 			xlnx,has-power = <0x0>;
 			xlnx,has-wp = <0x1>;
-			wp-inverted = <0x1>;
 		} ;
 		ps7_sd_1: ps7-sdio@e0101000 {
 			clock-frequency = <125000000>;
@@ -272,7 +271,6 @@
 			xlnx,has-cd = <0x1>;
 			xlnx,has-power = <0x0>;
 			xlnx,has-wp = <0x1>;
-			wp-inverted = <0x1>;
 		};
 		ps7_slcr_0: ps7-slcr@f8000000 {
 			#address-cells = <1>;
