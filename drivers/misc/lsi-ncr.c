@@ -72,24 +72,6 @@ EXPORT_SYMBOL(nca_access_lock);
 
 static unsigned long ncr_spin_flags;
 
-#ifdef AXXIA_NCR_RESET_CHECK
-/*
- * define behavior if NCA register read/write is called while
- * the axxia device is being reset. Any attempt to access NCA
- * AXI registers while the NCA is in reset will hang the system.
- *
- * Due to higher level locking (ncr_spin_lock) this should not
- * occur as part of normal config ring access (ncr_read/write),
- * so we handle this condition as a BUG(). If it turns out there
- * is some valid case where this may occur we can re-implement
- * this as a wait loop.
- */
-#define AXXIA_NCR_RESET_ACTIVE_CHECK()				\
-	do { if (ncr_reset_active) BUG(); } while (0)
-#else
-#define AXXIA_NCR_RESET_ACTIVE_CHECK()
-#endif
-
 #define LOCK_DOMAIN 0
 
 union command_data_register_0 {
@@ -151,7 +133,6 @@ ncr_register_read(unsigned *address)
 {
 	unsigned long value;
 
-	AXXIA_NCR_RESET_ACTIVE_CHECK();
 	value = __raw_readl(address);
 
 	return be32_to_cpu(value);
@@ -160,7 +141,6 @@ ncr_register_read(unsigned *address)
 void
 ncr_register_write(const unsigned value, unsigned *address)
 {
-	AXXIA_NCR_RESET_ACTIVE_CHECK();
 	__raw_writel(cpu_to_be32(value), address);
 }
 
