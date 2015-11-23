@@ -759,6 +759,7 @@ EXPORT_SYMBOL(mmc_read_bkops_status);
  */
 void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 {
+	struct mmc_host *host = card->host;
 	unsigned int mult;
 
 	/*
@@ -782,7 +783,12 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	if (data->flags & MMC_DATA_WRITE)
 		mult <<= card->csd.r2w_factor;
 
-	data->timeout_ns = card->csd.tacc_ns * mult;
+	/* Avoid over flow for some crappy cards. */
+	if ((UINT_MAX / mult) < card->csd.tacc_ns)
+		data->timeout_ns = UINT_MAX;
+	else
+		data->timeout_ns = card->csd.tacc_ns * mult;
+
 	data->timeout_clks = card->csd.tacc_clks * mult;
 
 	/*
@@ -844,6 +850,12 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 				data->timeout_ns =  100000000;	/* 100ms */
 		}
 	}
+
+	if (host->max_discard_to &&
+			(host->max_discard_to <
+			(data->timeout_ns / 1000000)))
+		data->timeout_ns = host->max_discard_to * 1000000;
+
 }
 EXPORT_SYMBOL(mmc_set_data_timeout);
 
@@ -1801,11 +1813,14 @@ static unsigned int mmc_mmc_erase_timeout(struct mmc_card *card,
 		unsigned int timeout_clks = card->csd.tacc_clks * mult;
 		unsigned int timeout_us;
 
-		/* Avoid overflow: e.g. tacc_ns=80000000 mult=1280 */
-		if (card->csd.tacc_ns < 1000000)
-			timeout_us = (card->csd.tacc_ns * mult) / 1000;
-		else
+		/*
+		 * Avoid over flow for some crappy cards.
+		 * e.g. tacc_ns=80000000 mult=1280
+		 */
+		if ((UINT_MAX / mult) < card->csd.tacc_ns)
 			timeout_us = (card->csd.tacc_ns / 1000) * mult;
+		else
+			timeout_us = (card->csd.tacc_ns * mult) / 1000;
 
 		/*
 		 * ios.clock is only a target.  The real clock rate might be
@@ -2072,8 +2087,11 @@ EXPORT_SYMBOL(mmc_can_erase);
 
 int mmc_can_trim(struct mmc_card *card)
 {
-	if (card->ext_csd.sec_feature_support & EXT_CSD_SEC_GB_CL_EN)
+	if ((card->ext_csd.sec_feature_support & EXT_CSD_SEC_GB_CL_EN) &&
+	    !(card->host->caps2 & MMC_CAP2_NO_TRIM)) {
 		return 1;
+	}
+
 	return 0;
 }
 EXPORT_SYMBOL(mmc_can_trim);
@@ -2170,16 +2188,18 @@ unsigned int mmc_calc_max_discard(struct mmc_card *card)
 	struct mmc_host *host = card->host;
 	unsigned int max_discard, max_trim;
 
-	if (!host->max_discard_to)
-		return UINT_MAX;
+	if (!host->max_discard_to) {
 
-	/*
-	 * Without erase_group_def set, MMC erase timeout depends on clock
-	 * frequence which can change.  In that case, the best choice is
-	 * just the preferred erase size.
-	 */
-	if (mmc_card_mmc(card) && !(card->ext_csd.erase_group_def & 1))
-		return card->pref_erase;
+		/*
+		 * Without erase_group_def set, MMC erase timeout depends
+		 * on clock frequence which can change.  In that case, the
+		 * best choice is just the preferred erase size.
+		 */
+		if (mmc_card_mmc(card) && !(card->ext_csd.erase_group_def & 1))
+			return card->pref_erase;
+		else
+			return UINT_MAX;
+	}
 
 	max_discard = mmc_do_calc_max_discard(card, MMC_ERASE_ARG);
 	if (mmc_can_trim(card)) {
@@ -2351,7 +2371,7 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 
 int _mmc_detect_card_removed(struct mmc_host *host)
 {
-	int ret;
+	int ret = -ENOSYS;
 
 	if ((host->caps & MMC_CAP_NONREMOVABLE) || !host->bus_ops->alive)
 		return 0;
@@ -2359,7 +2379,19 @@ int _mmc_detect_card_removed(struct mmc_host *host)
 	if (!host->card || mmc_card_removed(host->card))
 		return 1;
 
-	ret = host->bus_ops->alive(host);
+	/* First, try host-controller's card detect callback */
+	if (host->ops->get_cd) {
+		ret = host->ops->get_cd(host);
+		/*
+		 * The return value from get_cd: 1 for present, 0 for absent,
+		 * we need to convert it to: 1 for absent, 0 for present.
+		 */
+		if (ret >= 0)
+			ret = !ret;
+	}
+	/* If failed, back to the bus_ops alive() callback */
+	if (ret < 0)
+		ret = host->bus_ops->alive(host);
 
 	/*
 	 * Card detect status and alive check may be out of sync if card is
@@ -2385,6 +2417,7 @@ int mmc_detect_card_removed(struct mmc_host *host)
 {
 	struct mmc_card *card = host->card;
 	int ret;
+	unsigned long flags;
 
 	WARN_ON(!host->claimed);
 
@@ -2407,6 +2440,10 @@ int mmc_detect_card_removed(struct mmc_host *host)
 			 * Schedule a detect work as soon as possible to let a
 			 * rescan handle the card removal.
 			 */
+			spin_lock_irqsave(&host->lock, flags);
+			host->rescan_disable = 0;
+			spin_unlock_irqrestore(&host->lock, flags);
+
 			cancel_delayed_work(&host->detect);
 			_mmc_detect_change(host, 0, false);
 		}

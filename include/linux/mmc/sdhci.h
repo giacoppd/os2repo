@@ -100,6 +100,18 @@ struct sdhci_host {
 #define SDHCI_QUIRK2_BROKEN_HOST_CONTROL		(1<<5)
 /* Controller does not support HS200 */
 #define SDHCI_QUIRK2_BROKEN_HS200			(1<<6)
+/* Controller can't perform reset all successfully */
+#define SDHCI_QUIRK2_BROKEN_RESET_ALL			(1U<<31)
+/* Controller need long time to generate command complete interrupt */
+#define SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ		(1<<30)
+/* Controller can only supports 1.8V, but the peripheral hardware
+ * circuit has capability to support 3.3V
+ */
+#define SDHCI_QUIRK2_CIRCUIT_SUPPORT_VS33		(1<<29)
+#define SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD		(1<<28)
+/* Controller need to disable clock before reset all */
+#define SDHCI_QUIRK2_DISABLE_CLOCK_BEFORE_RESET		(1<<27)
+#define SDHCI_QUIRK2_BROKEN_TRIM			(1<<28)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
@@ -174,6 +186,9 @@ struct sdhci_host {
 	unsigned int            ocr_avail_sd;
 	unsigned int            ocr_avail_mmc;
 	u32 ocr_mask;		/* available voltages */
+
+	/* cached registers */
+	u32			ier;
 
 	wait_queue_head_t	buf_ready_int;	/* Waitqueue for Buffer Read Ready interrupt */
 	unsigned int		tuning_done;	/* Condition flag set when CMD19 succeeds */

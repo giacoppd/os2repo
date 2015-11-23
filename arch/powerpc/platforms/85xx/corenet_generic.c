@@ -26,17 +26,38 @@
 #include <asm/udbg.h>
 #include <asm/mpic.h>
 #include <asm/ehv_pic.h>
+#include <linux/fsl/qe_ic.h>
 
 #include <linux/of_platform.h>
 #include <sysdev/fsl_soc.h>
 #include <sysdev/fsl_pci.h>
+#include <asm/mpc85xx.h>
 #include "smp.h"
+#include "mpc85xx.h"
+
+#include <linux/fsl_usdpaa.h>
 
 void __init corenet_gen_pic_init(void)
 {
 	struct mpic *mpic;
+	u32 svr = mfspr(SPRN_SVR);
 	unsigned int flags = MPIC_BIG_ENDIAN | MPIC_SINGLE_DEST_CPU |
 		MPIC_NO_RESET;
+
+#ifdef CONFIG_QUICC_ENGINE
+	struct device_node *np;
+#endif
+	/*
+	 * The deep sleep does not wake consistently on T1040 and T1042 with
+	 * the external proxy facility mode of MPIC (MPIC_ENABLE_COREINT),
+	 * so use the mixed mode of MPIC. Set mpic_get_irq to ppc_md.get_irq
+	 * to enable the mixed mode of MPIC.
+	 */
+	if ((SVR_SOC_VER(svr) == SVR_T1040) ||
+	    (SVR_SOC_VER(svr) == SVR_T1042) ||
+	    (SVR_SOC_VER(svr) == SVR_T1024)) {
+		ppc_md.get_irq = mpic_get_irq;
+	}
 
 	if (ppc_md.get_irq == mpic_get_coreint_irq)
 		flags |= MPIC_ENABLE_COREINT;
@@ -45,6 +66,15 @@ void __init corenet_gen_pic_init(void)
 	BUG_ON(mpic == NULL);
 
 	mpic_init(mpic);
+
+#ifdef CONFIG_QUICC_ENGINE
+	np = of_find_compatible_node(NULL, NULL, "fsl,qe-ic");
+	if (np) {
+		qe_ic_init(np, 0, qe_ic_cascade_low_mpic,
+				qe_ic_cascade_high_mpic);
+		of_node_put(np);
+	}
+#endif
 }
 
 /*
@@ -57,11 +87,25 @@ void __init corenet_gen_setup_arch(void)
 	swiotlb_detect_4g();
 
 	pr_info("%s board from Freescale Semiconductor\n", ppc_md.name);
+
+	mpc85xx_qe_init();
 }
 
 static const struct of_device_id of_device_ids[] = {
 	{
 		.compatible	= "simple-bus"
+	},
+	{
+		.compatible	= "fsl,dpaa",
+	},
+	{
+		.compatible	= "mdio-mux-gpio",
+	},
+	{
+		.compatible	= "fsl,fpga-ngpixis",
+	},
+	{
+		.compatible	= "fsl,fpga-qixis",
 	},
 	{
 		.compatible	= "fsl,srio",
@@ -81,6 +125,11 @@ static const struct of_device_id of_device_ids[] = {
 	{
 		.compatible	= "fsl,qoriq-pcie-v3.0",
 	},
+#ifdef CONFIG_QUICC_ENGINE
+	{
+		.compatible	= "fsl,qe",
+	},
+#endif
 	/* The following two are for the Freescale hypervisor */
 	{
 		.name		= "hypervisor",
@@ -102,7 +151,19 @@ static const char * const boards[] __initconst = {
 	"fsl,P4080DS",
 	"fsl,P5020DS",
 	"fsl,P5040DS",
+	"fsl,T1023QDS",
+	"fsl,T1024QDS",
+	"fsl,T1024RDB",
+	"fsl,T1040QDS",
+	"fsl,T1042QDS",
+	"fsl,T1040RDB",
+	"fsl,T1042RDB",
+	"fsl,T1042RDB_PI",
+	"fsl,T2080QDS",
+	"fsl,T2081QDS",
+	"fsl,T2080RDB",
 	"fsl,T4240QDS",
+	"fsl,T4240RDB",
 	"fsl,B4860QDS",
 	"fsl,B4420QDS",
 	"fsl,B4220QDS",
@@ -115,7 +176,19 @@ static const char * const hv_boards[] __initconst = {
 	"fsl,P4080DS-hv",
 	"fsl,P5020DS-hv",
 	"fsl,P5040DS-hv",
+	"fsl,T1023QDS-hv",
+	"fsl,T1024QDS-hv",
+	"fsl,T1024RDB-hv",
+	"fsl,T1040QDS-hv",
+	"fsl,T1042QDS-hv",
+	"fsl,T1040RDB-hv",
+	"fsl,T1042RDB-hv",
+	"fsl,T1042RDB_PI-hv",
+	"fsl,T2080QDS-hv",
+	"fsl,T2081QDS-hv",
+	"fsl,T2080RDB-hv",
 	"fsl,T4240QDS-hv",
+	"fsl,T4240RDB-hv",
 	"fsl,B4860QDS-hv",
 	"fsl,B4420QDS-hv",
 	"fsl,B4220QDS-hv",
@@ -156,6 +229,41 @@ static int __init corenet_generic_probe(void)
 	return 0;
 }
 
+/* Early setup is required for large chunks of contiguous (and coarsely-aligned)
+ * memory. The following shoe-horns Q/Bman "init_early" calls into the
+ * platform setup to let them parse their CCSR nodes early on. */
+#ifdef CONFIG_FSL_FMAN
+void __init fman_init_early(void);
+#endif
+#ifdef CONFIG_FSL_QMAN_CONFIG
+void __init qman_init_early(void);
+#endif
+#ifdef CONFIG_FSL_BMAN_CONFIG
+void __init bman_init_early(void);
+#endif
+#ifdef CONFIG_FSL_PME2_CTRL
+void __init pme2_init_early(void);
+#endif
+
+static __init void corenet_ds_init_early(void)
+{
+#ifdef CONFIG_FSL_FMAN
+	fman_init_early();
+#endif
+#ifdef CONFIG_FSL_QMAN_CONFIG
+	qman_init_early();
+#endif
+#ifdef CONFIG_FSL_BMAN_CONFIG
+	bman_init_early();
+#endif
+#ifdef CONFIG_FSL_PME2_CTRL
+	pme2_init_early();
+#endif
+#ifdef CONFIG_FSL_USDPAA
+	fsl_usdpaa_init_early();
+#endif
+}
+
 define_machine(corenet_generic) {
 	.name			= "CoreNet Generic",
 	.probe			= corenet_generic_probe,
@@ -163,8 +271,17 @@ define_machine(corenet_generic) {
 	.init_IRQ		= corenet_gen_pic_init,
 #ifdef CONFIG_PCI
 	.pcibios_fixup_bus	= fsl_pcibios_fixup_bus,
+	.pcibios_fixup_phb	= fsl_pcibios_fixup_phb,
 #endif
+/*
+ * Core reset may cause issue if using the proxy mode of MPIC.
+ * Use the mixed mode of MPIC if enabling CPU hotplug.
+ */
+#ifdef CONFIG_HOTPLUG_CPU
+	.get_irq		= mpic_get_irq,
+#else
 	.get_irq		= mpic_get_coreint_irq,
+#endif
 	.restart		= fsl_rstcr_restart,
 	.calibrate_decr		= generic_calibrate_decr,
 	.progress		= udbg_progress,
@@ -173,6 +290,7 @@ define_machine(corenet_generic) {
 #else
 	.power_save		= e500_idle,
 #endif
+	.init_early		= corenet_ds_init_early,
 };
 
 machine_arch_initcall(corenet_generic, corenet_gen_publish_devices);

@@ -16,7 +16,7 @@ static inline int tlb1_next(void)
 	struct tlb_core_data *tcd;
 	int this, next;
 
-	tcd = paca->tcd_ptr;
+	tcd = (struct tlb_core_data *)(paca->tcd_ptr & ~1UL);
 	this = tcd->esel_next;
 
 	next = this + 1;
@@ -109,7 +109,10 @@ void book3e_hugetlb_preload(struct vm_area_struct *vma, unsigned long ea,
 	 */
 	local_irq_save(flags);
 
+	book3e_tlb_lock();
+
 	if (unlikely(book3e_tlb_exists(ea, mm->context.id))) {
+		book3e_tlb_unlock();
 		local_irq_restore(flags);
 		return;
 	}
@@ -141,6 +144,7 @@ void book3e_hugetlb_preload(struct vm_area_struct *vma, unsigned long ea,
 
 	asm volatile ("tlbwe");
 
+	book3e_tlb_unlock();
 	local_irq_restore(flags);
 }
 

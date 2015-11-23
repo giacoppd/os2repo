@@ -46,6 +46,37 @@ extern void init_fcc_ioports(struct fs_platform_info*);
 extern void init_fec_ioports(struct fs_platform_info*);
 extern void init_smc_ioports(struct fs_uart_platform_info*);
 static phys_addr_t immrbase = -1;
+static phys_addr_t dcsrbase = -1;
+
+phys_addr_t get_dcsrbase(void)
+{
+	struct device_node *np;
+	const __be32 *prop;
+	int size;
+	u32 naddr;
+
+	if (dcsrbase != -1)
+		return dcsrbase;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,dcsr");
+	if (!np)
+		return -1;
+
+	prop = of_get_property(np, "#address-cells", &size);
+	if (prop && size == 4)
+		naddr = be32_to_cpup(prop);
+	else
+		naddr = 2;
+
+	prop = of_get_property(np, "ranges", NULL);
+	if (prop)
+		dcsrbase = of_translate_address(np, prop + naddr);
+
+	of_node_put(np);
+
+	return dcsrbase;
+}
+EXPORT_SYMBOL(get_dcsrbase);
 
 phys_addr_t get_immrbase(void)
 {
@@ -76,6 +107,23 @@ phys_addr_t get_immrbase(void)
 }
 
 EXPORT_SYMBOL(get_immrbase);
+
+/* get address of cluster shared L2 cache controller */
+void __iomem *get_cpu_l2_base(int cpu)
+{
+	static void __iomem *cpu_l2_base;
+	struct device_node *np, *cache;
+
+	np = of_get_cpu_node(cpu, NULL);
+	cache = of_find_next_cache_node(np);
+
+	of_node_put(np);
+
+	cpu_l2_base = of_iomap(cache, 0);
+
+	return cpu_l2_base;
+}
+EXPORT_SYMBOL(get_cpu_l2_base);
 
 static u32 sysfreq = -1;
 
@@ -248,10 +296,8 @@ void fsl_rstcr_restart(char *cmd)
 }
 #endif
 
-#if defined(CONFIG_FB_FSL_DIU) || defined(CONFIG_FB_FSL_DIU_MODULE)
 struct platform_diu_data_ops diu_ops;
 EXPORT_SYMBOL(diu_ops);
-#endif
 
 #ifdef CONFIG_EPAPR_PARAVIRT
 /*

@@ -1,7 +1,7 @@
 /*
  * P2020 RDB-PC Device Tree Source stub (no addresses or top-level ranges)
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2011, 2014 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -56,22 +56,22 @@
 		};
 
 		partition@80000 {
-			/* 3.5 MB for Linux Kernel Image */
-			reg = <0x00080000 0x00380000>;
+			/* 4.5 MB for Linux Kernel Image */
+			reg = <0x00080000 0x00480000>;
 			label = "NOR Linux Kernel Image";
 		};
 
-		partition@400000 {
-			/* 11MB for JFFS2 based Root file System */
-			reg = <0x00400000 0x00b00000>;
+		partition@500000 {
+			/* 9.75MB for JFFS2 based Root file System */
+			reg = <0x00500000 0x009c0000>;
 			label = "NOR JFFS2 Root File System";
 		};
 
-		partition@f00000 {
+		partition@ec0000 {
 			/* This location must not be altered  */
-			/* 512KB for u-boot Bootloader Image */
+			/* 768KB for u-boot Bootloader Image */
 			/* 512KB for u-boot Environment Variables */
-			reg = <0x00f00000 0x00100000>;
+			reg = <0x00ec0000 0x00140000>;
 			label = "NOR U-Boot Image";
 			read-only;
 		};
@@ -156,33 +156,33 @@
 			spi-max-frequency = <40000000>;
 
 			partition@0 {
-				/* 512KB for u-boot Bootloader Image */
-				reg = <0x0 0x00080000>;
+				/* 1MKB for u-boot Bootloader Image */
+				reg = <0x0 0x00100000>;
 				label = "SPI U-Boot Image";
 				read-only;
 			};
 
-			partition@80000 {
+			partition@100000 {
 				/* 512KB for DTB Image */
-				reg = <0x00080000 0x00080000>;
+				reg = <0x00100000 0x00080000>;
 				label = "SPI DTB Image";
 			};
 
-			partition@100000 {
+			partition@180000 {
 				/* 4MB for Linux Kernel Image */
-				reg = <0x00100000 0x00400000>;
+				reg = <0x00180000 0x00400000>;
 				label = "SPI Linux Kernel Image";
 			};
 
-			partition@500000 {
+			partition@580000 {
 				/* 4MB for Compressed RFS Image */
-				reg = <0x00500000 0x00400000>;
+				reg = <0x00580000 0x00400000>;
 				label = "SPI Compressed RFS Image";
 			};
 
-			partition@900000 {
-				/* 7MB for JFFS2 based RFS */
-				reg = <0x00900000 0x00700000>;
+			partition@980000 {
+				/* 6.5MB for JFFS2 based RFS */
+				reg = <0x00980000 0x00680000>;
 				label = "SPI JFFS2 RFS";
 			};
 		};
@@ -223,19 +223,42 @@
 		fsl,max-adj = <249999999>;
 	};
 
+	ptp_timer: ptimer@24e00 {
+		compatible = "fsl,gianfar-ptp-timer";
+		reg = <0x24e00 0xb0>;
+		fsl,ts-to-buffer;
+		fsl,tmr-prsc = <0x2>;
+		fsl,clock-source-select = <1>;
+	};
+
+	ptp_clock@24e00 {
+		compatible = "fsl,etsec-ptp";
+		reg = <0x24e00 0xb0>;
+		interrupts = <68 2 0 0 69 2 0 0>;
+		fsl,tclk-period	= <5>;
+		fsl,tmr-prsc	= <2>;
+		fsl,tmr-add	= <0xaaaaaaab>;
+		fsl,tmr-fiper1	= <0x3b9ac9fb>;
+		fsl,tmr-fiper2	= <0x00018696>;
+		fsl,max-adj	= <299999999>;
+	};
+
 	enet0: ethernet@24000 {
 		fixed-link = <1 1 1000 0 0>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	enet1: ethernet@25000 {
 		tbi-handle = <&tbi0>;
 		phy-handle = <&phy0>;
 		phy-connection-type = "sgmii";
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	enet2: ethernet@26000 {
 		phy-handle = <&phy1>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 	};
 };

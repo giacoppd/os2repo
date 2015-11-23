@@ -245,10 +245,10 @@ static int dr_controller_setup(struct fsl_udc *udc)
 		if (udc->pdata->have_sysif_regs) {
 			if (udc->pdata->controller_ver) {
 				/* controller version 1.6 or above */
-				ctrl = __raw_readl(&usb_sys_regs->control);
+				ctrl = ioread32be(&usb_sys_regs->control);
 				ctrl &= ~USB_CTRL_UTMI_PHY_EN;
 				ctrl |= USB_CTRL_USB_EN;
-				__raw_writel(ctrl, &usb_sys_regs->control);
+				iowrite32be(ctrl, &usb_sys_regs->control);
 			}
 		}
 		portctrl |= PORTSCX_PTS_ULPI;
@@ -257,13 +257,14 @@ static int dr_controller_setup(struct fsl_udc *udc)
 		portctrl |= PORTSCX_PTW_16BIT;
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
+	case FSL_USB2_PHY_UTMI_DUAL:
 		if (udc->pdata->have_sysif_regs) {
 			if (udc->pdata->controller_ver) {
 				/* controller version 1.6 or above */
-				ctrl = __raw_readl(&usb_sys_regs->control);
+				ctrl = ioread32be(&usb_sys_regs->control);
 				ctrl |= (USB_CTRL_UTMI_PHY_EN |
 					USB_CTRL_USB_EN);
-				__raw_writel(ctrl, &usb_sys_regs->control);
+				iowrite32be(ctrl, &usb_sys_regs->control);
 				mdelay(FSL_UTMI_PHY_DLY); /* Delay for UTMI
 					PHY CLK to become stable - 10ms*/
 			}
@@ -329,22 +330,23 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	/* Config control enable i/o output, cpu endian register */
 #ifndef CONFIG_ARCH_MXC
 	if (udc->pdata->have_sysif_regs) {
-		ctrl = __raw_readl(&usb_sys_regs->control);
+		ctrl = ioread32be(&usb_sys_regs->control);
 		ctrl |= USB_CTRL_IOENB;
-		__raw_writel(ctrl, &usb_sys_regs->control);
+		iowrite32be(ctrl, &usb_sys_regs->control);
 	}
 #endif
 
-#if defined(CONFIG_PPC32) && !defined(CONFIG_NOT_COHERENT_CACHE)
+#if (defined(CONFIG_PPC32) || defined(CONFIG_PPC64)) && \
+	!defined(CONFIG_NOT_COHERENT_CACHE)
 	/* Turn on cache snooping hardware, since some PowerPC platforms
 	 * wholly rely on hardware to deal with cache coherent. */
 
 	if (udc->pdata->have_sysif_regs) {
 		/* Setup Snooping for all the 4GB space */
 		tmp = SNOOP_SIZE_2GB;	/* starts from 0x0, size 2G */
-		__raw_writel(tmp, &usb_sys_regs->snoop1);
+		iowrite32be(tmp, &usb_sys_regs->snoop1);
 		tmp |= 0x80000000;	/* starts from 0x8000000, size 2G */
-		__raw_writel(tmp, &usb_sys_regs->snoop2);
+		iowrite32be(tmp, &usb_sys_regs->snoop2);
 	}
 #endif
 
@@ -1219,6 +1221,10 @@ static int fsl_pullup(struct usb_gadget *gadget, int is_on)
 	struct fsl_udc *udc;
 
 	udc = container_of(gadget, struct fsl_udc, gadget);
+
+	if (!udc->vbus_active)
+		return -EOPNOTSUPP;
+
 	udc->softconnect = (is_on != 0);
 	if (can_pullup(udc))
 		fsl_writel((fsl_readl(&dr_regs->usbcmd) | USB_CMD_RUN_STOP),
@@ -2398,10 +2404,12 @@ static int __init fsl_udc_probe(struct platform_device *pdev)
 		usb_sys_regs = (void *)dr_regs + USB_DR_SYS_OFFSET;
 #endif
 
+#ifdef CONFIG_ARCH_MXC
 	/* Initialize USB clocks */
 	ret = fsl_udc_clk_init(pdev);
 	if (ret < 0)
 		goto err_iounmap_noclk;
+#endif
 
 	/* Read Device Controller Capability Parameters register */
 	dccparams = fsl_readl(&dr_regs->dccparams);
@@ -2441,9 +2449,11 @@ static int __init fsl_udc_probe(struct platform_device *pdev)
 		dr_controller_setup(udc_controller);
 	}
 
+#ifdef CONFIG_ARCH_MXC
 	ret = fsl_udc_clk_finalize(pdev);
 	if (ret)
 		goto err_free_irq;
+#endif
 
 	/* Setup gadget structure */
 	udc_controller->gadget.ops = &fsl_gadget_ops;
@@ -2456,6 +2466,7 @@ static int __init fsl_udc_probe(struct platform_device *pdev)
 	/* Setup gadget.dev and register with kernel */
 	dev_set_name(&udc_controller->gadget.dev, "gadget");
 	udc_controller->gadget.dev.of_node = pdev->dev.of_node;
+	set_dma_ops(&udc_controller->gadget.dev, pdev->dev.archdata.dma_ops);
 
 	if (!IS_ERR_OR_NULL(udc_controller->transceiver))
 		udc_controller->gadget.is_otg = 1;
@@ -2507,7 +2518,9 @@ err_free_irq:
 err_iounmap:
 	if (pdata->exit)
 		pdata->exit(pdev);
+#ifdef CONFIG_ARCH_MXC
 	fsl_udc_clk_release();
+#endif
 err_iounmap_noclk:
 	iounmap(dr_regs);
 err_release_mem_region:
@@ -2532,11 +2545,12 @@ static int __exit fsl_udc_remove(struct platform_device *pdev)
 	if (!udc_controller)
 		return -ENODEV;
 
-	usb_del_gadget_udc(&udc_controller->gadget);
 	udc_controller->done = &done;
+	usb_del_gadget_udc(&udc_controller->gadget);
 
+#ifdef CONFIG_ARCH_MXC
 	fsl_udc_clk_release();
-
+#endif
 	/* DR has been stopped in usb_gadget_unregister_driver() */
 	remove_proc_file();
 
@@ -2654,6 +2668,8 @@ static const struct platform_device_id fsl_udc_devtype[] = {
 		.name = "imx-udc-mx27",
 	}, {
 		.name = "imx-udc-mx51",
+	}, {
+		.name = "fsl-usb2-udc",
 	}, {
 		/* sentinel */
 	}

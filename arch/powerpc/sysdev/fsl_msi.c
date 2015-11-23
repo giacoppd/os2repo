@@ -18,6 +18,7 @@
 #include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/of_platform.h>
+#include <linux/iommu.h>
 #include <sysdev/fsl_soc.h>
 #include <asm/prom.h>
 #include <asm/hw_irq.h>
@@ -109,10 +110,53 @@ static int fsl_msi_init_allocator(struct fsl_msi *msi_data)
 	return 0;
 }
 
+static int fsl_msi_get_region_count(void)
+{
+	int count = 0;
+	struct fsl_msi *msi_data;
+
+	list_for_each_entry(msi_data, &msi_head, list)
+		count++;
+
+	return count;
+}
+
+static int fsl_msi_get_region(int region_num, struct msi_region *region)
+{
+	struct fsl_msi *msi_data;
+
+#define CCSR_BASE 0xffe000000
+
+	list_for_each_entry(msi_data, &msi_head, list) {
+		if (msi_data->bank_index == region_num) {
+			region->region_num = msi_data->bank_index;
+			/*
+			 * FIXME Get absolute MSIIR address
+			 * (remove define CCSR_BASE).
+			 */
+			region->addr = CCSR_BASE + msi_data->msiir_offset;
+			region->size = 0x1000;
+			return 0;
+		}
+	}
+
+	return -ENODEV;
+}
+
 static int fsl_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
-	if (type == PCI_CAP_ID_MSIX)
-		pr_debug("fslmsi: MSI-X untested, trying anyway.\n");
+	struct fsl_msi *msi;
+
+	if (type == PCI_CAP_ID_MSI) {
+		/*
+		 * MPIC version 2.0 has erratum PIC1. For now MSI
+		 * could not work. So check to prevent MSI from
+		 * being used on the board with this erratum.
+		 */
+		list_for_each_entry(msi, &msi_head, list)
+			if (msi->feature & MSI_HW_ERRATA_ENDIAN)
+				return -EINVAL;
+	}
 
 	return 0;
 }
@@ -135,7 +179,43 @@ static void fsl_teardown_msi_irqs(struct pci_dev *pdev)
 	return;
 }
 
-static void fsl_compose_msi_msg(struct pci_dev *pdev, int hwirq,
+static int fsl_iommu_get_iova(struct pci_dev *pdev, uint64_t *address)
+{
+	struct iommu_domain *domain;
+	struct iommu_domain_geometry geometry;
+	u32 wins = 0;
+	uint64_t iova, size, msi_phys;
+	int ret, i;
+
+	domain = iommu_get_dev_domain(&pdev->dev);
+	if (!domain)
+		return -EINVAL;
+
+	ret = iommu_domain_get_attr(domain, DOMAIN_ATTR_WINDOWS, &wins);
+	if (ret)
+		return ret;
+
+	ret = iommu_domain_get_attr(domain, DOMAIN_ATTR_GEOMETRY, &geometry);
+	if (ret)
+		return ret;
+
+	iova = geometry.aperture_start;
+	size = geometry.aperture_end - geometry.aperture_start + 1;
+	do_div(size, wins);
+	msi_phys = CCSR_BASE + (*address & 0x0007ffff);
+	for (i = 0; i < wins; i++) {
+		phys_addr_t phys;
+		phys = iommu_iova_to_phys(domain, iova);
+		if (phys == msi_phys) {
+			*address = (iova + (*address & 0x00000fff));
+			return 0;
+		}
+		iova += size;
+	}
+	return -EINVAL;
+}
+
+static int fsl_compose_msi_msg(struct pci_dev *pdev, int hwirq,
 				struct msi_msg *msg,
 				struct fsl_msi *fsl_msi_data)
 {
@@ -144,6 +224,7 @@ static void fsl_compose_msi_msg(struct pci_dev *pdev, int hwirq,
 	u64 address; /* Physical address of the MSIIR */
 	int len;
 	const __be64 *reg;
+	int ret = 0;
 
 	/* If the msi-address-64 property exists, then use it */
 	reg = of_get_property(hose->dn, "msi-address-64", &len);
@@ -152,14 +233,36 @@ static void fsl_compose_msi_msg(struct pci_dev *pdev, int hwirq,
 	else
 		address = fsl_pci_immrbar_base(hose) + msi_data->msiir_offset;
 
+	/*
+	 * If the device is attached with iommu domain then set MSI address
+	 * to the iova configured in PAMU.
+	 */
+	if (iommu_get_dev_domain(&pdev->dev)) {
+		ret = fsl_iommu_get_iova(pdev, &address);
+		if (ret)
+			return ret;
+	}
+
 	msg->address_lo = lower_32_bits(address);
 	msg->address_hi = upper_32_bits(address);
 
-	msg->data = hwirq;
+	/*
+	 * MPIC version 2.0 has erratum PIC1. It causes
+	 * that neither MSI nor MSI-X can work fine.
+	 * This is a workaround to allow MSI-X to function
+	 * properly. It only works for MSI-X, we prevent
+	 * MSI on buggy chips in fsl_msi_check_device().
+	 */
+	if (msi_data->feature & MSI_HW_ERRATA_ENDIAN)
+		msg->data = __swab32(hwirq);
+	else
+		msg->data = hwirq;
 
 	pr_debug("%s: allocated srs: %d, ibs: %d\n", __func__,
 		 (hwirq >> msi_data->srs_shift) & MSI_SRS_MASK,
 		 (hwirq >> msi_data->ibs_shift) & MSI_IBS_MASK);
+
+	return ret;
 }
 
 static int fsl_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
@@ -180,7 +283,8 @@ static int fsl_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	np = of_parse_phandle(hose->dn, "fsl,msi", 0);
 	if (np) {
 		if (of_device_is_compatible(np, "fsl,mpic-msi") ||
-		    of_device_is_compatible(np, "fsl,vmpic-msi"))
+		    of_device_is_compatible(np, "fsl,vmpic-msi") ||
+		    of_device_is_compatible(np, "fsl,vmpic-msi-v4.3"))
 			phandle = np->phandle;
 		else {
 			dev_err(&pdev->dev,
@@ -229,7 +333,13 @@ static int fsl_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 		/* chip_data is msi_data via host->hostdata in host->map() */
 		irq_set_msi_desc(virq, entry);
 
-		fsl_compose_msi_msg(pdev, hwirq, &msg, msi_data);
+		if (fsl_compose_msi_msg(pdev, hwirq, &msg, msi_data)) {
+			dev_err(&pdev->dev, "fail setting MSI");
+			msi_bitmap_free_hwirqs(&msi_data->bitmap, hwirq, 1);
+			rc = -ENODEV;
+			goto out_free;
+		}
+
 		write_msi_msg(virq, &msg);
 	}
 	return 0;
@@ -382,6 +492,15 @@ static int fsl_msi_setup_hwirq(struct fsl_msi *msi, struct platform_device *dev,
 	return 0;
 }
 
+/* MPIC version 2.0 has erratum PIC1 */
+static int mpic_has_erratum_pic1(void)
+{
+	if (fsl_mpic_primary_get_version() == 0x0200)
+		return 1;
+
+	return 0;
+}
+
 static const struct of_device_id fsl_of_msi_ids[];
 static int fsl_of_msi_probe(struct platform_device *dev)
 {
@@ -393,6 +512,7 @@ static int fsl_of_msi_probe(struct platform_device *dev)
 	const struct fsl_msi_feature *features;
 	int len;
 	u32 offset;
+	static int bank_index;
 
 	match = of_match_device(fsl_of_msi_ids, &dev->dev);
 	if (!match)
@@ -452,6 +572,11 @@ static int fsl_of_msi_probe(struct platform_device *dev)
 
 	msi->feature = features->fsl_pic_ip;
 
+	if ((features->fsl_pic_ip & FSL_PIC_IP_MASK) == FSL_PIC_IP_MPIC) {
+		if (mpic_has_erratum_pic1())
+			msi->feature |= MSI_HW_ERRATA_ENDIAN;
+	}
+
 	/*
 	 * Remember the phandle, so that we can match with any PCI nodes
 	 * that have an "fsl,msi" property.
@@ -466,7 +591,8 @@ static int fsl_of_msi_probe(struct platform_device *dev)
 
 	p = of_get_property(dev->dev.of_node, "msi-available-ranges", &len);
 
-	if (of_device_is_compatible(dev->dev.of_node, "fsl,mpic-msi-v4.3")) {
+	if (of_device_is_compatible(dev->dev.of_node, "fsl,mpic-msi-v4.3") ||
+	    of_device_is_compatible(dev->dev.of_node, "fsl,vmpic-msi-v4.3")) {
 		msi->srs_shift = MSIIR1_SRS_SHIFT;
 		msi->ibs_shift = MSIIR1_IBS_SHIFT;
 		if (p)
@@ -521,6 +647,7 @@ static int fsl_of_msi_probe(struct platform_device *dev)
 		}
 	}
 
+	msi->bank_index = bank_index++;
 	list_add_tail(&msi->list, &msi_head);
 
 	/* The multiple setting ppc_md.setup_msi_irqs will not harm things */
@@ -528,6 +655,8 @@ static int fsl_of_msi_probe(struct platform_device *dev)
 		ppc_md.setup_msi_irqs = fsl_setup_msi_irqs;
 		ppc_md.teardown_msi_irqs = fsl_teardown_msi_irqs;
 		ppc_md.msi_check_device = fsl_msi_check_device;
+		ppc_md.msi_get_region_count = fsl_msi_get_region_count;
+		ppc_md.msi_get_region = fsl_msi_get_region;
 	} else if (ppc_md.setup_msi_irqs != fsl_setup_msi_irqs) {
 		dev_err(&dev->dev, "Different MSI driver already installed!\n");
 		err = -ENODEV;
@@ -570,6 +699,10 @@ static const struct of_device_id fsl_of_msi_ids[] = {
 #ifdef CONFIG_EPAPR_PARAVIRT
 	{
 		.compatible = "fsl,vmpic-msi",
+		.data = &vmpic_msi_feature,
+	},
+	{
+		.compatible = "fsl,vmpic-msi-v4.3",
 		.data = &vmpic_msi_feature,
 	},
 #endif

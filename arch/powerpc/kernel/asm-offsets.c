@@ -254,7 +254,7 @@ int main(void)
 	DEFINE(PACA_SYSTEM_TIME, offsetof(struct paca_struct, system_time));
 	DEFINE(PACA_TRAP_SAVE, offsetof(struct paca_struct, trap_save));
 	DEFINE(PACA_NAPSTATELOST, offsetof(struct paca_struct, nap_state_lost));
-	DEFINE(PACA_SPRG3, offsetof(struct paca_struct, sprg3));
+	DEFINE(PACA_SPRG_VDSO, offsetof(struct paca_struct, sprg_vdso));
 #endif /* CONFIG_PPC64 */
 
 	/* RTAS */
@@ -373,6 +373,9 @@ int main(void)
 	DEFINE(CPU_SPEC_FEATURES, offsetof(struct cpu_spec, cpu_features));
 	DEFINE(CPU_SPEC_SETUP, offsetof(struct cpu_spec, cpu_setup));
 	DEFINE(CPU_SPEC_RESTORE, offsetof(struct cpu_spec, cpu_restore));
+#if defined(CONFIG_E500) || defined(CONFIG_PPC_E500MC)
+	DEFINE(CPU_FLUSH_CACHES, offsetof(struct cpu_spec, cpu_flush_caches));
+#endif
 
 	DEFINE(pbe_address, offsetof(struct pbe, address));
 	DEFINE(pbe_orig_address, offsetof(struct pbe, orig_address));

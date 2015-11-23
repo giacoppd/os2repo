@@ -32,7 +32,7 @@
 #define MAX_DIGEST_SIZE		64
 #define MAX_TAP			8
 
-#define MAX_KEYLEN		56
+#define MAX_KEYLEN		160
 #define MAX_IVLEN		32
 
 struct hash_testvec {
@@ -92,7 +92,239 @@ struct cprng_testvec {
 	unsigned short loops;
 };
 
+struct tls_testvec {
+	char *key;	/* wrapped keys for encryption and authentication */
+	char *iv;	/* initialization vector */
+	char *input;	/* input data */
+	char *assoc;	/* associated data: seq num, type, version, input len */
+	char *result;	/* result data */
+	unsigned char fail;	/* the test failure is expected */
+	unsigned char novrfy;	/* dec verification failure expected */
+	unsigned char klen;	/* key length */
+	unsigned short ilen;	/* input data length */
+	unsigned short alen;	/* associated data length */
+	unsigned short rlen;	/* result length */
+};
+
 static char zeroed_string[48];
+
+
+/*
+ * TLS1.0 synthetic test vectors
+ */
+#define TLS_ENC_TEST_VECTORS 3
+#define TLS_DEC_TEST_VECTORS 3
+
+static struct tls_testvec tls_enc_tv_template[] = {
+	{
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "Single block msg",
+		.ilen	= 16,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x10",
+		.alen	= 13,
+		.result	= "\xd5\xac\xb\xd2\xac\xad\x3f\xb1"
+			"\x59\x79\x1e\x91\x5f\x52\x14\x9c"
+			"\xc0\x75\xd8\x4c\x97\x0f\x07\x73"
+			"\xdc\x89\x47\x49\x49\xcb\x30\x6b"
+			"\x1b\x45\x23\xa1\xd0\x51\xcf\x02"
+			"\x2e\xa8\x5d\xa0\xfe\xca\x82\x61",
+		.rlen	= 16 + 20 + 12,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "",
+		.ilen	= 0,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x00",
+		.alen	= 13,
+		.result = "\x58\x2a\x11\xc\x86\x8e\x4b\x67"
+			"\x2d\x16\x26\x1a\xac\x4b\xe2\x1a"
+			"\xe9\x6a\xcc\x4d\x6f\x79\x8a\x45"
+			"\x1f\x4e\x27\xf2\xa7\x59\xb4\x5a",
+		.rlen	= 20 + 12,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext",
+		.ilen	= 285,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x01\x1d",
+		.alen	= 13,
+		.result = "\x80\x23\x82\x44\x14\x2a\x1d\x94\xc\xc2\x1d\xd"
+			"\x3a\x32\x89\x4c\x57\x30\xa8\x89\x76\x46\xcc\x90"
+			"\x1d\x88\xb8\xa6\x1a\x58\xe\x2d\xeb\x2c\xc7\x3a"
+			"\x52\x4e\xdb\xb3\x1e\x83\x11\xf5\x3c\xce\x6e\x94"
+			"\xd3\x26\x6a\x9a\xd\xbd\xc7\x98\xb9\xb3\x3a\x51"
+			"\x1e\x4\x84\x8a\x8f\x54\x9a\x51\x69\x9c\xce\x31"
+			"\x8d\x5d\x8b\xee\x5f\x70\xc\xc9\xb8\x50\x54\xf8"
+			"\xb2\x4a\x7a\xcd\xeb\x7a\x82\x81\xc6\x41\xc8\x50"
+			"\x91\x8d\xc8\xed\xcd\x40\x8f\x55\xd1\xec\xc9\xac"
+			"\x15\x18\xf9\x20\xa0\xed\x18\xa1\xe3\x56\xe3\x14"
+			"\xe5\xe8\x66\x63\x20\xed\xe4\x62\x9d\xa3\xa4\x1d"
+			"\x81\x89\x18\xf2\x36\xae\xc8\x8a\x2b\xbc\xc3\xb8"
+			"\x80\xf\x97\x21\x36\x39\x8\x84\x23\x18\x9e\x9c"
+			"\x72\x32\x75\x2d\x2e\xf9\x60\xb\xe8\xcc\xd9\x74"
+			"\x4\x1b\x8e\x99\xc1\x94\xee\xd0\xac\x4e\xfc\x7e"
+			"\xf1\x96\xb3\xe7\x14\xb8\xf2\xc\x25\x97\x82\x6b"
+			"\xbd\x0\x65\xab\x5c\xe3\x16\xfb\x68\xef\xea\x9d"
+			"\xff\x44\x1d\x2a\x44\xf5\xc8\x56\x77\xb7\xbf\x13"
+			"\xc8\x54\xdb\x92\xfe\x16\x4c\xbe\x18\xe9\xb\x8d"
+			"\xb\xd4\x43\x58\x43\xaa\xf4\x3\x80\x97\x62\xd5"
+			"\xdf\x3c\x28\xaa\xee\x48\x4b\x55\x41\x1b\x31\x2"
+			"\xbe\xa0\x1c\xbd\xb7\x22\x2a\xe5\x53\x72\x73\x20"
+			"\x44\x4f\xe6\x1\x2b\x34\x33\x11\x7d\xfb\x10\xc1"
+			"\x66\x7c\xa6\xf4\x48\x36\x5e\x2\xda\x41\x4b\x3e"
+			"\xe7\x80\x17\x17\xce\xf1\x3e\x6a\x8e\x26\xf3\xb7"
+			"\x2b\x85\xd\x31\x8d\xba\x6c\x22\xb4\x28\x55\x7e"
+			"\x2a\x9e\x26\xf1\x3d\x21\xac\x65",
+		.rlen	= 285 + 20 + 15,
+	}
+};
+
+static struct tls_testvec tls_dec_tv_template[] = {
+	{
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "\xd5\xac\xb\xd2\xac\xad\x3f\xb1"
+			"\x59\x79\x1e\x91\x5f\x52\x14\x9c"
+			"\xc0\x75\xd8\x4c\x97\x0f\x07\x73"
+			"\xdc\x89\x47\x49\x49\xcb\x30\x6b"
+			"\x1b\x45\x23\xa1\xd0\x51\xcf\x02"
+			"\x2e\xa8\x5d\xa0\xfe\xca\x82\x61",
+		.ilen	= 16 + 20 + 12,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x30",
+		.alen	= 13,
+		.result	= "Single block msg",
+		.rlen	= 16,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input = "\x58\x2a\x11\xc\x86\x8e\x4b\x67"
+			"\x2d\x16\x26\x1a\xac\x4b\xe2\x1a"
+			"\xe9\x6a\xcc\x4d\x6f\x79\x8a\x45"
+			"\x1f\x4e\x27\xf2\xa7\x59\xb4\x5a",
+		.ilen	= 20 + 12,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x20",
+		.alen	= 13,
+		.result	= "",
+		.rlen	= 0,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input = "\x80\x23\x82\x44\x14\x2a\x1d\x94\xc\xc2\x1d\xd"
+			"\x3a\x32\x89\x4c\x57\x30\xa8\x89\x76\x46\xcc\x90"
+			"\x1d\x88\xb8\xa6\x1a\x58\xe\x2d\xeb\x2c\xc7\x3a"
+			"\x52\x4e\xdb\xb3\x1e\x83\x11\xf5\x3c\xce\x6e\x94"
+			"\xd3\x26\x6a\x9a\xd\xbd\xc7\x98\xb9\xb3\x3a\x51"
+			"\x1e\x4\x84\x8a\x8f\x54\x9a\x51\x69\x9c\xce\x31"
+			"\x8d\x5d\x8b\xee\x5f\x70\xc\xc9\xb8\x50\x54\xf8"
+			"\xb2\x4a\x7a\xcd\xeb\x7a\x82\x81\xc6\x41\xc8\x50"
+			"\x91\x8d\xc8\xed\xcd\x40\x8f\x55\xd1\xec\xc9\xac"
+			"\x15\x18\xf9\x20\xa0\xed\x18\xa1\xe3\x56\xe3\x14"
+			"\xe5\xe8\x66\x63\x20\xed\xe4\x62\x9d\xa3\xa4\x1d"
+			"\x81\x89\x18\xf2\x36\xae\xc8\x8a\x2b\xbc\xc3\xb8"
+			"\x80\xf\x97\x21\x36\x39\x8\x84\x23\x18\x9e\x9c"
+			"\x72\x32\x75\x2d\x2e\xf9\x60\xb\xe8\xcc\xd9\x74"
+			"\x4\x1b\x8e\x99\xc1\x94\xee\xd0\xac\x4e\xfc\x7e"
+			"\xf1\x96\xb3\xe7\x14\xb8\xf2\xc\x25\x97\x82\x6b"
+			"\xbd\x0\x65\xab\x5c\xe3\x16\xfb\x68\xef\xea\x9d"
+			"\xff\x44\x1d\x2a\x44\xf5\xc8\x56\x77\xb7\xbf\x13"
+			"\xc8\x54\xdb\x92\xfe\x16\x4c\xbe\x18\xe9\xb\x8d"
+			"\xb\xd4\x43\x58\x43\xaa\xf4\x3\x80\x97\x62\xd5"
+			"\xdf\x3c\x28\xaa\xee\x48\x4b\x55\x41\x1b\x31\x2"
+			"\xbe\xa0\x1c\xbd\xb7\x22\x2a\xe5\x53\x72\x73\x20"
+			"\x44\x4f\xe6\x1\x2b\x34\x33\x11\x7d\xfb\x10\xc1"
+			"\x66\x7c\xa6\xf4\x48\x36\x5e\x2\xda\x41\x4b\x3e"
+			"\xe7\x80\x17\x17\xce\xf1\x3e\x6a\x8e\x26\xf3\xb7"
+			"\x2b\x85\xd\x31\x8d\xba\x6c\x22\xb4\x28\x55\x7e"
+			"\x2a\x9e\x26\xf1\x3d\x21\xac\x65",
+
+		.ilen	= 285 + 20 + 15,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x01\x40",
+		.alen	= 13,
+		.result	= "285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext285 bytes plaintext"
+			"285 bytes plaintext",
+		.rlen	= 285,
+	}
+};
 
 /*
  * MD4 test vectors from RFC1320
@@ -12821,6 +13053,10 @@ static struct cipher_testvec cast6_xts_dec_tv_template[] = {
 #define AES_DEC_TEST_VECTORS 4
 #define AES_CBC_ENC_TEST_VECTORS 5
 #define AES_CBC_DEC_TEST_VECTORS 5
+#define HMAC_MD5_ECB_CIPHER_NULL_ENC_TEST_VECTORS 2
+#define HMAC_MD5_ECB_CIPHER_NULL_DEC_TEST_VECTORS 2
+#define HMAC_SHA1_ECB_CIPHER_NULL_ENC_TEST_VECTORS 2
+#define HMAC_SHA1_ECB_CIPHER_NULL_DEC_TEST_VECTORS 2
 #define HMAC_SHA1_AES_CBC_ENC_TEST_VECTORS 7
 #define HMAC_SHA256_AES_CBC_ENC_TEST_VECTORS 7
 #define HMAC_SHA512_AES_CBC_ENC_TEST_VECTORS 7
@@ -13627,6 +13863,90 @@ static struct cipher_testvec aes_cbc_dec_tv_template[] = {
 	},
 };
 
+static struct aead_testvec hmac_md5_ecb_cipher_null_enc_tv_template[] = {
+	{ /* Input data from RFC 2410 Case 1 */
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00",
+		.klen   = 8 + 16 + 0,
+		.iv     = "",
+		.input  = "\x01\x23\x45\x67\x89\xab\xcd\xef",
+		.ilen   = 8,
+		.result = "\x01\x23\x45\x67\x89\xab\xcd\xef"
+			  "\xaa\x42\xfe\x43\x8d\xea\xa3\x5a"
+			  "\xb9\x3d\x9f\xb1\xa3\x8e\x9b\xae",
+		.rlen   = 8 + 16,
+	}, { /* Input data from RFC 2410 Case 2 */
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00",
+		.klen   = 8 + 16 + 0,
+		.iv     = "",
+		.input  = "Network Security People Have A Strange Sense Of Humor",
+		.ilen   = 53,
+		.result = "Network Security People Have A Strange Sense Of Humor"
+			  "\x73\xa5\x3e\x1c\x08\x0e\x8a\x8a"
+			  "\x8e\xb5\x5f\x90\x8e\xfe\x13\x23",
+		.rlen   = 53 + 16,
+	},
+};
+
+static struct aead_testvec hmac_md5_ecb_cipher_null_dec_tv_template[] = {
+	{
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00",
+		.klen   = 8 + 16 + 0,
+		.iv     = "",
+		.input  = "\x01\x23\x45\x67\x89\xab\xcd\xef"
+			  "\xaa\x42\xfe\x43\x8d\xea\xa3\x5a"
+			  "\xb9\x3d\x9f\xb1\xa3\x8e\x9b\xae",
+		.ilen   = 8 + 16,
+		.result = "\x01\x23\x45\x67\x89\xab\xcd\xef",
+		.rlen   = 8,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00",
+		.klen   = 8 + 16 + 0,
+		.iv     = "",
+		.input  = "Network Security People Have A Strange Sense Of Humor"
+			  "\x73\xa5\x3e\x1c\x08\x0e\x8a\x8a"
+			  "\x8e\xb5\x5f\x90\x8e\xfe\x13\x23",
+		.ilen   = 53 + 16,
+		.result = "Network Security People Have A Strange Sense Of Humor",
+		.rlen   = 53,
+	},
+};
+
 static struct aead_testvec hmac_sha1_aes_cbc_enc_tv_template[] = {
 	{ /* RFC 3602 Case 1 */
 #ifdef __LITTLE_ENDIAN
@@ -13873,6 +14193,98 @@ static struct aead_testvec hmac_sha1_aes_cbc_enc_tv_template[] = {
 			  "\x1b\x9f\xc6\x81\x26\x43\x4a\x87"
 			  "\x51\xee\xd6\x4e",
 		.rlen   = 64 + 20,
+	},
+};
+
+static struct aead_testvec hmac_sha1_ecb_cipher_null_enc_tv_template[] = {
+	{ /* Input data from RFC 2410 Case 1 */
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00",
+		.klen   = 8 + 20 + 0,
+		.iv     = "",
+		.input  = "\x01\x23\x45\x67\x89\xab\xcd\xef",
+		.ilen   = 8,
+		.result = "\x01\x23\x45\x67\x89\xab\xcd\xef"
+			  "\x40\xc3\x0a\xa1\xc9\xa0\x28\xab"
+			  "\x99\x5e\x19\x04\xd1\x72\xef\xb8"
+			  "\x8c\x5e\xe4\x08",
+		.rlen   = 8 + 20,
+	}, { /* Input data from RFC 2410 Case 2 */
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00",
+		.klen   = 8 + 20 + 0,
+		.iv     = "",
+		.input  = "Network Security People Have A Strange Sense Of Humor",
+		.ilen   = 53,
+		.result = "Network Security People Have A Strange Sense Of Humor"
+			  "\x75\x6f\x42\x1e\xf8\x50\x21\xd2"
+			  "\x65\x47\xee\x8e\x1a\xef\x16\xf6"
+			  "\x91\x56\xe4\xd6",
+		.rlen   = 53 + 20,
+	},
+};
+
+static struct aead_testvec hmac_sha1_ecb_cipher_null_dec_tv_template[] = {
+	{
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00",
+		.klen   = 8 + 20 + 0,
+		.iv     = "",
+		.input  = "\x01\x23\x45\x67\x89\xab\xcd\xef"
+			  "\x40\xc3\x0a\xa1\xc9\xa0\x28\xab"
+			  "\x99\x5e\x19\x04\xd1\x72\xef\xb8"
+			  "\x8c\x5e\xe4\x08",
+		.ilen   = 8 + 20,
+		.result = "\x01\x23\x45\x67\x89\xab\xcd\xef",
+		.rlen   = 8,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key    = "\x08\x00"		/* rta length */
+			  "\x01\x00"		/* rta type */
+#else
+		.key    = "\x00\x08"		/* rta length */
+			  "\x00\x01"		/* rta type */
+#endif
+			  "\x00\x00\x00\x00"	/* enc key length */
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00",
+		.klen   = 8 + 20 + 0,
+		.iv     = "",
+		.input  = "Network Security People Have A Strange Sense Of Humor"
+			  "\x75\x6f\x42\x1e\xf8\x50\x21\xd2"
+			  "\x65\x47\xee\x8e\x1a\xef\x16\xf6"
+			  "\x91\x56\xe4\xd6",
+		.ilen   = 53 + 20,
+		.result = "Network Security People Have A Strange Sense Of Humor",
+		.rlen   = 53,
 	},
 };
 

@@ -31,6 +31,19 @@ extern void flush_dcache_page(struct page *page);
 #define flush_dcache_mmap_unlock(mapping)	do { } while (0)
 
 extern void __flush_disable_L1(void);
+#ifdef CONFIG_FSL_SOC_BOOKE
+extern void flush_dcache_L1(void);
+void flush_backside_L2_cache(void);
+void cluster_flush_backside_L2_cache(void *cluster_l2_base);
+void cluster_flush_invalidate_L2_cache(void *cluster_l2_base);
+void cluster_disable_L2_cache(void *cluster_l2_base);
+void cluster_invalidate_enable_L2(void *cluster_l2_base);
+void disable_backside_L2_cache(void);
+void flush_disable_L2(void);
+void invalidate_enable_L2(void);
+#else
+#define flush_dcache_L1()			do { } while (0)
+#endif
 
 extern void flush_icache_range(unsigned long, unsigned long);
 extern void flush_icache_user_range(struct vm_area_struct *vma,

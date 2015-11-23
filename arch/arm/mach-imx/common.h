@@ -115,6 +115,7 @@ void tzic_handle_irq(struct pt_regs *);
 void imx_enable_cpu(int cpu, bool enable);
 void imx_set_cpu_jump(int cpu, void *jump_addr);
 u32 imx_get_cpu_arg(int cpu);
+u32 ls1_get_cpu_arg(int cpu);
 void imx_set_cpu_arg(int cpu, u32 arg);
 void v7_cpu_resume(void);
 #ifdef CONFIG_SMP
@@ -122,6 +123,7 @@ void v7_secondary_startup(void);
 void imx_scu_map_io(void);
 void imx_smp_prepare(void);
 void imx_scu_standby_enable(void);
+void secondary_startup(void);
 #else
 static inline void imx_scu_map_io(void) {}
 static inline void imx_smp_prepare(void) {}
@@ -144,6 +146,9 @@ void imx6q_set_chicken_bit(void);
 void imx_cpu_die(unsigned int cpu);
 int imx_cpu_kill(unsigned int cpu);
 
+void ls1021a_cpu_die(unsigned int cpu);
+int ls1021a_cpu_kill(unsigned int cpu);
+
 void imx6q_pm_init(void);
 void imx6q_pm_set_ccm_base(void __iomem *base);
 #ifdef CONFIG_PM
@@ -165,5 +170,6 @@ static inline void imx_init_l2cache(void) {}
 #endif
 
 extern struct smp_operations imx_smp_ops;
+extern struct smp_operations ls1021a_smp_ops;
 
 #endif

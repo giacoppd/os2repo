@@ -552,6 +552,21 @@ static ssize_t bonding_store_min_links(struct device *d,
 }
 static DEVICE_ATTR(min_links, S_IRUGO | S_IWUSR,
 		   bonding_show_min_links, bonding_store_min_links);
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+static DEVICE_ATTR(offline_port_xmit_statistics, S_IRUGO,
+		bonding_show_offline_port_xmit_statistics, NULL);
+
+static DEVICE_ATTR(offline_ports, S_IRUGO,
+		bonding_show_offline_ports, NULL);
+
+static DEVICE_ATTR(oh_needed_for_hw_distribution, S_IRUGO | S_IWUSR,
+		bonding_show_oh_needed_for_hw_distribution,
+		bonding_store_oh_needed_for_hw_distribution);
+
+static DEVICE_ATTR(oh_en, S_IRUGO | S_IWUSR,
+		bonding_show_oh_enable,
+		bonding_store_oh_enable);
+#endif
 
 static ssize_t bonding_show_ad_select(struct device *d,
 				      struct device_attribute *attr,
@@ -1099,6 +1114,12 @@ static struct attribute *per_bond_attrs[] = {
 	&dev_attr_min_links.attr,
 	&dev_attr_lp_interval.attr,
 	&dev_attr_packets_per_slave.attr,
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	&dev_attr_offline_ports.attr,
+	&dev_attr_oh_needed_for_hw_distribution.attr,
+	&dev_attr_oh_en.attr,
+	&dev_attr_offline_port_xmit_statistics.attr,
+#endif
 	NULL,
 };
 

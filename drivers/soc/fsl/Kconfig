@@ -1,0 +1,13 @@
+if ARM
+source "drivers/soc/fsl/Kconfig.arm"
+endif
+
+config FSL_QIXIS
+	tristate "QIXIS system controller driver"
+	depends on FSL_SOC_DRIVERS
+	select REGMAP_I2C
+	select REGMAP_MMIO
+	default n
+	help
+	  Say y here to enable QIXIS system controller api.  The qixis driver
+	  provides FPGA functions to control system.

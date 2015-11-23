@@ -32,6 +32,16 @@ struct platform_device;
 #define PIWAR_WRITE_SNOOP	0x00005000
 #define PIWAR_SZ_MASK          0x0000003f
 
+#define PEX_PMCR_PTOMR		0x1
+#define PEX_PMCR_EXL2S		0x2
+
+#define PME_DISR_EN_PTOD	0x00008000
+#define PME_DISR_EN_ENL23D	0x00002000
+#define PME_DISR_EN_EXL23D	0x00001000
+
+#define ENL23_DETECT_BIT	0x00002000
+#define EXL23_DETECT_BIT	0x00001000
+
 /* PCI/PCI Express outbound window reg */
 struct pci_outbound_window_regs {
 	__be32	potar;	/* 0x.0 - Outbound translation address register */
@@ -50,6 +60,45 @@ struct pci_inbound_window_regs {
 	__be32	piwbear;	/* 0x.c - Inbound window base extended address register */
 	__be32	piwar;	/* 0x.10 - Inbound window attributes register */
 	u8	res2[12];
+};
+
+/* PCI Error Management Registers */
+struct pci_err_regs {
+	/*   0x.e00 - PCI Error Detect Register */
+	__be32	pedr;
+	/*   0x.e04 - PCI Error Capture Disable Register */
+	__be32	pecdr;
+	/*   0x.e08 - PCI Error Interrupt Enable Register */
+	__be32	peer;
+	/*   0x.e0c - PCI Error Attributes Capture Register */
+	__be32	peattrcr;
+	/*   0x.e10 - PCI Error Address Capture Register */
+	__be32	peaddrcr;
+	/*   0x.e14 - PCI Error Extended Address Capture Register */
+	__be32	peextaddrcr;
+	/*   0x.e18 - PCI Error Data Low Capture Register */
+	__be32	pedlcr;
+	/*   0x.e1c - PCI Error Data High Capture Register */
+	__be32	pedhcr;
+	/*   0x.e20 - PCI Gasket Timer Register */
+	__be32	gas_timr;
+	u8	res21[4];
+};
+
+/* PCI Express Error Management Registers */
+struct pcie_err_regs {
+	/*  0x.e00 - PCI/PCIE error detect register */
+	__be32	pex_err_dr;
+	u8	res21[4];
+	/*  0x.e08 - PCI/PCIE error interrupt enable register */
+	__be32	pex_err_en;
+	u8	res22[4];
+	/*  0x.e10 - PCI/PCIE error disable register */
+	__be32	pex_err_disr;
+	u8	res23[12];
+	/*  0x.e20 - PCI/PCIE error capture status register */
+	__be32	pex_err_cap_stat;
+	u8	res24[4];
 };
 
 /* PCI/PCI Express IO block registers for 85xx/86xx */
@@ -84,15 +133,11 @@ struct ccsr_pci {
  * define an inbound window base extended address register.
  */
 	struct pci_inbound_window_regs piw[4];
-
-	__be32	pex_err_dr;		/* 0x.e00 - PCI/PCIE error detect register */
-	u8	res21[4];
-	__be32	pex_err_en;		/* 0x.e08 - PCI/PCIE error interrupt enable register */
-	u8	res22[4];
-	__be32	pex_err_disr;		/* 0x.e10 - PCI/PCIE error disable register */
-	u8	res23[12];
-	__be32	pex_err_cap_stat;	/* 0x.e20 - PCI/PCIE error capture status register */
-	u8	res24[4];
+/* PCI/PCI Express Error Management Registers */
+	union {
+		struct pci_err_regs pcier;
+		struct pcie_err_regs pexer;
+	};
 	__be32	pex_err_cap_r0;		/* 0x.e28 - PCIE error capture register 0 */
 	__be32	pex_err_cap_r1;		/* 0x.e2c - PCIE error capture register 0 */
 	__be32	pex_err_cap_r2;		/* 0x.e30 - PCIE error capture register 0 */
@@ -111,6 +156,7 @@ struct ccsr_pci {
 
 extern int fsl_add_bridge(struct platform_device *pdev, int is_primary);
 extern void fsl_pcibios_fixup_bus(struct pci_bus *bus);
+void fsl_pcibios_fixup_phb(struct pci_controller *phb);
 extern int mpc83xx_add_bridge(struct device_node *dev);
 u64 fsl_pci_immrbar_base(struct pci_controller *hose);
 
@@ -120,6 +166,10 @@ extern struct device_node *fsl_pci_primary;
 void fsl_pci_assign_primary(void);
 #else
 static inline void fsl_pci_assign_primary(void) {}
+#endif
+
+#ifdef CONFIG_P1022_DS
+void p1022ds_reset_pcie_slot(void);
 #endif
 
 #ifdef CONFIG_EDAC_MPC85XX

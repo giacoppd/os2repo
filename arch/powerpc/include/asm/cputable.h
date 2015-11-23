@@ -33,6 +33,13 @@ enum powerpc_pmc_type {
 	PPC_PMC_G4 = 3,
 };
 
+enum powerpc_l2cache_type {
+	PPC_L2_CACHE_DEFAULT = 0,
+	PPC_L2_CACHE_CORE    = 1, /* L2 cache used exclusively by one core */
+	PPC_L2_CACHE_CLUSTER = 2, /* L2 cache shared by a core cluster */
+	PPC_L2_CACHE_SOC     = 3, /* L2 cache shared by all cores */
+};
+
 struct pt_regs;
 
 extern int machine_check_generic(struct pt_regs *regs);
@@ -42,6 +49,13 @@ extern int machine_check_e500mc(struct pt_regs *regs);
 extern int machine_check_e500(struct pt_regs *regs);
 extern int machine_check_e200(struct pt_regs *regs);
 extern int machine_check_47x(struct pt_regs *regs);
+
+#if defined(CONFIG_E500) || defined(CONFIG_PPC_E500MC)
+extern void __flush_caches_e500v2(void);
+extern void __flush_caches_e500mc(void);
+extern void __flush_caches_e5500(void);
+extern void __flush_caches_e6500(void);
+#endif
 
 /* NOTE WELL: Update identify_cpu() if fields are added or removed! */
 struct cpu_spec {
@@ -59,6 +73,13 @@ struct cpu_spec {
 	unsigned int	icache_bsize;
 	unsigned int	dcache_bsize;
 
+	/* L2 cache type */
+	enum powerpc_l2cache_type l2cache_type;
+
+#if defined(CONFIG_E500) || defined(CONFIG_PPC_E500MC)
+	/* flush caches of the cpu which is running the function */
+	void (*cpu_flush_caches)(void);
+#endif
 	/* number of performance monitor counters */
 	unsigned int	num_pmcs;
 	enum powerpc_pmc_type pmc_type;
@@ -395,7 +416,7 @@ extern const char *powerpc_base_platform;
 	    CPU_FTR_L2CSR | CPU_FTR_LWSYNC | CPU_FTR_NOEXECUTE | \
 	    CPU_FTR_DBELL | CPU_FTR_POPCNTB | CPU_FTR_POPCNTD | \
 	    CPU_FTR_DEBUG_LVL_EXC | CPU_FTR_EMB_HV | CPU_FTR_ALTIVEC_COMP | \
-	    CPU_FTR_CELL_TB_BUG)
+	    CPU_FTR_CELL_TB_BUG | CPU_FTR_SMT)
 #define CPU_FTRS_GENERIC_32	(CPU_FTR_COMMON | CPU_FTR_NODSISRALIGN)
 
 /* 64-bit CPUs */

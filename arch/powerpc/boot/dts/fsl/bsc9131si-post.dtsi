@@ -156,19 +156,21 @@ crypto@30000 {
 };
 
 /include/ "pq3-mpic.dtsi"
+/include/ "pq3-mpic-timer-B.dtsi"
 
-timer@41100 {
-	compatible = "fsl,mpic-v1.2-msgr", "fsl,mpic-msg";
-	reg = <0x41400 0x200>;
-	interrupts = <
-		0xb0 2
-		0xb1 2
-		0xb2 2
-		0xb3 2>;
+ptp_timer: ptimer@b0e00 {
+	compatible = "fsl,gianfar-ptp-timer";
+	reg = <0xb0e00 0xb0>;
+	fsl,ts-to-buffer;
+	fsl,tmr-prsc = <0x2>;
+	fsl,clock-source-select = <1>;
 };
 
 /include/ "pq3-etsec2-0.dtsi"
 enet0: ethernet@b0000 {
+	ptimer-handle = <&ptp_timer>;
+	fsl,pmc-handle = <&etsec1_clk>;
+
 	queue-group@b0000 {
 		fsl,rx-bit-map = <0xff>;
 		fsl,tx-bit-map = <0xff>;
@@ -178,6 +180,9 @@ enet0: ethernet@b0000 {
 
 /include/ "pq3-etsec2-1.dtsi"
 enet1: ethernet@b1000 {
+	ptimer-handle = <&ptp_timer>;
+	fsl,pmc-handle = <&etsec2_clk>;
+
 	queue-group@b1000 {
 		fsl,rx-bit-map = <0xff>;
 		fsl,tx-bit-map = <0xff>;
@@ -190,4 +195,6 @@ global-utilities@e0000 {
 		reg = <0xe0000 0x1000>;
 		fsl,has-rstcr;
 	};
+
+/include/ "pq3-power.dtsi"
 };

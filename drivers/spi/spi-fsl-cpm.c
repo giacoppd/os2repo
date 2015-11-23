@@ -22,7 +22,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/of_address.h>
 #include <asm/cpm.h>
-#include <asm/qe.h>
+#include <linux/fsl/qe.h>
 
 #include "spi-fsl-lib.h"
 #include "spi-fsl-cpm.h"

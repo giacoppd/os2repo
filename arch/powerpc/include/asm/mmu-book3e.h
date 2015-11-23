@@ -214,6 +214,12 @@
 #define TLBILX_T_CLASS2			6
 #define TLBILX_T_CLASS3			7
 
+/* LRATCFG bits */
+#define LRATCFG_ASSOC		0xFF000000
+#define LRATCFG_LASIZE		0x00FE0000
+#define LRATCFG_LPID		0x00002000
+#define LRATCFG_NENTRY		0x00000FFF
+
 #ifndef __ASSEMBLY__
 #include <asm/bug.h>
 
@@ -287,12 +293,16 @@ extern int mmu_linear_psize;
 extern int mmu_vmemmap_psize;
 
 struct tlb_core_data {
+	/*
+	 * Per-core spinlock for e6500 TLB handlers (no tlbsrx.)
+	 * Must be the first struct element.
+	 */
+	u8 lock;
+
 	/* For software way selection, as on Freescale TLB1 */
 	u8 esel_next, esel_max, esel_first;
-
-	/* Per-core spinlock for e6500 TLB handlers (no tlbsrx.) */
-	u8 lock;
-};
+	u8 lrat_next, lrat_max;
+} __attribute__((aligned(4)));
 
 #ifdef CONFIG_PPC64
 extern unsigned long linear_map_top;
@@ -308,6 +318,15 @@ extern int book3e_htw_mode;
  * return 1, indicating that the tlb requires preloading.
  */
 #define HUGETLB_NEED_PRELOAD
+
+void book3e_tlb_lock(void);
+void book3e_tlb_unlock(void);
+#else
+static inline void book3e_tlb_lock(void)
+{}
+
+static inline void book3e_tlb_unlock(void)
+{}
 #endif
 
 #endif /* !__ASSEMBLY__ */

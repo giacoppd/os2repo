@@ -61,6 +61,7 @@ extern void smp_generic_take_timebase(void);
 DECLARE_PER_CPU(unsigned int, cpu_pvr);
 
 #ifdef CONFIG_HOTPLUG_CPU
+void platform_cpu_die(unsigned int cpu);
 extern void migrate_irqs(void);
 int generic_cpu_disable(void);
 void generic_cpu_die(unsigned int cpu);
@@ -75,7 +76,7 @@ extern void uninhibit_secondary_onlining(void);
 #else /* HOTPLUG_CPU */
 static inline void inhibit_secondary_onlining(void) {}
 static inline void uninhibit_secondary_onlining(void) {}
-
+#define generic_set_cpu_up(cpu) do { } while (0)
 #endif
 
 #ifdef CONFIG_PPC64
@@ -207,6 +208,7 @@ extern void generic_secondary_thread_init(void);
 extern unsigned long __secondary_hold_spinloop;
 extern unsigned long __secondary_hold_acknowledge;
 extern char __secondary_hold;
+extern unsigned long __run_at_kexec;
 
 extern void __early_start(void);
 #endif /* __ASSEMBLY__ */

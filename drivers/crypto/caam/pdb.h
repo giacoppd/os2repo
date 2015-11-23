@@ -66,9 +66,15 @@ struct ipsec_encap_ctr {
 
 struct ipsec_encap_ccm {
 	u32 salt; /* lower 24 bits */
+#ifdef __BIG_ENDIAN
 	u8 b0_flags;
 	u8 ctr_flags;
 	u16 ctr_initial;
+#else
+	u16 ctr_initial;
+	u8 ctr_flags;
+	u8 b0_flags;
+#endif
 	u32 iv[2];
 };
 
@@ -79,10 +85,17 @@ struct ipsec_encap_gcm {
 };
 
 struct ipsec_encap_pdb {
+#ifdef __BIG_ENDIAN
 	u8 hmo_rsvd;
 	u8 ip_nh;
 	u8 ip_nh_offset;
 	u8 options;
+#else
+	u8 options;
+	u8 ip_nh_offset;
+	u8 ip_nh;
+	u8 hmo_rsvd;
+#endif
 	u32 seq_num_ext_hi;
 	u32 seq_num;
 	union {
@@ -92,8 +105,13 @@ struct ipsec_encap_pdb {
 		struct ipsec_encap_gcm gcm;
 	};
 	u32 spi;
+#ifdef __BIG_ENDIAN
 	u16 rsvd1;
 	u16 ip_hdr_len;
+#else
+	u16 ip_hdr_len;
+	u16 rsvd1;
+#endif
 	u32 ip_hdr[0]; /* optional IP Header content */
 };
 
@@ -108,9 +126,15 @@ struct ipsec_decap_ctr {
 
 struct ipsec_decap_ccm {
 	u32 salt;
+#ifdef __BIG_ENDIAN
 	u8 iv_flags;
 	u8 ctr_flags;
 	u16 ctr_initial;
+#else
+	u16 ctr_initial;
+	u8 ctr_flags;
+	u8 iv_flags;
+#endif
 };
 
 struct ipsec_decap_gcm {
@@ -119,9 +143,15 @@ struct ipsec_decap_gcm {
 };
 
 struct ipsec_decap_pdb {
+#ifdef __BIG_ENDIAN
 	u16 hmo_ip_hdr_len;
 	u8 ip_nh_offset;
 	u8 options;
+#else
+	u8 options;
+	u8 ip_nh_offset;
+	u16 hmo_ip_hdr_len;
+#endif
 	union {
 		struct ipsec_decap_cbc cbc;
 		struct ipsec_decap_ctr ctr;
@@ -285,7 +315,7 @@ struct dtls_block_encap_pdb {
 	u16 epoch;
 	u16 seq_num[3];
 	u32 iv[4];
-};
+} __packed;
 
 struct tls_block_decap_pdb {
 	u8 rsvd[3];
@@ -310,7 +340,7 @@ struct dtls_block_decap_pdb {
 	u16 seq_num[3];
 	u32 iv[4];
 	u64 antireplay_scorecard;
-};
+} __packed;
 
 /*
  * SRTP Protocol Data Blocks
@@ -373,30 +403,204 @@ struct srtp_decap_pdb {
 
 #define DSA_PDB_N_MASK		0x7f
 
-struct dsa_sign_pdb {
-	u32 sgf_ln; /* Use DSA_PDB_ defintions per above */
-	u8 *q;
-	u8 *r;
-	u8 *g;	/* or Gx,y */
-	u8 *s;
-	u8 *f;
-	u8 *c;
-	u8 *d;
-	u8 *ab; /* ECC only */
-	u8 *u;
-};
+struct dsa_sign_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t sgf_ln; /* Use DSA_PDB_ definitions per above */
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t g_dma;	/* or Gx,y */
+	dma_addr_t s_dma;
+	dma_addr_t f_dma;
+	dma_addr_t c_dma;
+	dma_addr_t d_dma;
+	uint32_t	op;
+} __packed;
 
-struct dsa_verify_pdb {
-	u32 sgf_ln;
-	u8 *q;
-	u8 *r;
-	u8 *g;	/* or Gx,y */
-	u8 *w; /* or Wx,y */
-	u8 *f;
-	u8 *c;
-	u8 *d;
-	u8 *tmp; /* temporary data block */
-	u8 *ab; /* only used if ECC processing */
-};
+struct dsa_verify_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t sgf_ln;
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t g_dma;	/* or Gx,y */
+	dma_addr_t w_dma; /* or Wx,y */
+	dma_addr_t f_dma;
+	dma_addr_t c_dma;
+	dma_addr_t d_dma;
+	dma_addr_t tmp_dma; /* temporary data block */
+	uint32_t	op;
+} __packed;
+
+struct dlc_keygen_desc_s {
+	uint32_t desc_hdr;
+	uint32_t sgf_ln;
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t g_dma;
+	dma_addr_t s_dma;
+	dma_addr_t w_dma;
+	uint32_t op;
+} __packed;
+
+struct ecdsa_sign_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t sgf_ln; /* Use ECDSA_PDB_ definitions per above */
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t g_dma;	/* or Gx,y */
+	dma_addr_t s_dma;
+	dma_addr_t f_dma;
+	dma_addr_t c_dma;
+	dma_addr_t d_dma;
+	dma_addr_t ab_dma;
+	uint32_t	op;
+} __packed;
+
+struct ecdsa_verify_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t sgf_ln;
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t g_dma;	/* or Gx,y */
+	dma_addr_t w_dma; /* or Wx,y */
+	dma_addr_t f_dma;
+	dma_addr_t c_dma;
+	dma_addr_t d_dma;
+	dma_addr_t tmp_dma; /* temporary data block */
+	dma_addr_t ab_dma;
+	uint32_t	op;
+} __packed;
+
+struct ecc_keygen_desc_s {
+	uint32_t desc_hdr;
+	uint32_t sgf_ln;
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t g_dma;
+	dma_addr_t s_dma;
+	dma_addr_t w_dma;
+	dma_addr_t ab_dma;
+	uint32_t op;
+} __packed;
+
+#define DH_PDB_L_SHIFT         7
+#define DH_PDB_L_MASK          (0x3ff << DH_PDB_L_SHIFT)
+#define DH_PDB_N_MASK          0x7f
+#define DH_PDB_SGF_SHIFT       24
+#define DH_PDB_SGF_MASK        (0xff << DH_PDB_SGF_SHIFT)
+#define DH_PDB_SGF_Q           (0x80 << DH_PDB_SGF_SHIFT)
+#define DH_PDB_SGF_R           (0x40 << DH_PDB_SGF_SHIFT)
+#define DH_PDB_SGF_W           (0x20 << DH_PDB_SGF_SHIFT)
+#define DH_PDB_SGF_S           (0x10 << DH_PDB_SGF_SHIFT)
+#define DH_PDB_SGF_Z           (0x08 << DH_PDB_SGF_SHIFT)
+#define DH_PDB_SGF_AB          (0x04 << DH_PDB_SGF_SHIFT)
+
+struct dh_key_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t sgf_ln; /* Use DH_PDB_ definitions per above */
+	dma_addr_t q_dma;
+	dma_addr_t r_dma;
+	dma_addr_t w_dma;
+	dma_addr_t s_dma;
+	dma_addr_t z_dma;
+	dma_addr_t ab_dma;
+	uint32_t	op;
+} __packed;
+
+/* DSA/ECDSA Protocol Data Blocks */
+#define RSA_PDB_SGF_SHIFT       28
+#define RSA_PDB_MSG_FMT_SHIFT   12
+#define RSA_PDB_E_SHIFT       12
+#define RSA_PDB_E_MASK        (0xFFF << RSA_PDB_E_SHIFT)
+#define RSA_PDB_D_SHIFT       12
+#define RSA_PDB_D_MASK        (0xFFF << RSA_PDB_D_SHIFT)
+#define RSA_PDB_Q_SHIFT       12
+#define RSA_PDB_Q_MASK        (0xFFF << RSA_PDB_Q_SHIFT)
+
+
+#define RSA_PDB_SGF_F		(0x8 << RSA_PDB_SGF_SHIFT)
+#define RSA_PDB_SGF_G		(0x4 << RSA_PDB_SGF_SHIFT)
+#define RSA_PDB_SGF_N		(0x2 << RSA_PDB_SGF_SHIFT)
+#define RSA_PDB_SGF_E		(0x1 << RSA_PDB_SGF_SHIFT)
+
+#define RSA_PRIV_KEY_FRM_1	0
+#define RSA_PRIV_KEY_FRM_2	1
+#define RSA_PRIV_KEY_FRM_3	2
+
+#define RSA_PDB_PVT_FRM1_SGF_SHIFT  28
+#define RSA_PDB_PVT_FRM1_D_SHIFT 10
+
+#define RSA_PDB_PVT_MSG_FMT_SHIFT   12
+#define RSA_PDB_PVT_FRM3_SGF_SHIFT  23
+#define RSA_PDB_PVT_FRM3_Q_SHIFT  12
+
+/* RSA Pub_Key Descriptor */
+struct rsa_pub_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t	sgf_flg;
+	dma_addr_t	f_dma;
+	dma_addr_t	g_dma;
+	dma_addr_t	n_dma;
+	dma_addr_t	e_dma;
+	uint32_t	msg_len;
+	uint32_t	op;
+} __packed;
+
+/*
+ * Form1 Priv_key Decryption Descriptor
+ * Private key is represented by (n,d)
+ * f is decrypted data pointer while g is pointer
+ * of encrypted data
+ */
+struct rsa_priv_frm1_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t	sgf_flg;
+	dma_addr_t	g_dma;
+	dma_addr_t	f_dma;
+	dma_addr_t	n_dma;
+	dma_addr_t	d_dma;
+	uint32_t	op;
+} __packed;
+
+/*
+ * Form2 Priv_key Decryption Descriptor
+ * Private key is represented by (p,q,d)
+ * f is decrypted data pointer while g is pointer
+ * of encrypted data
+ */
+struct rsa_priv_frm2_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t	sgf_flg;
+	dma_addr_t	g_dma;
+	dma_addr_t	f_dma;
+	dma_addr_t	d_dma;
+	dma_addr_t	p_dma;
+	dma_addr_t	q_dma;
+	dma_addr_t	tmp1_dma;
+	dma_addr_t	tmp2_dma;
+	uint32_t	p_q_len;
+	uint32_t	op;
+} __packed;
+
+/*
+ * Form3 Priv_key Decryption Descriptor
+ * Private key is represented by (p,q,dp,dq,c)
+ * f is decrypted data pointer while g is input pointer
+ * of encrypted data
+ */
+struct rsa_priv_frm3_desc_s {
+	uint32_t	desc_hdr;
+	uint32_t	sgf_flg;
+	dma_addr_t	g_dma;
+	dma_addr_t	f_dma;
+	dma_addr_t	c_dma;
+	dma_addr_t	p_dma;
+	dma_addr_t	q_dma;
+	dma_addr_t	dp_dma;
+	dma_addr_t	dq_dma;
+	dma_addr_t	tmp1_dma;
+	dma_addr_t	tmp2_dma;
+	uint32_t	p_q_len;
+	uint32_t	op;
+} __packed;
 
 #endif

@@ -9,7 +9,7 @@
  * Maintainer: Kumar Gala
  * Modifier: Sandeep Gopalpet <sandeep.kumar@freescale.com>
  *
- * Copyright 2002-2009, 2011 Freescale Semiconductor, Inc.
+ * Copyright 2002-2009, 2011-2013 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -29,6 +29,7 @@
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
+#include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -37,6 +38,10 @@
 #include <linux/mm.h>
 #include <linux/mii.h>
 #include <linux/phy.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -45,6 +50,31 @@
 #include <linux/crc32.h>
 #include <linux/workqueue.h>
 #include <linux/ethtool.h>
+
+#if defined CONFIG_FSL_GIANFAR_1588
+#include <linux/circ_buf.h>
+#endif
+
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_ARM)
+#define AS_FP_PROCEED  1
+#define AS_FP_STOLEN   2
+
+typedef        int (*devfp_hook_t)(struct sk_buff *skb, struct net_device *dev);
+extern devfp_hook_t   devfp_rx_hook;
+extern devfp_hook_t   devfp_tx_hook;
+
+static inline int devfp_register_rx_hook(devfp_hook_t hook)
+{
+	devfp_rx_hook = hook;
+	return 0;
+}
+
+static inline int devfp_register_tx_hook(devfp_hook_t hook)
+{
+	devfp_tx_hook = hook;
+	return 0;
+}
+#endif
 
 struct ethtool_flow_spec_container {
 	struct ethtool_rx_flow_spec fs;
@@ -71,6 +101,10 @@ struct ethtool_rx_list {
 /* Number of bytes to align the rx bufs to */
 #define RXBUF_ALIGNMENT 64
 
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
+/* Headroom required for IPSec processing in ASF */
+#define EXTRA_HEADROOM 128
+#endif
 /* The number of bytes which composes a unit for the purpose of
  * allocating data buffers.  ie-for any given MTU, the data buffer
  * will be the next highest multiple of 512 bytes. */
@@ -98,6 +132,10 @@ extern const char gfar_driver_version[];
 #define GFAR_MAX_FIFO_THRESHOLD 511
 #define GFAR_MAX_FIFO_STARVE	511
 #define GFAR_MAX_FIFO_STARVE_OFF 511
+
+#define FBTHR_SHIFT        24
+#define DEFAULT_RX_LFC_THR  16
+#define DEFAULT_LFC_PTVVAL  4
 
 #define DEFAULT_RX_BUFFER_SIZE  1536
 #define TX_RING_MOD_MASK(size) (size-1)
@@ -145,9 +183,63 @@ extern const char gfar_driver_version[];
 		| SUPPORTED_Autoneg \
 		| SUPPORTED_MII)
 
-#define GFAR_SUPPORTED_GBIT (SUPPORTED_1000baseT_Full \
-		| SUPPORTED_Pause \
-		| SUPPORTED_Asym_Pause)
+#define GFAR_SUPPORTED_GBIT SUPPORTED_1000baseT_Full
+
+#if defined CONFIG_FSL_GIANFAR_1588
+/* 1588 defines */
+#define make64(high, low) (((u64)(high) << 32) | (low))
+
+#define PTP_ENBL_TXTS_IOCTL	SIOCDEVPRIVATE
+#define PTP_DSBL_TXTS_IOCTL	(SIOCDEVPRIVATE + 1)
+#define PTP_ENBL_RXTS_IOCTL	(SIOCDEVPRIVATE + 2)
+#define PTP_DSBL_RXTS_IOCTL	(SIOCDEVPRIVATE + 3)
+#define PTP_GET_TX_TIMESTAMP	(SIOCDEVPRIVATE + 4)
+#define PTP_GET_RX_TIMESTAMP	(SIOCDEVPRIVATE + 5)
+#define PTP_SET_TIME		(SIOCDEVPRIVATE + 6)
+#define PTP_GET_TIME		(SIOCDEVPRIVATE + 7)
+#define PTP_SET_FIPER_ALARM	(SIOCDEVPRIVATE + 8)
+#define PTP_SET_ADJ		(SIOCDEVPRIVATE + 9)
+#define PTP_GET_ADJ		(SIOCDEVPRIVATE + 10)
+#define PTP_CLEANUP_TS		(SIOCDEVPRIVATE + 11)
+
+#define DEFAULT_PTP_TX_BUF_SZ		1024
+#define DEFAULT_PTP_RX_BUF_SZ		2048
+
+/* The threshold between the current found one and the oldest one */
+#define TS_ACCUMULATION_THRESHOLD	50
+
+#define GFAR_PTP_SOURCE_PORT_LENGTH	10
+#define	GFAR_PTP_HEADER_SEQ_OFFS	30
+#define GFAR_PTP_SPID_OFFS		20
+#define GFAR_PTP_HEADER_SZE		34
+#define GFAR_PTP_EVENT_PORT		0x013F
+
+#define GFAR_VLAN_QINQ_1		0x9100
+#define GFAR_VLAN_QINQ_2		0x9200
+#define GFAR_VLAN_QINQ_3		0x9300
+#define GFAR_VLAN_QINQ_4		0x88A8
+#define GFAR_VLAN_TAG_LEN		0x04
+#define GFAR_ETHTYPE_LEN		0x02
+#define GFAR_PACKET_TYPE_UDP		0x11
+/* 1588-2008 network protocol enumeration values */
+#define GFAR_PTP_PROT_IPV4		1
+#define GFAR_PTP_PROT_IPV6		2
+#define GFAR_PTP_PROT_802_3		3
+#define GFAR_PTP_PROT_DONTCARE		0xFFFF
+
+/* 1588 Module Registers bits */
+#define TMR_CTRL_CKSEL_MASK	0x00000003
+#define TMR_CTRL_ENABLE		0x00000004
+#define TMR_RTPE		0x00008000
+#define TMR_CTRL_TCLK_MASK	0x03ff0000
+#define TMR_CTRL_FIPER_START	0x10000000
+#define ONE_GIGA	1000000000
+
+/*Alarm to traigger at 15sec boundary */
+#define TMR_ALARM1_L	0xD964B800
+#define TMR_ALARM1_H	0x00000045
+#define NANOSEC_PER_SEC	1000000000
+#endif
 
 /* TBI register addresses */
 #define MII_TBICON		0x11
@@ -236,6 +328,7 @@ extern const char gfar_driver_version[];
 #define DMACTRL_INIT_SETTINGS   0x000000c3
 #define DMACTRL_GRS             0x00000010
 #define DMACTRL_GTS             0x00000008
+#define DMACTRL_LE		0x00008000
 
 #define TSTAT_CLEAR_THALT_ALL	0xFF000000
 #define TSTAT_CLEAR_THALT	0x80000000
@@ -275,6 +368,7 @@ extern const char gfar_driver_version[];
 
 #define RCTRL_TS_ENABLE 	0x01000000
 #define RCTRL_PAL_MASK		0x001f0000
+#define RCTRL_LFC		0x00004000
 #define RCTRL_VLEX		0x00002000
 #define RCTRL_FILREN		0x00001000
 #define RCTRL_GHTX		0x00000400
@@ -337,6 +431,7 @@ extern const char gfar_driver_version[];
 #define IEVENT_MAG		0x00000800
 #define IEVENT_GRSC		0x00000100
 #define IEVENT_RXF0		0x00000080
+#define IEVENT_FGPI		0x00000010
 #define IEVENT_FIR		0x00000008
 #define IEVENT_FIQ		0x00000004
 #define IEVENT_DPE		0x00000002
@@ -369,6 +464,7 @@ extern const char gfar_driver_version[];
 #define IMASK_MAG		0x00000800
 #define IMASK_GRSC              0x00000100
 #define IMASK_RXFEN0		0x00000080
+#define IMASK_FGPI		0x00000010
 #define IMASK_FIR		0x00000008
 #define IMASK_FIQ		0x00000004
 #define IMASK_DPE		0x00000002
@@ -377,8 +473,11 @@ extern const char gfar_driver_version[];
 		IMASK_RXFEN0 | IMASK_BSY | IMASK_EBERR | IMASK_BABR | \
 		IMASK_XFUN | IMASK_RXC | IMASK_BABT | IMASK_DPE \
 		| IMASK_PERR)
-#define IMASK_RTX_DISABLED ((~(IMASK_RXFEN0 | IMASK_TXFEN | IMASK_BSY)) \
-			   & IMASK_DEFAULT)
+#define IMASK_RX_DEFAULT (IMASK_RXFEN0 | IMASK_BSY)
+#define IMASK_TX_DEFAULT (IMASK_TXFEN | IMASK_TXBEN)
+
+#define IMASK_RX_DISABLED ((~(IMASK_RX_DEFAULT)) & IMASK_DEFAULT)
+#define IMASK_TX_DISABLED ((~(IMASK_TX_DEFAULT)) & IMASK_DEFAULT)
 
 /* Fifo management */
 #define FIFO_TX_THR_MASK	0x01ff
@@ -409,7 +508,9 @@ extern const char gfar_driver_version[];
 
 /* This default RIR value directly corresponds
  * to the 3-bit hash value generated */
-#define DEFAULT_RIR0	0x05397700
+#define DEFAULT_8RXQ_RIR0	0x05397700
+/* Map even hash values to Q0, and odd ones to Q1 */
+#define DEFAULT_2RXQ_RIR0	0x04104100
 
 /* RQFCR register bits */
 #define RQFCR_GPI		0x80000000
@@ -532,16 +633,20 @@ extern const char gfar_driver_version[];
 
 #define GFAR_INT_NAME_MAX	(IFNAMSIZ + 6)	/* '_g#_xx' */
 
+#define GFAR_WOL_MAGIC		0x00000001
+#define GFAR_WOL_FILER_UCAST	0x00000002
+#define GFAR_WOL_FILER_ARP	0x00000004
+
 struct txbd8
 {
 	union {
 		struct {
-			u16	status;	/* Status Fields */
-			u16	length;	/* Buffer length */
+			__be16	status;	/* Status Fields */
+			__be16	length;	/* Buffer length */
 		};
-		u32 lstatus;
+		__be32 lstatus;
 	};
-	u32	bufPtr;	/* Buffer Pointer */
+	__be32	bufPtr;	/* Buffer Pointer */
 };
 
 struct txfcb {
@@ -549,28 +654,28 @@ struct txfcb {
 	u8	ptp;    /* Flag to enable tx timestamping */
 	u8	l4os;	/* Level 4 Header Offset */
 	u8	l3os; 	/* Level 3 Header Offset */
-	u16	phcs;	/* Pseudo-header Checksum */
-	u16	vlctl;	/* VLAN control word */
+	__be16	phcs;	/* Pseudo-header Checksum */
+	__be16	vlctl;	/* VLAN control word */
 };
 
 struct rxbd8
 {
 	union {
 		struct {
-			u16	status;	/* Status Fields */
-			u16	length;	/* Buffer Length */
+			__be16	status;	/* Status Fields */
+			__be16	length;	/* Buffer Length */
 		};
-		u32 lstatus;
+		__be32 lstatus;
 	};
-	u32	bufPtr;	/* Buffer Pointer */
+	__be32	bufPtr;	/* Buffer Pointer */
 };
 
 struct rxfcb {
-	u16	flags;
+	__be16	flags;
 	u8	rq;	/* Receive Queue index */
 	u8	pro;	/* Layer 4 Protocol */
 	u16	reserved;
-	u16	vlctl;	/* VLAN control word */
+	__be16	vlctl;	/* VLAN control word */
 };
 
 struct gianfar_skb_cb {
@@ -654,6 +759,80 @@ struct gfar_extra_stats {
 /* Number of stats exported via ethtool */
 #define GFAR_STATS_LEN (GFAR_RMON_LEN + GFAR_EXTRA_STATS_LEN)
 
+#if defined CONFIG_FSL_GIANFAR_1588
+/* IEEE-1588 Timer Controller Registers */
+struct gfar_regs_1588 {
+	u32	tmr_ctrl;	/* 0x.e00 - Timer Control Register */
+	u32	tmr_tevent;	/* 0x.e04 - Timer stamp event register */
+	u32	tmr_temask;	/* 0x.e08 - Timer event mask register */
+	u32	tmr_pevent;	/* 0x.e0c - Timer stamp event register */
+	u32	tmr_pemask;	/* 0x.e10 - Timer event mask register */
+	u32	tmr_stat;	/* 0x.e14 - Timer stamp status register */
+	u32	tmr_cnt_h;	/* 0x.e18 - Timer counter high register */
+	u32	tmr_cnt_l;	/* 0x.e1c - Timer counter low register */
+	u32	tmr_add;	/* 0x.e20 - Timer dirft compensation */
+					/* addend register */
+	u32	tmr_acc;	/* 0x.e24 - Timer accumulator register */
+	u32	tmr_prsc;	/* 0x.e28 - Timer prescale register */
+	u8	res24a[4];	/* 0x.e2c - 0x.e2f reserved */
+	u32	tmr_off_h;	/* 0x.e30 - Timer offset high register */
+	u32	tmr_off_l;	/* 0x.e34 - Timer offset low register */
+	u8	res24b[8];	/* 0x.e38 - 0x.e3f reserved */
+	u32	tmr_alarm1_h;	/* 0x.e40 - Timer alarm 1 high register */
+	u32	tmr_alarm1_l;	/* 0x.e44 - Timer alarm 1 low register */
+	u32	tmr_alarm2_h;	/* 0x.e48 - Timer alarm 2 high register */
+	u32	tmr_alarm2_l;	/* 0x.e4c - Timer alarm 2 low register */
+	u8	res24c[48];	/* 0x.e50 - 0x.e7f reserved */
+	u32	tmr_fiper1;	/* 0x.e80 - Timer fixed period register 1 */
+	u32	tmr_fiper2;	/* 0x.e84 - Timer fixed period register 2 */
+	u32	tmr_fiper3;	/* 0x.e88 - Timer fixed period register 3 */
+	u8	res24d[20];	/* 0x.e8c - 0x.ebf reserved */
+	u32	tmr_etts1_h;	/* 0x.ea0 - Timer stamp high of */
+					/* general purpose external trigger 1 */
+	u32	tmr_etts1_l;	/* 0x.ea4 - Timer stamp low of */
+					/* general purpose external trigger 1 */
+	u32	tmr_etts2_h;	/* 0x.ea8 - Timer stamp high of */
+					/* general purpose external trigger 2 */
+	u32	tmr_etts2_l;	/* 0x.eac - Timer stamp low of */
+};
+
+/* struct needed to identify a timestamp */
+struct gfar_ptp_ident {
+	u8  version;
+	u8  msg_type;
+	u16 netw_prot;
+	u16 seq_id;
+	u8  snd_port_id[GFAR_PTP_SOURCE_PORT_LENGTH];
+};
+
+/* timestamp format in 1588-2008 */
+struct gfar_ptp_time {
+	u64 sec; /* just 48 bit used */
+	u32 nsec;
+};
+
+/* needed for timestamp data over ioctl */
+struct gfar_ptp_data {
+	struct  gfar_ptp_ident  ident;
+	struct  gfar_ptp_time   ts;
+};
+
+/* circular buffer for ptp timestamps over ioctl */
+struct gfar_ptp_circular {
+	struct circ_buf circ_buf;
+	u32 size;
+	spinlock_t ptp_lock;
+};
+
+struct gfar_ptp_attr_t {
+	u32 tclk_period;
+	u32 nominal_freq;
+	u32 sysclock_freq;
+	u32 tmr_fiper1;
+	u32 freq_comp;
+};
+#endif
+
 struct gfar {
 	u32	tsec_id;	/* 0x.000 - Controller ID register */
 	u32	tsec_id2;	/* 0x.004 - Controller ID2 register */
@@ -726,7 +905,19 @@ struct gfar {
 	u32	tbase6;		/* 0x.234 - TxBD Base Address of ring 6 */
 	u8	res10g[4];
 	u32	tbase7;		/* 0x.23c - TxBD Base Address of ring 7 */
+#if defined CONFIG_FSL_GIANFAR_1588
+	u8	res10h[64];
+	u32	tmr_txts1_id;	/* 0x.280 Tx time stamp identification */
+	u32	tmr_txts2_id;	/* 0x.284 Tx time stamp Identification */
+	u8	res10i[56];
+	u32	tmr_txts1_h;	/* 0x.2c0 Tx time stamp high */
+	u32	tmr_txts1_l;	/* 0x.2c4 Tx Time Stamp low */
+	u32	tmr_txts2_h;	/* 0x.2c8 Tx time stamp high */
+	u32	tmr_txts2_l;	/* 0x.2cc  Tx Time Stamp low */
+	u8	res10j[48];
+#else
 	u8	res10[192];
+#endif
 	u32	rctrl;		/* 0x.300 - Receive Control Register */
 	u32	rstat;		/* 0x.304 - Receive Status Register */
 	u8	res12[8];
@@ -777,7 +968,14 @@ struct gfar {
 	u32	rbase6;		/* 0x.434 - RxBD base address of ring 6 */
 	u8	res17g[4];
 	u32	rbase7;		/* 0x.43c - RxBD base address of ring 7 */
+#if defined CONFIG_FSL_GIANFAR_1588
+	u8	res17h[128];
+	u32	tmr_rxts_h;	/* 0x.4c0 Rx Time Stamp high */
+	u32	tmr_rxts_l;	/* 0x.4c4 Rx Time Stamp low */
+	u8	res17i[56];
+#else
 	u8	res17[192];
+#endif
 	u32	maccfg1;	/* 0x.500 - MAC Configuration 1 Register */
 	u32	maccfg2;	/* 0x.504 - MAC Configuration 2 Register */
 	u32	ipgifg;		/* 0x.508 - Inter Packet Gap/Inter Frame Gap Register */
@@ -846,7 +1044,38 @@ struct gfar {
 	u8	res23c[248];
 	u32	attr;		/* 0x.bf8 - Attributes Register */
 	u32	attreli;	/* 0x.bfc - Attributes Extract Length and Extract Index Register */
-	u8	res24[688];
+	u32	rqprm0;	/* 0x.c00 - Receive queue parameters register 0 */
+	u32	rqprm1;	/* 0x.c04 - Receive queue parameters register 1 */
+	u32	rqprm2;	/* 0x.c08 - Receive queue parameters register 2 */
+	u32	rqprm3;	/* 0x.c0c - Receive queue parameters register 3 */
+	u32	rqprm4;	/* 0x.c10 - Receive queue parameters register 4 */
+	u32	rqprm5;	/* 0x.c14 - Receive queue parameters register 5 */
+	u32	rqprm6;	/* 0x.c18 - Receive queue parameters register 6 */
+	u32	rqprm7;	/* 0x.c1c - Receive queue parameters register 7 */
+	u8	res24[36];
+	u32	rfbptr0; /* 0x.c44 - Last free RxBD pointer for ring 0 */
+	u8	res24a[4];
+	u32	rfbptr1; /* 0x.c4c - Last free RxBD pointer for ring 1 */
+	u8	res24b[4];
+	u32	rfbptr2; /* 0x.c54 - Last free RxBD pointer for ring 2 */
+	u8	res24c[4];
+	u32	rfbptr3; /* 0x.c5c - Last free RxBD pointer for ring 3 */
+	u8	res24d[4];
+	u32	rfbptr4; /* 0x.c64 - Last free RxBD pointer for ring 4 */
+	u8	res24e[4];
+	u32	rfbptr5; /* 0x.c6c - Last free RxBD pointer for ring 5 */
+	u8	res24f[4];
+	u32	rfbptr6; /* 0x.c74 - Last free RxBD pointer for ring 6 */
+	u8	res24g[4];
+	u32	rfbptr7; /* 0x.c7c - Last free RxBD pointer for ring 7 */
+	u8	res24h[4];
+#if defined CONFIG_FSL_GIANFAR_1588
+	u8	res24x[380];
+	struct gfar_regs_1588 regs_1588;
+#else
+	u8	res24x[556];
+#endif
+
 	u32	isrg0;		/* 0x.eb0 - Interrupt steering group 0 register */
 	u32	isrg1;		/* 0x.eb4 - Interrupt steering group 1 register */
 	u32	isrg2;		/* 0x.eb8 - Interrupt steering group 2 register */
@@ -880,11 +1109,15 @@ struct gfar {
 #define FSL_GIANFAR_DEV_HAS_CSUM		0x00000010
 #define FSL_GIANFAR_DEV_HAS_VLAN		0x00000020
 #define FSL_GIANFAR_DEV_HAS_EXTENDED_HASH	0x00000040
-#define FSL_GIANFAR_DEV_HAS_PADDING		0x00000080
 #define FSL_GIANFAR_DEV_HAS_MAGIC_PACKET	0x00000100
 #define FSL_GIANFAR_DEV_HAS_BD_STASHING		0x00000200
 #define FSL_GIANFAR_DEV_HAS_BUF_STASHING	0x00000400
 #define FSL_GIANFAR_DEV_HAS_TIMER		0x00000800
+#define FSL_GIANFAR_DEV_HAS_WAKE_ON_FILER	0x00001000
+
+#if defined CONFIG_FSL_GIANFAR_1588
+#define FSL_GIANFAR_DEV_HAS_TS_TO_BUFFER	0x00001000
+#endif
 
 #if (MAXGROUPS == 2)
 #define DEFAULT_MAPPING 	0xAA
@@ -892,8 +1125,8 @@ struct gfar {
 #define DEFAULT_MAPPING 	0xFF
 #endif
 
-#define ISRG_SHIFT_TX	0x10
-#define ISRG_SHIFT_RX	0x18
+#define ISRG_RR0	0x80000000
+#define ISRG_TR0	0x00800000
 
 /* The same driver can operate in two modes */
 /* SQ_SG_MODE: Single Queue Single Group Mode
@@ -903,6 +1136,22 @@ struct gfar {
 enum {
 	SQ_SG_MODE = 0,
 	MQ_MG_MODE
+};
+
+/* GFAR_SQ_POLLING: Single Queue NAPI polling mode
+ *	The driver supports a single pair of RX/Tx queues
+ *	per interrupt group (Rx/Tx int line). MQ_MG mode
+ *	devices have 2 interrupt groups, so the device will
+ *	have a total of 2 Tx and 2 Rx queues in this case.
+ * GFAR_MQ_POLLING: Multi Queue NAPI polling mode
+ *	The driver supports all the 8 Rx and Tx HW queues
+ *	each queue mapped by the Device Tree to one of
+ *	the 2 interrupt groups. This mode implies significant
+ *	processing overhead (CPU and controller level).
+ */
+enum gfar_poll_mode {
+	GFAR_SQ_POLLING = 0,
+	GFAR_MQ_POLLING
 };
 
 /*
@@ -966,7 +1215,6 @@ struct rx_q_stats {
 
 /**
  *	struct gfar_priv_rx_q - per rx queue structure
- *	@rxlock: per queue rx spin lock
  *	@rx_skbuff: skb pointers
  *	@skb_currx: currently use skb pointer
  *	@rx_bd_base: First rx buffer descriptor
@@ -979,8 +1227,7 @@ struct rx_q_stats {
  */
 
 struct gfar_priv_rx_q {
-	spinlock_t rxlock __attribute__ ((aligned (SMP_CACHE_BYTES)));
-	struct	sk_buff ** rx_skbuff;
+	struct	sk_buff **rx_skbuff __aligned(SMP_CACHE_BYTES);
 	dma_addr_t rx_bd_dma_base;
 	struct	rxbd8 *rx_bd_base;
 	struct	rxbd8 *cur_rx;
@@ -993,6 +1240,7 @@ struct gfar_priv_rx_q {
 	/* RX Coalescing values */
 	unsigned char rxcoalescing;
 	unsigned long rxic;
+	u32 __iomem *rfbptr;
 };
 
 enum gfar_irqinfo_id {
@@ -1016,17 +1264,20 @@ struct gfar_irqinfo {
  */
 
 struct gfar_priv_grp {
-	spinlock_t grplock __attribute__ ((aligned (SMP_CACHE_BYTES)));
-	struct	napi_struct napi;
-	struct gfar_private *priv;
+	spinlock_t grplock __aligned(SMP_CACHE_BYTES);
+	struct	napi_struct napi_rx;
+	struct	napi_struct napi_tx;
 	struct gfar __iomem *regs;
-	unsigned int rstat;
-	unsigned long num_rx_queues;
-	unsigned long rx_bit_map;
-	/* cacheline 3 */
+	struct gfar_priv_tx_q *tx_queue;
+	struct gfar_priv_rx_q *rx_queue;
 	unsigned int tstat;
+	unsigned int rstat;
+
+	struct gfar_private *priv;
 	unsigned long num_tx_queues;
 	unsigned long tx_bit_map;
+	unsigned long num_rx_queues;
+	unsigned long rx_bit_map;
 
 	struct gfar_irqinfo *irqinfo[GFAR_NUM_IRQS];
 };
@@ -1041,6 +1292,11 @@ enum gfar_errata {
 	GFAR_ERRATA_12		= 0x08, /* a.k.a errata eTSEC49 */
 };
 
+enum gfar_dev_state {
+	GFAR_DOWN = 1,
+	GFAR_RESETTING
+};
+
 /* Struct stolen almost completely (and shamelessly) from the FCC enet source
  * (Ok, that's not so true anymore, but there is a family resemblance)
  * The GFAR buffer descriptors track the ring buffers.  The rx_bd_base
@@ -1051,8 +1307,6 @@ enum gfar_errata {
  * the buffer descriptor determines the actual condition.
  */
 struct gfar_private {
-	unsigned int num_rx_queues;
-
 	struct device *dev;
 	struct net_device *ndev;
 	enum gfar_errata errata;
@@ -1060,23 +1314,43 @@ struct gfar_private {
 
 	u16 uses_rxfcb;
 	u16 padding;
+	u32 device_flags;
 
+#if defined CONFIG_FSL_GIANFAR_1588
+	/* HW TX timestamping enabled flag */
+	u16 hwts_tx_en;
+	u16 hwts_tx_en_ioctl;
+#else
 	/* HW time stamping enabled flag */
 	int hwts_rx_en;
 	int hwts_tx_en;
-
+#endif
 	struct gfar_priv_tx_q *tx_queue[MAX_TX_QS];
 	struct gfar_priv_rx_q *rx_queue[MAX_RX_QS];
 	struct gfar_priv_grp gfargrp[MAXGROUPS];
 
-	u32 device_flags;
+	unsigned long state;
 
-	unsigned int mode;
+	unsigned short mode;
+	unsigned short poll_mode;
 	unsigned int num_tx_queues;
+	unsigned int num_rx_queues;
 	unsigned int num_grps;
+	int tx_actual_en;
 
 	/* Network Statistics */
 	struct gfar_extra_stats extra_stats;
+
+#if defined CONFIG_FSL_GIANFAR_1588
+	/* HW RX timestamping enabled flag */
+	u16 hwts_rx_en;
+	u16 hwts_rx_en_ioctl;
+
+	/* 1588 stuff */
+	struct gfar_regs_1588 __iomem *ptimer;
+	struct gfar_ptp_circular tx_timestamps;
+	struct gfar_ptp_circular rx_timestamps;
+#endif
 
 	/* PHY stuff */
 	phy_interface_t interface;
@@ -1088,9 +1362,6 @@ struct gfar_private {
 	int oldduplex;
 	int oldlink;
 
-	/* Bitfield update lock */
-	spinlock_t bflock;
-
 	uint32_t msg_enable;
 
 	struct work_struct reset_task;
@@ -1100,18 +1371,24 @@ struct gfar_private {
 		extended_hash:1,
 		bd_stash_en:1,
 		rx_filer_enable:1,
-		/* Wake-on-LAN enabled */
-		wol_en:1,
 		/* Enable priorty based Tx scheduling in Hw */
 		prio_sched_en:1,
 		/* Flow control flags */
 		pause_aneg_en:1,
 		tx_pause_en:1,
-		rx_pause_en:1;
+		rx_pause_en:1,
+		/* L2 SRAM alloc of BDs */
+		bd_l2sram_en:1;
+
+	/* little endian dma buffer and descriptor host interface */
+	unsigned int dma_endian_le;
 
 	/* The total tx and rx ring size for the enabled queues */
 	unsigned int total_tx_ring_size;
 	unsigned int total_rx_ring_size;
+
+	u32 rqueue;
+	u32 tqueue;
 
 	/* RX per device parameters */
 	unsigned int rx_stash_size;
@@ -1127,16 +1404,23 @@ struct gfar_private {
 	u32 __iomem *hash_regs[16];
 	int hash_width;
 
-	/* global parameters */
-	unsigned int fifo_threshold;
-	unsigned int fifo_starve;
-	unsigned int fifo_starve_off;
+	/* wake-on-lan settings */
+	u16 wol_opts;
+	u16 wol_supported;
 
 	/*Filer table*/
 	unsigned int ftp_rqfpr[MAX_FILER_IDX + 1];
 	unsigned int ftp_rqfcr[MAX_FILER_IDX + 1];
+#ifdef CONFIG_GFAR_DBG_LOOP
+	struct dentry *dbg_ndev_dir;
+	struct list_head dbg_ndev_node;
+	struct net_device *dbg_ndev_loopbk_tgt;
+#endif
 };
 
+#define BD_RING_REG_SZ(priv) ( \
+	sizeof(struct txbd8) * (priv)->total_tx_ring_size + \
+	sizeof(struct rxbd8) * (priv)->total_rx_ring_size)
 
 static inline int gfar_has_errata(struct gfar_private *priv,
 				  enum gfar_errata err)
@@ -1176,21 +1460,105 @@ static inline void gfar_read_filer(struct gfar_private *priv,
 	*fpr = gfar_read(&regs->rqfpr);
 }
 
-void lock_rx_qs(struct gfar_private *priv);
-void lock_tx_qs(struct gfar_private *priv);
-void unlock_rx_qs(struct gfar_private *priv);
-void unlock_tx_qs(struct gfar_private *priv);
+static inline void gfar_write_isrg(struct gfar_private *priv)
+{
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 __iomem *baddr = &regs->isrg0;
+	u32 isrg = 0;
+	int grp_idx, i;
+
+	for (grp_idx = 0; grp_idx < priv->num_grps; grp_idx++) {
+		struct gfar_priv_grp *grp = &priv->gfargrp[grp_idx];
+
+		for_each_set_bit(i, &grp->rx_bit_map, priv->num_rx_queues) {
+			isrg |= (ISRG_RR0 >> i);
+		}
+
+		for_each_set_bit(i, &grp->tx_bit_map, priv->num_tx_queues) {
+			isrg |= (ISRG_TR0 >> i);
+		}
+
+		gfar_write(baddr, isrg);
+
+		baddr++;
+		isrg = 0;
+	}
+}
+
+static inline int gfar_is_dma_stopped(struct gfar_private *priv)
+{
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+
+	return ((gfar_read(&regs->ievent) & (IEVENT_GRSC | IEVENT_GTSC)) ==
+	       (IEVENT_GRSC | IEVENT_GTSC));
+}
+
+static inline int gfar_is_rx_dma_stopped(struct gfar_private *priv)
+{
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+
+	return gfar_read(&regs->ievent) & IEVENT_GRSC;
+}
+
+static inline void gfar_wmb(void)
+{
+#if defined(CONFIG_PPC)
+	/* The powerpc-specific eieio() is used, as wmb() has too strong
+	 * semantics (it requires synchronization between cacheable and
+	 * uncacheable mappings, which eieio() doesn't provide and which we
+	 * don't need), thus requiring a more expensive sync instruction.  At
+	 * some point, the set of architecture-independent barrier functions
+	 * should be expanded to include weaker barriers.
+	 */
+	eieio();
+#else
+	wmb(); /* order write acesses for BD (or FCB) fields */
+#endif
+}
+
+static inline void gfar_clear_txbd_status(struct txbd8 *bdp)
+{
+	u32 lstatus = be32_to_cpu(bdp->lstatus);
+	lstatus &= BD_LFLAG(TXBD_WRAP);
+	bdp->lstatus = cpu_to_be32(lstatus);
+}
+
 irqreturn_t gfar_receive(int irq, void *dev_id);
 int startup_gfar(struct net_device *dev);
 void stop_gfar(struct net_device *dev);
-void gfar_halt(struct net_device *dev);
+void reset_gfar(struct net_device *dev);
+void gfar_mac_reset(struct gfar_private *priv);
+void gfar_halt(struct gfar_private *priv);
+void gfar_start(struct gfar_private *priv);
+#if defined CONFIG_FSL_GIANFAR_1588
+void gfar_1588_start(struct gfar_private *priv);
+void gfar_1588_stop(struct gfar_private *priv);
+int gfar_ptp_init(struct device_node *np, struct gfar_private *priv);
+void gfar_ptp_cleanup(struct gfar_private *priv);
+int gfar_ioctl_1588(struct net_device *dev, struct ifreq *ifr, int cmd);
+void gfar_ptp_store_txstamp(struct net_device *dev,
+			struct sk_buff *skb, struct gfar_ptp_time *tx_ts);
+void gfar_ptp_store_rxstamp(struct net_device *dev,
+			struct sk_buff *skb, struct gfar_ptp_time *rx_ts);
+void gfar_cnt_to_ptp_time(u32 high, u32 low, struct gfar_ptp_time *time);
+u64 gfar_get_tx_timestamp(struct gfar __iomem *regs);
+#endif
 void gfar_phy_test(struct mii_bus *bus, struct phy_device *phydev, int enable,
 		   u32 regnum, u32 read);
 void gfar_configure_coalescing_all(struct gfar_private *priv);
-void gfar_init_sysfs(struct net_device *dev);
 int gfar_set_features(struct net_device *dev, netdev_features_t features);
-void gfar_check_rx_parser_mode(struct gfar_private *priv);
-void gfar_vlan_mode(struct net_device *dev, netdev_features_t features);
+
+#ifdef CONFIG_GFAR_DBG_LOOP
+void gfar_dbg_init(void);
+void gfar_dbg_exit(void);
+void gfar_dbg_ndev_init(struct gfar_private *priv);
+void gfar_dbg_ndev_exit(struct gfar_private *priv);
+#else
+static inline void gfar_dbg_init(void) {}
+static inline void gfar_dbg_exit(void) {}
+static inline void gfar_dbg_ndev_init(struct gfar_private *priv) {}
+static inline void gfar_dbg_ndev_exit(struct gfar_private *priv) {}
+#endif
 
 extern const struct ethtool_ops gfar_ethtool_ops;
 
@@ -1224,5 +1592,159 @@ struct filer_table {
 
 /* The gianfar_ptp module will set this variable */
 extern int gfar_phc_index;
+
+static inline struct txbd8 *skip_txbd(struct txbd8 *bdp, int stride,
+					struct txbd8 *base, int ring_size)
+{
+	struct txbd8 *new_bd = bdp + stride;
+	return (new_bd >= (base + ring_size)) ? (new_bd - ring_size) : new_bd;
+}
+
+static inline struct txbd8 *next_txbd(struct txbd8 *bdp, struct txbd8 *base,
+								int ring_size)
+{
+	return skip_txbd(bdp, 1, base, ring_size);
+}
+
+static inline struct txfcb *gfar_add_fcb(struct sk_buff *skb)
+{
+	struct txfcb *fcb = (struct txfcb *)skb_push(skb, GMAC_FCB_LEN);
+	memset(fcb, 0, GMAC_FCB_LEN);
+	return fcb;
+}
+
+static inline void gfar_tx_checksum(struct sk_buff *skb, struct txfcb *fcb,
+				    int fcb_length)
+{
+	/* If we're here, it's a IP packet with a TCP or UDP
+	 * payload.  We set it to checksum, using a pseudo-header
+	 * we provide
+	 */
+	u8 flags = TXFCB_DEFAULT;
+
+	/* Tell the controller what the protocol is
+	 * And provide the already calculated phcs
+	 */
+	if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
+		flags |= TXFCB_UDP;
+		fcb->phcs = (__force __be16)(udp_hdr(skb)->check);
+	} else
+		fcb->phcs = (__force __be16)(tcp_hdr(skb)->check);
+
+	/* l3os is the distance between the start of the
+	 * frame (skb->data) and the start of the IP hdr.
+	 * l4os is the distance between the start of the
+	 * l3 hdr and the l4 hdr
+	 */
+	fcb->l3os = (u8)(skb_network_offset(skb) - fcb_length);
+	fcb->l4os = skb_network_header_len(skb);
+
+	fcb->flags = flags;
+}
+
+static inline bool gfar_csum_errata_12(struct gfar_private *priv,
+						unsigned long fcb_addr)
+{
+	return gfar_has_errata(priv, GFAR_ERRATA_12) &&
+			(fcb_addr % 0x20) > 0x18;
+}
+
+static inline bool gfar_csum_errata_76(struct gfar_private *priv,
+							unsigned int len)
+{
+	return gfar_has_errata(priv, GFAR_ERRATA_76) &&
+		(len > 2500);
+}
+
+static inline void gfar_init_rxbdp(struct gfar_priv_rx_q *rx_queue,
+					struct rxbd8 *bdp, dma_addr_t buf)
+{
+	u32 lstatus;
+
+	bdp->bufPtr = cpu_to_be32(buf);
+
+	lstatus = BD_LFLAG(RXBD_EMPTY | RXBD_INTERRUPT);
+	if (bdp == rx_queue->rx_bd_base + rx_queue->rx_ring_size - 1)
+		lstatus |= BD_LFLAG(RXBD_WRAP);
+
+	gfar_wmb();
+
+	bdp->lstatus = cpu_to_be32(lstatus);
+}
+
+static inline void gfar_new_rxbdp(struct gfar_priv_rx_q *rx_queue,
+					struct rxbd8 *bdp, struct sk_buff *skb)
+{
+	struct net_device *dev = rx_queue->dev;
+	struct gfar_private *priv = netdev_priv(dev);
+	dma_addr_t buf;
+
+	buf = dma_map_single(priv->dev, skb->data,
+			     priv->rx_buffer_size, DMA_FROM_DEVICE);
+	gfar_init_rxbdp(rx_queue, bdp, buf);
+}
+
+static inline void count_errors(unsigned short status, struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct net_device_stats *stats = &dev->stats;
+	struct gfar_extra_stats *estats = &priv->extra_stats;
+
+	/* If the packet was truncated, none of the other errors matter */
+	if (status & RXBD_TRUNCATED) {
+		stats->rx_length_errors++;
+
+		atomic64_inc(&estats->rx_trunc);
+
+		return;
+	}
+	/* Count the errors, if there were any */
+	if (status & (RXBD_LARGE | RXBD_SHORT)) {
+		stats->rx_length_errors++;
+
+		if (status & RXBD_LARGE)
+			atomic64_inc(&estats->rx_large);
+		else
+			atomic64_inc(&estats->rx_short);
+	}
+	if (status & RXBD_NONOCTET) {
+		stats->rx_frame_errors++;
+		atomic64_inc(&estats->rx_nonoctet);
+	}
+	if (status & RXBD_CRCERR) {
+		atomic64_inc(&estats->rx_crcerr);
+		stats->rx_crc_errors++;
+	}
+	if (status & RXBD_OVERRUN) {
+		atomic64_inc(&estats->rx_overrun);
+		stats->rx_crc_errors++;
+	}
+}
+
+static inline void gfar_rx_checksum(struct sk_buff *skb, struct rxfcb *fcb)
+{
+	/* If valid headers were found, and valid sums
+	 * were verified, then we tell the kernel that no
+	 * checksumming is necessary.  Otherwise, it is [FIXME]
+	 */
+	if ((be16_to_cpu(fcb->flags) & RXFCB_CSUM_MASK) ==
+	    (RXFCB_CIP | RXFCB_CTU))
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+	else
+		skb_checksum_none_assert(skb);
+}
+
+static inline void gfar_align_skb(struct sk_buff *skb)
+{
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
+	/* Reserving the extra headroom required for ASF IPSec processing */
+	skb_reserve(skb, EXTRA_HEADROOM);
+#endif
+	/* We need the data buffer to be aligned properly.  We will reserve
+	* as many bytes as needed to align the data properly
+	*/
+	skb_reserve(skb, RXBUF_ALIGNMENT -
+		(((unsigned long) skb->data) & (RXBUF_ALIGNMENT - 1)));
+}
 
 #endif /* __GIANFAR_H */

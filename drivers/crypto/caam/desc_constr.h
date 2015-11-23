@@ -4,6 +4,8 @@
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
  */
 
+#ifndef _DESC_CONSTR_H_
+#define _DESC_CONSTR_H_
 #include "desc.h"
 
 #define IMMEDIATE (1 << 23)
@@ -155,19 +157,28 @@ static inline void append_cmd_data(u32 *desc, void *data, int len,
 	append_data(desc, data, len);
 }
 
-static inline u32 *append_jump(u32 *desc, u32 options)
-{
-	u32 *cmd = desc_end(desc);
-
-	PRINT_POS;
-	append_cmd(desc, CMD_JUMP | options);
-
-	return cmd;
+#define APPEND_CMD_RET(cmd, op) \
+static inline u32 *append_##cmd(u32 *desc, u32 options) \
+{ \
+	u32 *cmd = desc_end(desc); \
+	PRINT_POS; \
+	append_cmd(desc, CMD_##op | options); \
+	return cmd; \
 }
+APPEND_CMD_RET(jump, JUMP)
+APPEND_CMD_RET(move, MOVE)
+APPEND_CMD_RET(moveb, MOVEB)
 
 static inline void set_jump_tgt_here(u32 *desc, u32 *jump_cmd)
 {
 	*jump_cmd = *jump_cmd | (desc_len(desc) - (jump_cmd - desc));
+}
+
+static inline void set_move_tgt_here(u32 *desc, u32 *move_cmd)
+{
+	*move_cmd &= ~MOVE_OFFSET_MASK;
+	*move_cmd = *move_cmd | ((desc_len(desc) << (MOVE_OFFSET_SHIFT + 2)) &
+				 MOVE_OFFSET_MASK);
 }
 
 #define APPEND_CMD(cmd, op) \
@@ -177,7 +188,6 @@ static inline void append_##cmd(u32 *desc, u32 options) \
 	append_cmd(desc, CMD_##op | options); \
 }
 APPEND_CMD(operation, OPERATION)
-APPEND_CMD(move, MOVE)
 
 #define APPEND_CMD_LEN(cmd, op) \
 static inline void append_##cmd(u32 *desc, unsigned int len, u32 options) \
@@ -188,6 +198,8 @@ static inline void append_##cmd(u32 *desc, unsigned int len, u32 options) \
 APPEND_CMD_LEN(seq_store, SEQ_STORE)
 APPEND_CMD_LEN(seq_fifo_load, SEQ_FIFO_LOAD)
 APPEND_CMD_LEN(seq_fifo_store, SEQ_FIFO_STORE)
+APPEND_CMD_LEN(seq_out_ptr_pre_rto, SEQ_OUT_PTR)
+APPEND_CMD_LEN(seq_in_ptr_pre_rto, SEQ_IN_PTR)
 
 #define APPEND_CMD_PTR(cmd, op) \
 static inline void append_##cmd(u32 *desc, dma_addr_t ptr, unsigned int len, \
@@ -320,7 +332,7 @@ append_cmd(desc, CMD_MATH | MATH_FUN_##op | MATH_DEST_##dest | \
 	APPEND_MATH(LSHIFT, desc, dest, src0, src1, len)
 #define append_math_rshift(desc, dest, src0, src1, len) \
 	APPEND_MATH(RSHIFT, desc, dest, src0, src1, len)
-#define append_math_ldshift(desc, dest, src0, src1, len) \
+#define append_math_shld(desc, dest, src0, src1, len) \
 	APPEND_MATH(SHLD, desc, dest, src0, src1, len)
 
 /* Exactly one source is IMM. Data is passed in as u32 value */
@@ -328,7 +340,7 @@ append_cmd(desc, CMD_MATH | MATH_FUN_##op | MATH_DEST_##dest | \
 do { \
 	APPEND_MATH(op, desc, dest, src_0, src_1, CAAM_CMD_SZ); \
 	append_cmd(desc, data); \
-} while (0);
+} while (0)
 
 #define append_math_add_imm_u32(desc, dest, src0, src1, data) \
 	APPEND_MATH_IMM_u32(ADD, desc, dest, src0, src1, data)
@@ -358,7 +370,7 @@ do { \
 	if (upper) \
 		append_u64(desc, data); \
 	else \
-		append_u32(desc, data); \
+		append_u32(desc, lower_32_bits(data)); \
 } while (0)
 
 #define append_math_add_imm_u64(desc, dest, src0, src1, data) \
@@ -379,3 +391,4 @@ do { \
 	APPEND_MATH_IMM_u64(LSHIFT, desc, dest, src0, src1, data)
 #define append_math_rshift_imm_u64(desc, dest, src0, src1, data) \
 	APPEND_MATH_IMM_u64(RSHIFT, desc, dest, src0, src1, data)
+#endif

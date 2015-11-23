@@ -91,7 +91,7 @@ config AT_HDMAC
 
 config FSL_DMA
 	tristate "Freescale Elo series DMA support"
-	depends on FSL_SOC
+	depends on FSL_SOC && PPC
 	select DMA_ENGINE
 	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
 	---help---
@@ -350,6 +350,27 @@ config MOXART_DMA
 	select DMA_VIRTUAL_CHANNELS
 	help
 	  Enable support for the MOXA ART SoC DMA controller.
+
+config FSL_EDMA
+	tristate "Freescale eDMA engine support"
+	depends on OF
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the Freescale eDMA engine with programmable channel
+	  multiplexing capability for DMA request sources(slot).
+	  This module can be found on Freescale Vybrid and LS-1 SoCs.
+
+config FSL_RAID
+        tristate "Freescale RAID Engine Device Driver"
+        depends on FSL_SOC && !FSL_DMA
+        select DMA_ENGINE
+        select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+        ---help---
+          Enable support for Freescale RAID Engine. RAID Engine is
+          available on some QorIQ SoCs (like P5020). It has
+          the capability to offload RAID5/RAID6 operations from CPU.
+          RAID5 is XOR and memcpy. RAID6 is P/Q and memcpy
 
 config DMA_ENGINE
 	bool

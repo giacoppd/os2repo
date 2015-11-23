@@ -27,7 +27,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <asm/ppc4xx_ocm.h>
 #include <linux/slab.h>
 #include <linux/debugfs.h>
@@ -50,7 +50,7 @@ struct ocm_region {
 	int					memtotal;
 	int					memfree;
 
-	rh_info_t			*rh;
+	struct _rh_info			*rh;
 	struct list_head	list;
 };
 

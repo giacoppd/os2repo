@@ -283,6 +283,7 @@ struct mmc_host {
 				 MMC_CAP2_PACKED_WR)
 #define MMC_CAP2_NO_PRESCAN_POWERUP (1 << 14)	/* Don't power up before scan */
 #define MMC_CAP2_SANITIZE	(1 << 15)		/* Support Sanitize */
+#define MMC_CAP2_NO_TRIM	(1 << 16)	/* Don't Support trim */
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 
@@ -395,7 +396,8 @@ static inline void mmc_signal_sdio_irq(struct mmc_host *host)
 {
 	host->ops->enable_sdio_irq(host, 0);
 	host->sdio_irq_pending = true;
-	wake_up_process(host->sdio_irq_thread);
+	if (host->sdio_irq_thread)
+		wake_up_process(host->sdio_irq_thread);
 }
 
 #ifdef CONFIG_REGULATOR

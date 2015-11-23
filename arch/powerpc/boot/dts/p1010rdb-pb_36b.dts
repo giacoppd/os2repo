@@ -1,7 +1,7 @@
 /*
  * P1010 RDB Device Tree Source (36-bit address map)
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -42,17 +42,5 @@
 };
 
 /include/ "p1010rdb.dtsi"
-
-&phy0 {
-	interrupts = <0 1 0 0>;
-};
-
-&phy1 {
-	interrupts = <2 1 0 0>;
-};
-
-&phy2 {
-	interrupts = <1 1 0 0>;
-};
-
+/include/ "p1010rdb-pb.dtsi"
 /include/ "fsl/p1010si-post.dtsi"

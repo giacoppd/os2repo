@@ -107,14 +107,14 @@ unsigned long p_mapped_by_tlbcam(phys_addr_t pa)
  * an unsigned long (for example, 32-bit implementations cannot support a 4GB
  * size).
  */
-static void settlbcam(int index, unsigned long virt, phys_addr_t phys,
+void settlbcam(int index, unsigned long virt, phys_addr_t phys,
 		unsigned long size, unsigned long flags, unsigned int pid)
 {
 	unsigned int tsize;
 
 	tsize = __ilog2(size) - 10;
 
-#ifdef CONFIG_SMP
+#if defined(CONFIG_SMP) || defined(CONFIG_PPC_E500MC)
 	if ((flags & _PAGE_NO_CACHE) == 0)
 		flags |= _PAGE_COHERENT;
 #endif
@@ -196,6 +196,15 @@ static unsigned long map_mem_in_cams_addr(phys_addr_t phys, unsigned long virt,
 	get_paca()->tcd.esel_next = i;
 	get_paca()->tcd.esel_max = mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY;
 	get_paca()->tcd.esel_first = i;
+	
+	get_paca()->tcd.lrat_next = 0;
+	if (((mfspr(SPRN_MMUCFG) & MMUCFG_MAVN) == MMUCFG_MAVN_V2) &&
+	    (mfspr(SPRN_MMUCFG) & MMUCFG_LRAT)) {
+		get_paca()->tcd.lrat_max =
+			mfspr(SPRN_LRATCFG) & LRATCFG_NENTRY;
+	} else {
+		get_paca()->tcd.lrat_max = 0;
+	}	
 #endif
 
 	return amount_mapped;
@@ -315,4 +324,45 @@ notrace void __init relocate_init(u64 dt_ptr, phys_addr_t start)
 	}
 }
 #endif
+#endif
+
+#if defined(CONFIG_PPC64)
+void book3e_tlb_lock(void)
+{
+	struct paca_struct *paca = get_paca();
+	struct tlb_core_data *percore;
+	unsigned long tmp;
+
+	if (!(paca->tcd_ptr & 1))
+		return;
+
+	percore = (struct tlb_core_data *)(paca->tcd_ptr & ~1UL);
+
+	asm volatile("1: lbarx %0, 0, %1;\n"
+		     "cmpdi %0, 0;\n"
+		     "bne 2f;\n"
+		     "li %0, 1;\n"
+		     "stbcx. %0, 0, %1;\n"
+		     "bne 1b;\n"
+		     "b 3f;\n"
+		     "2: lbzx %0, 0, %1;\n"
+		     "cmpdi %0, 0;\n"
+		     "bne 2b;\n"
+		     "b 1b;\n"
+		     "3:" : "=&r" (tmp) : "r" (&percore->lock) : "memory");
+}
+
+void book3e_tlb_unlock(void)
+{
+	struct paca_struct *paca = get_paca();
+	struct tlb_core_data *percore;
+
+	if (!(paca->tcd_ptr & 1))
+		return;
+
+	percore = (struct tlb_core_data *)(paca->tcd_ptr & ~1UL);
+
+	isync();
+	percore->lock = 0;
+}
 #endif

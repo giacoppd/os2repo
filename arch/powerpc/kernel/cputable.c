@@ -2049,6 +2049,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_setup		= __setup_cpu_e500v1,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppc8540",
+		.l2cache_type		= PPC_L2_CACHE_SOC,
 	},
 	{	/* e500v2 */
 		.pvr_mask		= 0xffff0000,
@@ -2069,6 +2070,8 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_setup		= __setup_cpu_e500v2,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppc8548",
+		.l2cache_type		= PPC_L2_CACHE_SOC,
+		.cpu_flush_caches	= __flush_caches_e500v2,
 	},
 	{	/* e500mc */
 		.pvr_mask		= 0xffff0000,
@@ -2087,6 +2090,8 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_setup		= __setup_cpu_e500mc,
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce500mc",
+		.l2cache_type		= PPC_L2_CACHE_CORE,
+		.cpu_flush_caches	= __flush_caches_e500mc,
 	},
 #endif /* CONFIG_PPC32 */
 	{	/* e5500 */
@@ -2109,7 +2114,10 @@ static struct cpu_spec __initdata cpu_specs[] = {
 #endif
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce5500",
+		.l2cache_type		= PPC_L2_CACHE_CORE,
+		.cpu_flush_caches	= __flush_caches_e5500,
 	},
+#ifndef CONFIG_PPC32
 	{	/* e6500 */
 		.pvr_mask		= 0xffff0000,
 		.pvr_value		= 0x80400000,
@@ -2126,12 +2134,13 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.oprofile_cpu_type	= "ppc/e6500",
 		.oprofile_type		= PPC_OPROFILE_FSL_EMB,
 		.cpu_setup		= __setup_cpu_e6500,
-#ifndef CONFIG_PPC32
 		.cpu_restore		= __restore_cpu_e6500,
-#endif
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce6500",
+		.l2cache_type		= PPC_L2_CACHE_CLUSTER,
+		.cpu_flush_caches	= __flush_caches_e6500,
 	},
+#endif
 #ifdef CONFIG_PPC32
 	{	/* default match */
 		.pvr_mask		= 0x00000000,

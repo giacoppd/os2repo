@@ -2,7 +2,7 @@
  * CAAM/SEC 4.x driver backend
  * Private/internal definitions between modules
  *
- * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright 2008-2012 Freescale Semiconductor, Inc.
  *
  */
 
@@ -23,6 +23,8 @@
 #define JOBR_INTC_COUNT_THLD 0
 #endif
 
+#define CAAM_NAPI_WEIGHT	63
+
 /*
  * Storage for tracking each in-process entry moving across a ring
  * Each entry on an output ring needs one of these
@@ -41,7 +43,8 @@ struct caam_drv_private_jr {
 	struct device		*dev;
 	int ridx;
 	struct caam_job_ring __iomem *rregs;	/* JobR's register space */
-	struct tasklet_struct irqtask;
+	struct napi_struct __percpu *irqtask;
+	struct net_device __percpu *net_dev;
 	int irq;			/* One per queue */
 
 	/* Number of scatterlist crypt transforms active on the JobR */
@@ -54,6 +57,8 @@ struct caam_drv_private_jr {
 	int inp_ring_write_index;	/* Input index "tail" */
 	int head;			/* entinfo (s/w ring) head index */
 	dma_addr_t *inpring;	/* Base of input ring, alloc DMA-safe */
+	dma_addr_t inpbusaddr;	/* Input ring physical address */
+	dma_addr_t outbusaddr;	/* Output ring physical address */
 	spinlock_t outlock ____cacheline_aligned; /* Output ring index lock */
 	int out_ring_read_index;	/* Output index "tail" */
 	int tail;			/* entinfo (s/w ring) tail index */
@@ -67,13 +72,17 @@ struct caam_drv_private {
 
 	struct device *dev;
 	struct platform_device **jrpdev; /* Alloc'ed array per sub-device */
+#ifdef CONFIG_CAAM_QI
+	struct device *qidev;
+#endif
 	struct platform_device *pdev;
 
 	/* Physical-presence section */
-	struct caam_ctrl *ctrl; /* controller region */
-	struct caam_deco **deco; /* DECO/CCB views */
-	struct caam_assurance *ac;
-	struct caam_queue_if *qi; /* QI control region */
+	struct caam_ctrl __iomem *ctrl; /* controller region */
+	struct caam_deco __iomem *deco; /* DECO/CCB views */
+	struct caam_assurance __iomem *assure;
+	struct caam_queue_if __iomem *qi; /* QI control region */
+	struct caam_job_ring __iomem *jr[4];	/* JobR's register space */
 
 	/*
 	 * Detected geometry block. Filled in from device tree if powerpc,
@@ -82,6 +91,16 @@ struct caam_drv_private {
 	u8 total_jobrs;		/* Total Job Rings in device */
 	u8 qi_present;		/* Nonzero if QI present in device */
 	int secvio_irq;		/* Security violation interrupt number */
+	/* list of registered pkc algorithms */
+	struct list_head pkc_list;
+
+	int era;		/* SEC Era */
+
+#define SEC_ERRATUM_A_006899 0x01
+	/* SEC errata bitmask */
+	u32 errata;
+
+	int virt_en;		/* Virtualization enabled in CAAM */
 
 #define	RNG4_MAX_HANDLES 2
 	/* RNG4 block */

@@ -9,7 +9,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 
-#include <asm/qe.h>
+#include <linux/fsl/qe.h>
 #include <sysdev/cpm2_pic.h>
 
 #include "mpc85xx.h"
@@ -40,6 +40,8 @@ static struct of_device_id __initdata mpc85xx_common_ids[] = {
 	{ .compatible = "fsl,qoriq-pcie-v2.4", },
 	{ .compatible = "fsl,qoriq-pcie-v2.3", },
 	{ .compatible = "fsl,qoriq-pcie-v2.2", },
+	/* For the FMan driver */
+	{ .compatible = "fsl,dpaa", },
 	{},
 };
 
@@ -107,6 +109,12 @@ void __init mpc85xx_qe_init(void)
 	qe_reset();
 	of_node_put(np);
 
+}
+
+void __init mpc85xx_qe_par_io_init(void)
+{
+	struct device_node *np;
+
 	np = of_find_node_by_name(NULL, "par_io");
 	if (np) {
 		struct device_node *ucc;
@@ -117,6 +125,10 @@ void __init mpc85xx_qe_init(void)
 		for_each_node_by_name(ucc, "ucc")
 			par_io_of_config(ucc);
 
+#ifdef CONFIG_SPI_FSL_SPI
+		for_each_node_by_name(qe_spi, "spi")
+			par_io_of_config(qe_spi);
+#endif	/* CONFIG_SPI_FSL_SPI */
 	}
 }
 #endif

@@ -57,7 +57,12 @@
 struct mmu_psize_def mmu_psize_defs[MMU_PAGE_COUNT] = {
 	[MMU_PAGE_4K] = {
 		.shift	= 12,
+		.ind	= 21,
 		.enc	= BOOK3E_PAGESZ_4K,
+	},
+	[MMU_PAGE_1M] = {
+		.shift	= 20,
+		.enc	= BOOK3E_PAGESZ_1M,
 	},
 	[MMU_PAGE_2M] = {
 		.shift	= 21,
@@ -143,6 +148,15 @@ int mmu_pte_psize;		/* Page size used for PTE pages */
 int mmu_vmemmap_psize;		/* Page size used for the virtual mem map */
 int book3e_htw_mode;		/* HW tablewalk?  Value is PPC_HTW_* */
 unsigned long linear_map_top;	/* Top of linear mapping */
+
+
+/*
+ * Number of bytes to add to SPRN_SPRG_TLB_EXFRAME on crit/mcheck/debug
+ * exceptions.  This is used for bolted and e6500 TLB miss handlers which
+ * do not modify this SPRG in the TLB miss code; for other TLB miss handlers,
+ * this is set to zero.
+ */
+int extlb_level_exc;
 
 #endif /* CONFIG_PPC64 */
 
@@ -456,6 +470,7 @@ static void setup_page_sizes(void)
 		tlb1ps = mfspr(SPRN_TLB1PS);
 		eptcfg = mfspr(SPRN_EPTCFG);
 
+#ifndef CONFIG_FSL_ERRATUM_A_005337
 		if ((tlb1cfg & TLBnCFG_IND) && (tlb0cfg & TLBnCFG_PT))
 			book3e_htw_mode = PPC_HTW_E6500;
 
@@ -466,6 +481,7 @@ static void setup_page_sizes(void)
 		 */
 		if (eptcfg != 2)
 			book3e_htw_mode = PPC_HTW_NONE;
+#endif
 
 		for (psize = 0; psize < MMU_PAGE_COUNT; ++psize) {
 			struct mmu_psize_def *def = &mmu_psize_defs[psize];
@@ -559,6 +575,7 @@ static void setup_mmu_htw(void)
 		break;
 #ifdef CONFIG_PPC_FSL_BOOK3E
 	case PPC_HTW_E6500:
+		extlb_level_exc = EX_TLB_SIZE;
 		patch_exception(0x1c0, exc_data_tlb_miss_e6500_book3e);
 		patch_exception(0x1e0, exc_instruction_tlb_miss_e6500_book3e);
 		break;
@@ -648,10 +665,13 @@ static void __early_init_mmu(int boot_cpu)
 		num_cams = (mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY) / 4;
 		linear_map_top = map_mem_in_cams(linear_map_top, num_cams);
 
-		/* limit memory so we dont have linear faults */
-		memblock_enforce_memory_limit(linear_map_top);
+		if (boot_cpu) {
+			/* limit memory so we dont have linear faults */
+			memblock_enforce_memory_limit(linear_map_top);
+		}
 
 		if (book3e_htw_mode == PPC_HTW_NONE) {
+			extlb_level_exc = EX_TLB_SIZE;
 			patch_exception(0x1c0, exc_data_tlb_miss_bolted_book3e);
 			patch_exception(0x1e0,
 				exc_instruction_tlb_miss_bolted_book3e);

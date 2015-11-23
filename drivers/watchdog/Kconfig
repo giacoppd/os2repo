@@ -369,6 +369,8 @@ config MAX63XX_WATCHDOG
 config IMX2_WDT
 	tristate "IMX2+ Watchdog"
 	depends on ARCH_MXC
+	select REGMAP_MMIO
+	select WATCHDOG_CORE
 	help
 	  This is the driver for the hardware watchdog
 	  on the Freescale IMX2 and later processors.
@@ -1235,7 +1237,7 @@ config PIKA_WDT
 
 config BOOKE_WDT
 	tristate "PowerPC Book-E Watchdog Timer"
-	depends on BOOKE || 4xx
+	depends on (BOOKE || 4xx) && !FSL_ERRATUM_A_006184
 	select WATCHDOG_CORE
 	---help---
 	  Watchdog driver for PowerPC Book-E chips, such as the Freescale

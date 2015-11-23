@@ -249,3 +249,11 @@ config ARM_VEXPRESS_SPC_CPUFREQ
         help
           This add the CPUfreq driver support for Versatile Express
 	  big.LITTLE platforms using SPC for power management.
+
+config QORIQ_CPUFREQ
+	tristate "CPU frequency scaling driver for Freescale QorIQ SoCs"
+	depends on OF && COMMON_CLK
+	select CLK_QORIQ
+	help
+	  This adds the CPUFreq driver support for Freescale QorIQ SoCs
+	  which are capable of changing the CPU's frequency dynamically.

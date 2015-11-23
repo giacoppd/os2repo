@@ -27,6 +27,8 @@
 #define FSL_PIC_IP_IPIC   0x00000002
 #define FSL_PIC_IP_VMPIC  0x00000003
 
+#define MSI_HW_ERRATA_ENDIAN 0x00000010
+
 struct fsl_msi {
 	struct irq_domain *irqhost;
 
@@ -38,6 +40,14 @@ struct fsl_msi {
 	void __iomem *msi_regs;
 	u32 feature;
 	int msi_virqs[NR_MSI_REG_MAX];
+
+	/*
+	 * During probe each bank is assigned a index number.
+	 * index number ranges from 0 to 2^32.
+	 * Example  MSI bank 1 = 0
+	 * MSI bank 2 = 1, and so on.
+	 */
+	int bank_index;
 
 	struct msi_bitmap bitmap;
 

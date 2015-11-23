@@ -659,7 +659,11 @@ static int uio_mmap_physical(struct vm_area_struct *vma)
 		return -EINVAL;
 
 	vma->vm_ops = &uio_physical_vm_ops;
-	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	if (idev->info->set_pgprot)
+		vma->vm_page_prot = idev->info->set_pgprot(idev->info, mi,
+							   vma->vm_page_prot);
+	else
+		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 	/*
 	 * We cannot use the vm_iomap_memory() helper here,
@@ -797,6 +801,22 @@ static void release_uio_class(void)
 	uio_major_cleanup();
 }
 
+static void uio_mem_region_align(struct uio_info *info)
+{
+	int mi;
+	struct uio_mem *mem;
+
+	for (mi = 0; mi < MAX_UIO_MAPS; mi++) {
+		mem = &info->mem[mi];
+		if (mem->size == 0)
+			break;
+		if (mem->memtype == UIO_MEM_PHYS) {
+			mem->addr = mem->addr & PAGE_MASK;
+			mem->size = PAGE_ALIGN(mem->size);
+		}
+	}
+}
+
 /**
  * uio_register_device - register a new userspace IO device
  * @owner:	module that creates the new device
@@ -814,6 +834,8 @@ int __uio_register_device(struct module *owner,
 
 	if (!parent || !info || !info->name || !info->version)
 		return -EINVAL;
+
+	uio_mem_region_align(info);
 
 	info->uio_dev = NULL;
 

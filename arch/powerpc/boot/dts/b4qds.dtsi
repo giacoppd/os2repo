@@ -39,6 +39,13 @@
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
 
+	aliases{
+		phy_sgmii_10 = &phy_sgmii_10;
+		phy_sgmii_11 = &phy_sgmii_11;
+		phy_sgmii_1c = &phy_sgmii_1c;
+		phy_sgmii_1d = &phy_sgmii_1d;
+	};
+
 	ifc: localbus@ffe124000 {
 		reg = <0xf 0xfe124000 0 0x2000>;
 		ranges = <0 0 0xf 0xe8000000 0x08000000
@@ -52,6 +59,93 @@
 			reg = <0x0 0x0 0x8000000>;
 			bank-width = <2>;
 			device-width = <1>;
+
+			partition@0 {
+				/* This can't be accessed because of a board issue. */
+				label = "Reserved";
+				reg = <0x0 0x4000000>;
+				read-only;
+			};
+			partition@4000000 {
+				label = "rcw";
+				reg = <0x4000000 0x20000>;
+				read-only;
+			};
+			partition@4020000 {
+				label = "Linux.uImage";
+				reg = <0x4020000 0x6e0000>;
+			};
+			partition@4700000 {
+				label = "HV.uImage";
+				reg = <0x4700000 0x100000>;
+			};
+			partition@4800000 {
+				label = "dtb";
+				reg = <0x4800000 0x100000>;
+			};
+			partition@4900000 {
+				label = "HV.dtb";
+				reg = <0x4900000 0x100000>;
+			};
+			partition@4a00000 {
+				label = "fs1";
+				reg = <0x4a00000 0x1500000>;
+			};
+			partition@5f00000 {
+				label = "alt-fman-firmware";
+				reg = <0x5f00000 0x20000>;
+				read-only;
+			};
+			partition@5f20000 {
+				label = "alt-u-boot env";
+				reg = <0x5f20000  0x20000>;
+				read-only;
+			};
+			partition@5f40000 {
+				label = "alt-u-boot";
+				reg = <0x5f40000 0xc0000>;
+				read-only;
+			};
+			partition@6000000 {
+				label = "alt-rcw";
+				reg = <0x6000000 0x20000>;
+				read-only;
+			};
+			partition@6020000 {
+				label = "alt-kernel";
+				reg = <0x6020000 0x6e0000>;
+			};
+			partition@6700000 {
+				label = "alt-HV.uImage";
+				reg = <0x6700000 0x100000>;
+			};
+			partition@6800000 {
+				label = "alt-dtb";
+				reg = <0x6800000 0x100000>;
+			};
+			partition@6900000 {
+				label = "alt-HV.dtb";
+				reg = <0x6900000 0x100000>;
+			};
+			partition@6a00000 {
+				label = "fs2";
+				reg = <0x6a00000 0x1500000>;
+			};
+			partition@7f00000 {
+				label = "fman-firmware";
+				reg = <0x7f00000 0x20000>;
+				read-only;
+			};
+			partition@7f20000 {
+				label = "u-boot env";
+				reg = <0x7f20000  0x20000>;
+				read-only;
+			};
+			partition@7f40000 {
+				label = "u-boot";
+				reg = <0x7f40000 0xc0000>;
+				read-only;
+			};
 		};
 
 		nand@2,0 {
@@ -99,6 +193,14 @@
 
 	dcsr: dcsr@f00000000 {
 		ranges = <0x00000000 0xf 0x00000000 0x01052000>;
+	};
+
+	bportals: bman-portals@ff4000000 {
+		ranges = <0x0 0xf 0xf4000000 0x2000000>;
+	};
+
+	qportals: qman-portals@ff6000000 {
+		ranges = <0x0 0xf 0xf6000000 0x2000000>;
 	};
 
 	soc: soc@ffe000000 {
@@ -152,6 +254,30 @@
 						reg = <0x68>;
 					};
 				};
+
+				i2c@2 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0x2>;
+
+					ina220@40 {
+						compatible = "ti,ina220";
+						reg = <0x40>;
+						shunt-resistor = <1000>;
+					};
+				};
+
+				i2c@3 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0x3>;
+
+					adt7461@4c {
+						compatible = "adi,adt7461";
+						reg = <0x4c>;
+					};
+				};
+
 			};
 		};
 
@@ -160,6 +286,41 @@
 			phy_type = "ulpi";
 		};
 
+		fman0: fman@400000 {
+			fm1mac1: ethernet@e0000 {
+				phy-handle = <&phy_sgmii_10>;
+				phy-connection-type = "sgmii";
+			};
+			fm1mac2: ethernet@e2000 {
+				phy-handle = <&phy_sgmii_11>;
+				phy-connection-type = "sgmii";
+			};
+			fm1mac3: ethernet@e4000 {
+				phy-handle = <&phy_sgmii_1c>;
+				phy-connection-type = "sgmii";
+			};
+			fm1mac4: ethernet@e6000 {
+				phy-handle = <&phy_sgmii_1d>;
+				phy-connection-type = "sgmii";
+			};
+
+			mdio0: mdio@fc000 {
+				phy_sgmii_10: ethernet-phy@10 {
+					reg = <0x10>;
+				};
+				phy_sgmii_11: ethernet-phy@11 {
+					reg = <0x11>;
+				};
+				phy_sgmii_1c: ethernet-phy@1c {
+					status = "disabled";
+					reg = <0x1c>;
+				};
+				phy_sgmii_1d: ethernet-phy@1d {
+					status = "disabled";
+					reg = <0x1d>;
+				};
+			};
+		};
 	};
 
 	pci0: pcie@ffe200000 {
@@ -177,6 +338,28 @@
 		};
 	};
 
+	fsl,dpaa {
+		compatible = "fsl,dpaa";
+		ethernet@0 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac1>;
+		};
+		ethernet@1 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac2>;
+		};
+		ethernet@2 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac3>;
+		};
+		ethernet@3 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac4>;
+		};
+	};
+
 };
 
 /include/ "fsl/b4si-post.dtsi"
+/include/ "fsl/qoriq-dpaa-res3.dtsi"
+/include/ "fsl/qoriq-qman-ceetm0.dtsi"

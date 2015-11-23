@@ -75,6 +75,7 @@
 #endif
 
 int boot_cpuid = 0;
+EXPORT_SYMBOL_GPL(boot_cpuid);
 int spinning_secondaries;
 u64 ppc64_pft_size;
 
@@ -102,23 +103,17 @@ static void setup_tlb_core_data(void)
 {
 	int cpu;
 
+	BUILD_BUG_ON(offsetof(struct tlb_core_data, lock) != 0);
+
 	for_each_possible_cpu(cpu) {
 		int first = cpu_first_thread_sibling(cpu);
 
-		paca[cpu].tcd_ptr = &paca[first].tcd;
+		paca[cpu].tcd_ptr = (uintptr_t)&paca[first].tcd;
 
-		/*
-		 * If we have threads, we need either tlbsrx.
-		 * or e6500 tablewalk mode, or else TLB handlers
-		 * will be racy and could produce duplicate entries.
-		 */
+		/* If we have threads but no tlbsrx., use a per-core lock */
 		if (smt_enabled_at_boot >= 2 &&
-		    !mmu_has_feature(MMU_FTR_USE_TLBRSRV) &&
-		    book3e_htw_mode != PPC_HTW_E6500) {
-			/* Should we panic instead? */
-			WARN_ONCE("%s: unsupported MMU configuration -- expect problems\n",
-				  __func__);
-		}
+		    !mmu_has_feature(MMU_FTR_USE_TLBRSRV))
+			paca[cpu].tcd_ptr |= TLB_PER_CORE_HAS_LOCK;
 	}
 }
 #else
@@ -134,6 +129,9 @@ static char *smt_enabled_cmdline;
 /* Look for ibm,smt-enabled OF option */
 static void check_smt_enabled(void)
 {
+#ifdef CONFIG_PPC_DISABLE_THREADS
+	smt_enabled_at_boot = 0;
+#else
 	struct device_node *dn;
 	const char *smt_option;
 
@@ -171,6 +169,7 @@ static void check_smt_enabled(void)
 			of_node_put(dn);
 		}
 	}
+#endif
 }
 
 /* Look for smt-enabled= cmdline option */
@@ -477,7 +476,11 @@ void __init setup_system(void)
 	check_smt_enabled();
 	setup_tlb_core_data();
 
-#ifdef CONFIG_SMP
+	/*
+	 * Freescale Book3e parts spin in a loop provided by firmware,
+	 * so smp_release_cpus() does nothing for them
+	 */
+#if defined(CONFIG_SMP) && !defined(CONFIG_PPC_FSL_BOOK3E)
 	/* Release secondary cpus out of their spinloops at 0x60 now that
 	 * we can map physical -> logical CPU ids
 	 */
@@ -552,14 +555,20 @@ static void __init irqstack_early_init(void)
 static void __init exc_lvl_early_init(void)
 {
 	unsigned int i;
+	unsigned long sp;
 
 	for_each_possible_cpu(i) {
-		critirq_ctx[i] = (struct thread_info *)
-			__va(memblock_alloc(THREAD_SIZE, THREAD_SIZE));
-		dbgirq_ctx[i] = (struct thread_info *)
-			__va(memblock_alloc(THREAD_SIZE, THREAD_SIZE));
-		mcheckirq_ctx[i] = (struct thread_info *)
-			__va(memblock_alloc(THREAD_SIZE, THREAD_SIZE));
+		sp = memblock_alloc(THREAD_SIZE, THREAD_SIZE);
+		critirq_ctx[i] = (struct thread_info *)__va(sp);
+		paca[i].crit_kstack = __va(sp + THREAD_SIZE);
+
+		sp = memblock_alloc(THREAD_SIZE, THREAD_SIZE);
+		dbgirq_ctx[i] = (struct thread_info *)__va(sp);
+		paca[i].dbg_kstack = __va(sp + THREAD_SIZE);
+
+		sp = memblock_alloc(THREAD_SIZE, THREAD_SIZE);
+		mcheckirq_ctx[i] = (struct thread_info *)__va(sp);
+		paca[i].mc_kstack = __va(sp + THREAD_SIZE);
 	}
 
 	if (cpu_has_feature(CPU_FTR_DEBUG_LVL_EXC))

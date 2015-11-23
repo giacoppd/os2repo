@@ -443,17 +443,19 @@ void __init smp_setup_cpu_maps(void)
 		intserv = of_get_property(dn, "ibm,ppc-interrupt-server#s",
 				&len);
 		if (intserv) {
-			nthreads = len / sizeof(int);
 			DBG("    ibm,ppc-interrupt-server#s -> %d threads\n",
 			    nthreads);
 		} else {
 			DBG("    no ibm,ppc-interrupt-server#s -> 1 thread\n");
-			intserv = of_get_property(dn, "reg", NULL);
+			intserv = of_get_property(dn, "reg", &len);
 			if (!intserv) {
 				cpu_be = cpu_to_be32(cpu);
 				intserv = &cpu_be;	/* assume logical == phys */
+				len = 4;
 			}
 		}
+
+		nthreads = len / sizeof(int);
 
 		for (j = 0; j < nthreads && cpu < nr_cpu_ids; j++) {
 			bool avail;
@@ -722,33 +724,6 @@ static int powerpc_debugfs_init(void)
 }
 arch_initcall(powerpc_debugfs_init);
 #endif
-
-#ifdef CONFIG_BOOKE_WDT
-extern u32 booke_wdt_enabled;
-extern u32 booke_wdt_period;
-
-/* Checks wdt=x and wdt_period=xx command-line option */
-notrace int __init early_parse_wdt(char *p)
-{
-	if (p && strncmp(p, "0", 1) != 0)
-		booke_wdt_enabled = 1;
-
-	return 0;
-}
-early_param("wdt", early_parse_wdt);
-
-int __init early_parse_wdt_period(char *p)
-{
-	unsigned long ret;
-	if (p) {
-		if (!kstrtol(p, 0, &ret))
-			booke_wdt_period = ret;
-	}
-
-	return 0;
-}
-early_param("wdt_period", early_parse_wdt_period);
-#endif	/* CONFIG_BOOKE_WDT */
 
 void ppc_printk_progress(char *s, unsigned short hex)
 {

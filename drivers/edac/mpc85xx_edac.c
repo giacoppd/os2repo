@@ -23,6 +23,7 @@
 
 #include <linux/of_platform.h>
 #include <linux/of_device.h>
+#include <linux/memblock.h>
 #include "edac_module.h"
 #include "edac_core.h"
 #include "mpc85xx_edac.h"
@@ -633,7 +634,7 @@ static int mpc85xx_l2_err_probe(struct platform_device *op)
 	if (edac_op_state == EDAC_OPSTATE_INT) {
 		pdata->irq = irq_of_parse_and_map(op->dev.of_node, 0);
 		res = devm_request_irq(&op->dev, pdata->irq,
-				       mpc85xx_l2_isr, IRQF_DISABLED,
+				       mpc85xx_l2_isr, IRQF_SHARED,
 				       "[EDAC] L2 err", edac_dev);
 		if (res < 0) {
 			printk(KERN_ERR
@@ -676,6 +677,7 @@ static int mpc85xx_l2_err_remove(struct platform_device *op)
 
 	if (edac_op_state == EDAC_OPSTATE_INT) {
 		out_be32(pdata->l2_vbase + MPC85XX_L2_ERRINTEN, 0);
+		devm_free_irq(&op->dev, pdata->irq, edac_dev);
 		irq_dispose_mapping(pdata->irq);
 	}
 
@@ -827,6 +829,8 @@ static void sbe_ecc_decode(u32 cap_high, u32 cap_low, u32 cap_ecc,
 	}
 }
 
+#define make64(high, low) (((u64)(high) << 32) | (low))
+
 static void mpc85xx_mc_check(struct mem_ctl_info *mci)
 {
 	struct mpc85xx_mc_pdata *pdata = mci->pvt_info;
@@ -834,7 +838,7 @@ static void mpc85xx_mc_check(struct mem_ctl_info *mci)
 	u32 bus_width;
 	u32 err_detect;
 	u32 syndrome;
-	u32 err_addr;
+	u64 err_addr;
 	u32 pfn;
 	int row_index;
 	u32 cap_high;
@@ -865,7 +869,9 @@ static void mpc85xx_mc_check(struct mem_ctl_info *mci)
 	else
 		syndrome &= 0xffff;
 
-	err_addr = in_be32(pdata->mc_vbase + MPC85XX_MC_CAPTURE_ADDRESS);
+	err_addr = make64(
+		in_be32(pdata->mc_vbase + MPC85XX_MC_CAPTURE_EXT_ADDRESS),
+		in_be32(pdata->mc_vbase + MPC85XX_MC_CAPTURE_ADDRESS));
 	pfn = err_addr >> PAGE_SHIFT;
 
 	for (row_index = 0; row_index < mci->nr_csrows; row_index++) {
@@ -902,7 +908,7 @@ static void mpc85xx_mc_check(struct mem_ctl_info *mci)
 	mpc85xx_mc_printk(mci, KERN_ERR,
 			"Captured Data / ECC:\t%#8.8x_%08x / %#2.2x\n",
 			cap_high, cap_low, syndrome);
-	mpc85xx_mc_printk(mci, KERN_ERR, "Err addr: %#8.8x\n", err_addr);
+	mpc85xx_mc_printk(mci, KERN_ERR, "Err addr: %#8.8llx\n", err_addr);
 	mpc85xx_mc_printk(mci, KERN_ERR, "PFN: %#8.8x\n", pfn);
 
 	/* we are out of range */
@@ -1018,6 +1024,15 @@ static void mpc85xx_init_csrows(struct mem_ctl_info *mci)
 	}
 }
 
+static unsigned long mpc85xx_ctl_page_to_phys(struct mem_ctl_info *mci,
+					      unsigned long page)
+{
+	if (memblock_is_reserved(page << PAGE_SHIFT))
+		return -1UL;
+
+	return page;
+}
+
 static int mpc85xx_mc_err_probe(struct platform_device *op)
 {
 	struct mem_ctl_info *mci;
@@ -1093,7 +1108,7 @@ static int mpc85xx_mc_err_probe(struct platform_device *op)
 	if (edac_op_state == EDAC_OPSTATE_POLL)
 		mci->edac_check = mpc85xx_mc_check;
 
-	mci->ctl_page_to_phys = NULL;
+	mci->ctl_page_to_phys = mpc85xx_ctl_page_to_phys;
 
 	mci->scrub_mode = SCRUB_SW_SRC;
 
@@ -1170,6 +1185,7 @@ static int mpc85xx_mc_err_remove(struct platform_device *op)
 
 	if (edac_op_state == EDAC_OPSTATE_INT) {
 		out_be32(pdata->mc_vbase + MPC85XX_MC_ERR_INT_EN, 0);
+		devm_free_irq(&op->dev, pdata->irq, mci);
 		irq_dispose_mapping(pdata->irq);
 	}
 

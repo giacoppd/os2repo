@@ -60,6 +60,10 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	cmpw	r6,r9				/* Are we done? */
 	bne	1b				/* If not, repeat */
 
+#ifdef CONFIG_PPC_E500MC
+	/* Some chips can't handle tlbivax due to erratum A-004827 */
+	tlbilxlpid
+#else
 	/* Invalidate TLB0 */
 	li	r6,0x04
 	tlbivax 0,r6
@@ -68,6 +72,7 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	li	r6,0x0c
 	tlbivax 0,r6
 	TLBSYNC
+#endif
 
 /* 3. Setup a temp mapping and jump to it */
 	andi.	r5, r3, 0x1	/* Find an entry not used and is non-zero */
@@ -147,16 +152,24 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	rlwinm	r6,r6,0,2,0	/* clear IPROT */
 	mtspr	SPRN_MAS1,r6
 	tlbwe
+#ifdef CONFIG_PPC_E500MC
+	/* Some chips can't handle tlbivax due to erratum A-004827 */
+	tlbilxlpid
+#else
 	/* Invalidate TLB1 */
 	li	r9,0x0c
 	tlbivax 0,r9
 	TLBSYNC
+#endif
 
-/* The mapping only needs to be cache-coherent on SMP */
-#ifdef CONFIG_SMP
-#define M_IF_SMP	MAS2_M
+/*
+ * The mapping only needs to be cache-coherent on SMP, except on
+ * Freescale e500mc derivatives where it's also needed for coherent DMA.
+ */
+#if defined(CONFIG_SMP) || defined(CONFIG_PPC_E500MC)
+#define M_IF_NEEDED	MAS2_M
 #else
-#define M_IF_SMP	0
+#define M_IF_NEEDED	0
 #endif
 
 #if defined(ENTRY_MAPPING_BOOT_SETUP)
@@ -167,9 +180,13 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	lis	r6,(MAS1_VALID|MAS1_IPROT)@h
 	ori	r6,r6,(MAS1_TSIZE(BOOK3E_PAGESZ_64M))@l
 	mtspr	SPRN_MAS1,r6
-	lis	r6,MAS2_VAL(PAGE_OFFSET, BOOK3E_PAGESZ_64M, M_IF_SMP)@h
-	ori	r6,r6,MAS2_VAL(PAGE_OFFSET, BOOK3E_PAGESZ_64M, M_IF_SMP)@l
+	lis	r6,MAS2_VAL(PAGE_OFFSET, BOOK3E_PAGESZ_64M, M_IF_NEEDED)@h
+	ori	r6,r6,MAS2_VAL(PAGE_OFFSET, BOOK3E_PAGESZ_64M, M_IF_NEEDED)@l
 	mtspr	SPRN_MAS2,r6
+#ifdef ENTRY_DEEPSLEEP_SETUP
+	LOAD_REG_IMMEDIATE(r8, MEMORY_START)
+	ori	r8,r8,(MAS3_SX|MAS3_SW|MAS3_SR)
+#endif
 	mtspr	SPRN_MAS3,r8
 	tlbwe
 
@@ -212,12 +229,18 @@ next_tlb_setup:
 	#error You need to specify the mapping or not use this at all.
 #endif
 
+#ifdef ENTRY_DEEPSLEEP_SETUP
+	LOAD_REG_ADDR(r6, 2f)
+	mfmsr	r7
+	rlwinm	r7,r7,0,~(MSR_IS|MSR_DS)
+#else
 	lis	r7,MSR_KERNEL@h
 	ori	r7,r7,MSR_KERNEL@l
 	bl	1f			/* Find our address */
 1:	mflr	r9
 	rlwimi	r6,r9,0,20,31
 	addi	r6,r6,(2f - 1b)
+#endif
 	mtspr	SPRN_SRR0,r6
 	mtspr	SPRN_SRR1,r7
 	rfi				/* start execution out of TLB1[0] entry */
@@ -231,7 +254,12 @@ next_tlb_setup:
 	rlwinm	r8,r8,0,2,0	/* clear IPROT */
 	mtspr	SPRN_MAS1,r8
 	tlbwe
+#ifdef CONFIG_PPC_E500MC
+	/* Some chips can't handle tlbivax due to erratum A-004827 */
+	tlbilxlpid
+#else
 	/* Invalidate TLB1 */
 	li	r9,0x0c
 	tlbivax 0,r9
 	TLBSYNC
+#endif

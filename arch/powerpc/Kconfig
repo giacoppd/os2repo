@@ -225,7 +225,7 @@ config ARCH_HIBERNATION_POSSIBLE
 config ARCH_SUSPEND_POSSIBLE
 	def_bool y
 	depends on ADB_PMU || PPC_EFIKA || PPC_LITE5200 || PPC_83xx || \
-		   (PPC_85xx && !PPC_E500MC) || PPC_86xx || PPC_PSERIES \
+		   FSL_SOC_BOOKE || PPC_86xx || PPC_PSERIES \
 		   || 44x || 40x
 
 config PPC_DCR_NATIVE
@@ -367,7 +367,7 @@ config SWIOTLB
 config HOTPLUG_CPU
 	bool "Support for enabling/disabling CPUs"
 	depends on SMP && (PPC_PSERIES || \
-	PPC_PMAC || PPC_POWERNV || (PPC_85xx && !PPC_E500MC))
+	PPC_PMAC || PPC_POWERNV || FSL_SOC_BOOKE)
 	---help---
 	  Say Y here to be able to disable and re-enable individual
 	  CPUs at runtime on SMP machines.
@@ -395,7 +395,7 @@ config PPC64_SUPPORTS_MEMORY_FAILURE
 
 config KEXEC
 	bool "kexec system call"
-	depends on (PPC_BOOK3S || FSL_BOOKE || (44x && !SMP))
+	depends on (PPC_BOOK3S || FSL_BOOKE || (44x && !SMP)) || PPC_BOOK3E
 	help
 	  kexec is a system call that implements the ability to shutdown your
 	  current kernel, and to start another kernel.  It is like a reboot
@@ -713,8 +713,6 @@ config FSL_PCI
 
 config FSL_PMC
 	bool
-	default y
-	depends on SUSPEND && (PPC_85xx || PPC_86xx)
 	help
 	  Freescale MPC85xx/MPC86xx power management controller support
 	  (suspend/resume). For MPC83xx see platforms/83xx/suspend.c
@@ -739,15 +737,24 @@ config FSL_LBC
 	  controller.  Also contains some common code used by
 	  drivers for specific local bus peripherals.
 
-config FSL_IFC
-	bool
-        depends on FSL_SOC
-
 config FSL_GTM
 	bool
 	depends on PPC_83xx || QUICC_ENGINE || CPM2
 	help
 	  Freescale General-purpose Timers support
+
+config FSL_FMAN_CPC_STASH
+	bool "Enable stashing of FMAN write transactions for ethernet ports"
+	depends on FSL_PAMU
+	default n
+	help
+	  Select this option to enable stashing of incoming ethernet frames
+	  from FMAN ports into platform cache.
+
+config HAS_FSL_QBMAN
+        bool "Datapath Acceleration Queue and Buffer management"
+        help
+          Datapath Acceleration Queue and Buffer management
 
 # Yes MCA RS/6000s exist but Linux-PPC does not currently support any
 config MCA
@@ -1037,8 +1044,6 @@ source "drivers/Kconfig"
 
 source "fs/Kconfig"
 
-source "arch/powerpc/sysdev/qe_lib/Kconfig"
-
 source "lib/Kconfig"
 
 source "arch/powerpc/Kconfig.debug"
@@ -1051,8 +1056,5 @@ config KEYS_COMPAT
 	default y
 
 source "crypto/Kconfig"
-
-config PPC_LIB_RHEAP
-	bool
 
 source "arch/powerpc/kvm/Kconfig"

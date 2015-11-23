@@ -1,7 +1,7 @@
 /*
  * P1010/P1014 Silicon/SoC Device Tree Source (post include)
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2011-2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -41,7 +41,7 @@
 
 /* controller at 0x9000 */
 &pci0 {
-	compatible = "fsl,p1010-pcie", "fsl,qoriq-pcie-v2.3";
+	compatible = "fsl,p1010-pcie", "fsl,qoriq-pcie-v2.3", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;
@@ -59,8 +59,12 @@
 		interrupt-map-mask = <0xf800 0 0 7>;
 		interrupt-map = <
 			/* IDSEL 0x0 */
-			0000 0x0 0x0 0x1 &mpic 0x4 0x1 0x0 0x0
-			0000 0x0 0x0 0x2 &mpic 0x5 0x1 0x0 0x0
+			/*
+			 *irq[4:5] only for PCIe in dts, set to active-high
+			 *irq[6:7] is pulled up on board, set to active-low
+			 */
+			0000 0x0 0x0 0x1 &mpic 0x4 0x2 0x0 0x0
+			0000 0x0 0x0 0x2 &mpic 0x5 0x2 0x0 0x0
 			0000 0x0 0x0 0x3 &mpic 0x6 0x1 0x0 0x0
 			0000 0x0 0x0 0x4 &mpic 0x7 0x1 0x0 0x0
 			>;
@@ -69,7 +73,7 @@
 
 /* controller at 0xa000 */
 &pci1 {
-	compatible = "fsl,p1010-pcie", "fsl,qoriq-pcie-v2.3";
+	compatible = "fsl,p1010-pcie", "fsl,qoriq-pcie-v2.3", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;
@@ -132,6 +136,7 @@
 /include/ "pq3-gpio-0.dtsi"
 /include/ "pq3-sata2-0.dtsi"
 /include/ "pq3-sata2-1.dtsi"
+/include/ "pq3-tdm1.0-0.dtsi"
 
 	can0: can@1c000 {
 		compatible = "fsl,p1010-flexcan";
@@ -171,6 +176,8 @@
 
 /include/ "pq3-etsec2-0.dtsi"
 	enet0: ethernet@b0000 {
+		fsl,pmc-handle = <&etsec1_clk>;
+
 		queue-group@b0000 {
 			fsl,rx-bit-map = <0xff>;
 			fsl,tx-bit-map = <0xff>;
@@ -179,6 +186,8 @@
 
 /include/ "pq3-etsec2-1.dtsi"
 	enet1: ethernet@b1000 {
+		fsl,pmc-handle = <&etsec2_clk>;
+
 		queue-group@b1000 {
 			fsl,rx-bit-map = <0xff>;
 			fsl,tx-bit-map = <0xff>;
@@ -187,6 +196,8 @@
 
 /include/ "pq3-etsec2-2.dtsi"
 	enet2: ethernet@b2000 {
+		fsl,pmc-handle = <&etsec3_clk>;
+
 		queue-group@b2000 {
 			fsl,rx-bit-map = <0xff>;
 			fsl,tx-bit-map = <0xff>;
@@ -199,4 +210,6 @@
 		reg = <0xe0000 0x1000>;
 		fsl,has-rstcr;
 	};
+
+/include/ "pq3-power.dtsi"
 };

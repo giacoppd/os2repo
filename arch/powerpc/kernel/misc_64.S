@@ -469,8 +469,41 @@ _GLOBAL(scom970_write)
  * Physical (hardware) cpu id should be in r3.
  */
 _GLOBAL(kexec_wait)
-	bl	1f
-1:	mflr	r5
+#ifdef CONFIG_PPC_BOOK3E
+BEGIN_FTR_SECTION
+	/* Disable all the secondary threads. In kdump boot, we will
+	 * disable the thread0 if there is a panic on thread1 */
+#ifdef CONFIG_KEXEC
+	LOAD_REG_ADDR(r4,crashing_cpu)
+	lwz	r4,0(r4)
+	cmpwi	0,r4,-1
+	beq	10f
+	lhz	r5,PACAPACAINDEX(r13)
+	LOAD_REG_ADDR(r6,threads_per_core)
+	lwz	r6,0(r6)
+	addi	r6,r6,-1
+	andc	r4,r4,r6
+	andc	r5,r5,r6
+	cmpw	r4,r5
+	bne	10f
+	mfspr	r4,SPRN_TIR
+	li	r5,1
+	sld	r4,r5,r4
+	mtspr	SPRN_TENC,r4
+	b	$
+10:
+#endif
+	andi.	r4,r3,1
+	beq	1f
+	li	r4,2
+	mtspr	SPRN_TENC,r4
+	b	$
+1:
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
+#endif
+
+	bl	2f
+2:	mflr	r5
 	addi	r5,r5,kexec_flag-1b
 
 99:	HMT_LOW
@@ -489,6 +522,49 @@ kexec_flag:
 
 
 #ifdef CONFIG_KEXEC
+#ifdef CONFIG_PPC_BOOK3E
+/* BOOK3E have no a real MMU mode so we have to setup the initial TLB
+ * for a core to map v:0 to p:0 as 1:1. This current implementation
+ * assume that 1G is enough for kexec.
+ */
+#include <asm/mmu.h>
+kexec_create_tlb:
+	/* Invalidate all TLBs to avoid any TLB conflict. */
+	PPC_TLBILX_ALL(0,R0)
+	sync
+	isync
+
+	mfspr	r10,SPRN_TLB1CFG
+	andi.	r10,r10,TLBnCFG_N_ENTRY	/* Extract # entries */
+	subi	r10,r10,1		/* Often its always safe to use last */
+	lis	r9,MAS0_TLBSEL(1)@h
+	rlwimi	r9,r10,16,4,15		/* Setup MAS0 = TLBSEL | ESEL(r9) */
+
+/* Setup a temp mapping v:0 to p:0 as 1:1 and return to it.
+ */
+#ifdef CONFIG_SMP
+#define M_IF_SMP	MAS2_M
+#else
+#define M_IF_SMP	0
+#endif
+	mtspr	SPRN_MAS0,r9
+
+	lis	r9,(MAS1_VALID|MAS1_IPROT)@h
+	ori	r9,r9,(MAS1_TSIZE(BOOK3E_PAGESZ_1GB))@l
+	mtspr	SPRN_MAS1,r9
+
+	LOAD_REG_IMMEDIATE(r9, 0x0 | M_IF_SMP)
+	mtspr	SPRN_MAS2,r9
+
+	LOAD_REG_IMMEDIATE(r9, 0x0 | MAS3_SR | MAS3_SW | MAS3_SX)
+	mtspr	SPRN_MAS3,r9
+	li	r9,0
+	mtspr	SPRN_MAS7,r9
+
+	tlbwe
+	isync
+	blr
+#endif
 
 /* kexec_smp_wait(void)
  *
@@ -502,6 +578,10 @@ kexec_flag:
  */
 _GLOBAL(kexec_smp_wait)
 	lhz	r3,PACAHWCPUID(r13)
+#ifdef CONFIG_PPC_BOOK3E
+	/* Create a 1:1 mapping. */
+	bl	kexec_create_tlb
+#endif
 	bl	real_mode
 
 	li	r4,KEXEC_STATE_REAL_MODE
@@ -518,6 +598,7 @@ _GLOBAL(kexec_smp_wait)
  * don't overwrite r3 here, it is live for kexec_wait above.
  */
 real_mode:	/* assume normal blr return */
+#ifndef CONFIG_PPC_BOOK3E
 1:	li	r9,MSR_RI
 	li	r10,MSR_DR|MSR_IR
 	mflr	r11		/* return address to SRR0 */
@@ -529,7 +610,10 @@ real_mode:	/* assume normal blr return */
 	mtspr	SPRN_SRR1,r10
 	mtspr	SPRN_SRR0,r11
 	rfid
-
+#else
+	/* the real mode is nothing for book3e. */
+	blr
+#endif
 
 /*
  * kexec_sequence(newstack, start, image, control, clear_all())
@@ -572,9 +656,15 @@ _GLOBAL(kexec_sequence)
 	lhz	r25,PACAHWCPUID(r13)	/* get our phys cpu from paca */
 
 	/* disable interrupts, we are overwriting kernel data next */
+#ifndef CONFIG_PPC_BOOK3E
 	mfmsr	r3
 	rlwinm	r3,r3,0,17,15
 	mtmsrd	r3,1
+#else
+	wrteei	0
+	/* Create a 1:1 mapping. */
+	bl	kexec_create_tlb
+#endif
 
 	/* copy dest pages, flush whole dest image */
 	mr	r3,r29
@@ -591,15 +681,23 @@ _GLOBAL(kexec_sequence)
 	bl	.copy_and_flush	/* (dest, src, copy limit, start offset) */
 1:	/* assume normal blr return */
 
+	/* notify we're going into kexec kernel for SMP. */
+	LOAD_REG_ADDR(r3,__run_at_kexec)
+	li	r4,1
+	std	r4,0(r3)
+	sync
+
 	/* release other cpus to the new kernel secondary start at 0x60 */
 	mflr	r5
 	li	r6,1
 	stw	r6,kexec_flag-1b(5)
 
+#ifndef CONFIG_PPC_BOOK3E
 	/* clear out hardware hash page table and tlb */
 	ld	r5,0(r27)		/* deref function descriptor */
 	mtctr	r5
 	bctrl				/* ppc_md.hpte_clear_all(void); */
+#endif
 
 /*
  *   kexec image calling is:

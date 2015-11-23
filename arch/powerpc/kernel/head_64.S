@@ -92,6 +92,19 @@ __secondary_hold_spinloop:
 __secondary_hold_acknowledge:
 	.llong	0x0
 
+	.globl	__run_at_kexec
+__run_at_kexec:
+	.llong	0x0	/* Flag for the secondary kernel from kexec. */
+
+	/*
+	 * The first thread will write this value with the logical id of
+	 * the thread0 and the secondary thread will calculate his logical
+	 * id based on this and the value in TIR register.
+	 */
+	.global __thread0_cpu_id
+__thread0_cpu_id:
+	.llong 0x0
+
 #ifdef CONFIG_RELOCATABLE
 	/* This flag is set to 1 by a loader if the kernel should run
 	 * at the loaded address instead of the linked address.  This
@@ -127,6 +140,10 @@ __secondary_hold:
 	/* Grab our physical cpu number */
 	mr	r24,r3
 	/* stash r4 for book3e */
+#ifdef CONFIG_PPC_FSL_BOOK3E
+	/* we need to setup initial TLB entry. */
+	li	r4,0
+#endif
 	mr	r25,r4
 
 	/* Tell the master cpu we're here */
@@ -180,6 +197,55 @@ exception_marker:
  */
 #ifdef CONFIG_PPC_BOOK3S
 #include "exceptions-64s.S"
+#endif
+
+#ifdef CONFIG_PPC_BOOK3E
+/*
+ * In kexec boot, r3 = this processor's number (physical cpu id).
+ * For normal boot, we have to tweak the PIR to get the physical cpu id.
+*/
+_GLOBAL(fsl_secondary_thread_init)
+BEGIN_FTR_SECTION
+	/* Enable branch prediction */
+	lis     r4,BUCSR_INIT@h
+	ori     r4,r4,BUCSR_INIT@l
+	mtspr   SPRN_BUCSR,r4
+	isync
+
+	bl	.relative_toc
+#if defined(CONFIG_KEXEC) || defined(CONFIG_CRASH_DUMP)
+	LOAD_REG_ADDR(r4, __run_at_kexec)
+	ld	r4,0(r4)
+	cmpdi	r4,0
+	bne	1f
+#endif
+	/*
+	 * Get the cpu physical id, we can't use this method for kexec/kdump
+	 * because all the sencondary cores will run fsl_enable_threads
+	 * concurrently in kexec/kdump boot.
+	 */
+	LOAD_REG_ADDR(r3, __thread0_cpu_id)
+	ld	r3,0(r3)
+	mfspr	r4,SPRN_TIR	/* The thread0 cpu id plus TIR is the */
+	add	r3,r3,r4	/* logical id of the current thread. */
+#ifdef CONFIG_SMP
+	LOAD_REG_ADDR(r4, nr_cpu_ids)
+	lwz	r4,0(r4)
+#else
+	li r4,1
+#endif
+	cmpld	r3,r4
+	bge	.
+
+	LOAD_REG_ADDR(r4, paca)
+	ld	r4,0(r4)
+	mulli	r3,r3,PACA_SIZE
+	add	r4,r4,r3
+	lhz	r3,PACAHWCPUID(r4)
+
+	mtspr	SPRN_PIR, r3
+1:
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 #endif
 
 _GLOBAL(generic_secondary_thread_init)
@@ -319,7 +385,7 @@ _STATIC(__mmu_off)
  *
  *   r5 != NULL -> OF entry, we go to prom_init, "legacy" parameter content
  *                 in r3...r7
- *   
+ *
  *   r5 == NULL -> kexec style entry. r3 is a physical pointer to the
  *                 DT block, r4 is a physical pointer to the kernel itself
  *
@@ -419,12 +485,25 @@ _STATIC(__after_prom_start)
 	/* process relocations for the final address of the kernel */
 	lis	r25,PAGE_OFFSET@highest	/* compute virtual base of kernel */
 	sldi	r25,r25,32
+#if defined(CONFIG_PPC_BOOK3E)
+	tovirt(r26,r26)			/* on booke, we already run at PAGE_OFFSET */
+#endif
 	lwz	r7,__run_at_load-_stext(r26)
+#if defined(CONFIG_PPC_BOOK3E)
+	tophys(r26,r26)			/* Restore for the remains. */
+#endif
 	cmplwi	cr0,r7,1	/* flagged to stay where we are ? */
 	bne	1f
 	add	r25,r25,r26
 1:	mr	r3,r25
 	bl	.relocate
+#if defined(CONFIG_PPC_BOOK3E)
+	/* In relocatable case we always have to load the address of label 'name'
+	 * to set IVPR. So after .relocate we have to update IVPR with current
+	 * address of label.
+	 */
+	bl	.init_core_book3e
+#endif
 #endif
 
 /*
@@ -439,12 +518,12 @@ _STATIC(__after_prom_start)
 	tovirt(r3,r3)			/* on booke, we already run at PAGE_OFFSET */
 #endif
 	mr.	r4,r26			/* In some cases the loader may  */
+#if defined(CONFIG_PPC_BOOK3E)
+	tovirt(r4,r4)
+#endif
 	beq	9f			/* have already put us at zero */
 	li	r6,0x100		/* Start offset, the first 0x100 */
 					/* bytes were copied earlier.	 */
-#ifdef CONFIG_PPC_BOOK3E
-	tovirt(r6,r6)			/* on booke, we already run at PAGE_OFFSET */
-#endif
 
 #ifdef CONFIG_RELOCATABLE
 /*
@@ -452,12 +531,30 @@ _STATIC(__after_prom_start)
  * variable __run_at_load, if it is set the kernel is treated as relocatable
  * kernel, otherwise it will be moved to PHYSICAL_START
  */
+#if defined(CONFIG_PPC_BOOK3E)
+	tovirt(r26,r26)			/* on booke, we already run at PAGE_OFFSET */
+#endif
+#if defined(CONFIG_KEXEC) || defined(CONFIG_CRASH_DUMP)
+	/* If relocated we need to restore this flag on that relocated address. */
+	ld	r7,__run_at_kexec-_stext(r3)
+	std	r7,__run_at_kexec-_stext(r26)
+#endif
+
 	lwz	r7,__run_at_load-_stext(r26)
+#if defined(CONFIG_PPC_BOOK3E)
+	tophys(r26,r26)			/* Restore for the remains. */
+#endif
 	cmplwi	cr0,r7,1
 	bne	3f
 
+#ifdef CONFIG_PPC_BOOK3E
+	LOAD_REG_ADDR(r5, __end_interrupts)
+	LOAD_REG_ADDR(r11, _stext)
+	sub	r5,r5,r11
+#else
 	/* just copy interrupts */
 	LOAD_REG_IMMEDIATE(r5, __end_interrupts - _stext)
+#endif
 	b	5f
 3:
 #endif
@@ -476,6 +573,9 @@ _STATIC(__after_prom_start)
 p_end:	.llong	_end - _stext
 
 4:	/* Now copy the rest of the kernel up to _end */
+#if defined(CONFIG_PPC_BOOK3E)
+	tovirt(r26,r26)
+#endif
 	addis	r5,r26,(p_end - _stext)@ha
 	ld	r5,(p_end - _stext)@l(r5)	/* get _end */
 5:	bl	.copy_and_flush		/* copy the rest */
@@ -541,7 +641,7 @@ __secondary_start_pmac_0:
 	b	1f
 	li	r24,3
 1:
-	
+
 _GLOBAL(pmac_secondary_start)
 	/* turn on 64-bit mode */
 	bl	.enable_64b_mode
@@ -647,7 +747,7 @@ __secondary_start:
 	RFI
 	b	.	/* prevent speculative execution */
 
-/* 
+/*
  * Running with relocation on at this point.  All we want to do is
  * zero the stack back-chain pointer and get the TOC virtual address
  * before going into C code.
@@ -784,7 +884,7 @@ _INIT_STATIC(start_here_multiplatform)
 	mtspr	SPRN_SRR1,r4
 	RFI
 	b	.	/* prevent speculative execution */
-	
+
 	/* This is where all platforms converge execution */
 _INIT_GLOBAL(start_here_common)
 	/* relocation is on at this point */
@@ -795,6 +895,12 @@ _INIT_GLOBAL(start_here_common)
 
 	/* Do more system initializations in virtual mode */
 	bl	.setup_system
+
+#ifdef CONFIG_PPC_BOOK3E
+BEGIN_FTR_SECTION
+	bl	.fsl_enable_threads
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
+#endif
 
 	/* Mark interrupts soft and hard disabled (they might be enabled
 	 * in the PACA when doing hotplug)

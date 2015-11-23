@@ -14,6 +14,7 @@
 #include <linux/jiffies.h>
 #include <asm/cp15.h>
 #include <asm/proc-fns.h>
+#include <asm/cacheflush.h>
 
 #include "common.h"
 
@@ -66,5 +67,29 @@ int imx_cpu_kill(unsigned int cpu)
 			return 0;
 	imx_enable_cpu(cpu, false);
 	imx_set_cpu_arg(cpu, 0);
+	return 1;
+}
+
+/*
+ * For LS102x platforms, shutdowning a CPU is not supported by hardware.
+ * So we just put the offline CPU into lower-power state here.
+ */
+void __ref ls1021a_cpu_die(unsigned int cpu)
+{
+	v7_exit_coherency_flush(louis);
+
+	/* LS1021a platform can't really power down a CPU, so we
+	 * just put it into WFI state here.
+	 */
+	wfi();
+}
+
+int ls1021a_cpu_kill(unsigned int cpu)
+{
+	unsigned long timeout = jiffies + msecs_to_jiffies(50);
+
+	while (!ls1_get_cpu_arg(cpu))
+		if (time_after(jiffies, timeout))
+			return 0;
 	return 1;
 }

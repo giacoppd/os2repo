@@ -39,37 +39,49 @@
  *                                                                    *
  **********************************************************************/
 
+/*
+ * Note that, unlike non-bolted handlers, TLB_EXFRAME is not
+ * modified by the TLB miss handlers themselves, since the TLB miss
+ * handler code will not itself cause a recursive TLB miss.
+ *
+ * TLB_EXFRAME will be modified when crit/mc/debug exceptions are
+ * entered/exited.
+ */
 .macro tlb_prolog_bolted intnum addr
-	mtspr	SPRN_SPRG_GEN_SCRATCH,r13
+	mtspr	SPRN_SPRG_GEN_SCRATCH,r12
+	mfspr	r12,SPRN_SPRG_TLB_EXFRAME
+	std	r13,EX_TLB_R13(r12)
+	std	r10,EX_TLB_R10(r12)
 	mfspr	r13,SPRN_SPRG_PACA
-	std	r10,PACA_EXTLB+EX_TLB_R10(r13)
+
 	mfcr	r10
-	std	r11,PACA_EXTLB+EX_TLB_R11(r13)
+	std	r11,EX_TLB_R11(r12)
 #ifdef CONFIG_KVM_BOOKE_HV
 BEGIN_FTR_SECTION
 	mfspr	r11, SPRN_SRR1
 END_FTR_SECTION_IFSET(CPU_FTR_EMB_HV)
 #endif
 	DO_KVM	\intnum, SPRN_SRR1
-	std	r16,PACA_EXTLB+EX_TLB_R16(r13)
+	std	r16,EX_TLB_R16(r12)
 	mfspr	r16,\addr		/* get faulting address */
-	std	r14,PACA_EXTLB+EX_TLB_R14(r13)
+	std	r14,EX_TLB_R14(r12)
 	ld	r14,PACAPGD(r13)
-	std	r15,PACA_EXTLB+EX_TLB_R15(r13)
-	std	r10,PACA_EXTLB+EX_TLB_CR(r13)
-	TLB_MISS_PROLOG_STATS_BOLTED
+	std	r15,EX_TLB_R15(r12)
+	std	r10,EX_TLB_CR(r12)
+	TLB_MISS_PROLOG_STATS
 .endm
 
 .macro tlb_epilog_bolted
-	ld	r14,PACA_EXTLB+EX_TLB_CR(r13)
-	ld	r10,PACA_EXTLB+EX_TLB_R10(r13)
-	ld	r11,PACA_EXTLB+EX_TLB_R11(r13)
+	ld	r14,EX_TLB_CR(r12)
+	ld	r10,EX_TLB_R10(r12)
+	ld	r11,EX_TLB_R11(r12)
+	ld	r13,EX_TLB_R13(r12)
 	mtcr	r14
-	ld	r14,PACA_EXTLB+EX_TLB_R14(r13)
-	ld	r15,PACA_EXTLB+EX_TLB_R15(r13)
-	TLB_MISS_RESTORE_STATS_BOLTED
-	ld	r16,PACA_EXTLB+EX_TLB_R16(r13)
-	mfspr	r13,SPRN_SPRG_GEN_SCRATCH
+	ld	r14,EX_TLB_R14(r12)
+	ld	r15,EX_TLB_R15(r12)
+	TLB_MISS_RESTORE_STATS
+	ld	r16,EX_TLB_R16(r12)
+	mfspr	r12,SPRN_SPRG_GEN_SCRATCH
 .endm
 
 /* Data TLB miss */
@@ -110,6 +122,10 @@ END_FTR_SECTION_IFSET(CPU_FTR_EMB_HV)
 	ori	r10,r10,_PAGE_PRESENT
 	oris	r11,r10,_PAGE_ACCESSED@h
 
+BEGIN_FTR_SECTION
+	ld	r10,PACA_TCD_PTR(r13)
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
+
 	TLB_MISS_STATS_SAVE_INFO_BOLTED
 	bne	tlb_miss_kernel_bolted
 
@@ -123,23 +139,64 @@ tlb_miss_common_bolted:
  * r14 = page table base
  * r13 = PACA
  * r11 = PTE permission mask
- * r10 = crap (free to use)
+ * r10 = tlb_per_core ptr
  */
+
+	/*
+	 * Search if we already have an entry for that virtual
+	 * address, and if we do, bail out.
+	 */
+BEGIN_FTR_SECTION
+	mtocrf	0x01,r10
+	addi	r10,r10,TCD_LOCK-1 /* -1 to compensate for low bit set */
+	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
+2:	lbarx	r15,0,r10
+	cmpdi	r15,0
+	bne	3f
+	li	r15,1
+	stbcx.	r15,0,r10
+	bne	2b
+	.subsection 1
+3:	lbz	r15,0(r10)
+	cmpdi	r15,0
+	bne	3b
+	b	2b
+	.previous
+1:
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
+
 	rldicl	r15,r16,64-PGDIR_SHIFT+3,64-PGD_INDEX_SIZE-3
 	cmpldi	cr0,r14,0
 	clrrdi	r15,r15,3
 	beq	tlb_miss_fault_bolted	/* No PGDIR, bail */
 
-BEGIN_MMU_FTR_SECTION
-	/* Set the TLB reservation and search for existing entry. Then load
-	 * the entry.
-	 */
-	PPC_TLBSRX_DOT(0,R16)
 	ldx	r14,r14,r15		/* grab pgd entry */
-	beq	tlb_miss_done_bolted	/* tlb exists already, bail */
-MMU_FTR_SECTION_ELSE
-	ldx	r14,r14,r15		/* grab pgd entry */
-ALT_MMU_FTR_SECTION_END_IFSET(MMU_FTR_USE_TLBRSRV)
+BEGIN_FTR_SECTION
+	cmpdi	cr0,r16,0		/* Check for vmalloc region */
+	bge	1f
+	mfspr	r10,SPRN_MAS6
+	rlwinm	r15,r15,0,16,1		/* Clear SPID */
+	mtspr	SPRN_MAS6,r10
+1:
+
+	mfspr	r10,SPRN_MAS2
+	tlbsx	0,r16
+	mfspr	r15,SPRN_MAS1
+	andis.	r15,r15,MAS1_VALID@h
+	bne	tlb_miss_done_bolted	/* tlb exists already, bail */
+
+	/* Undo MAS-damage from the tlbsx */
+	mfspr	r15,SPRN_MAS1
+	oris	r15,r15,MAS1_VALID@h
+
+	cmpdi	cr0,r16,0		/* Check for vmalloc region */
+	bge	1f
+	rlwinm	r15,r15,0,16,1		/* Clear TID */
+1:
+
+	mtspr	SPRN_MAS1,r15
+	mtspr	SPRN_MAS2,r10
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 
 #ifndef CONFIG_PPC_64K_PAGES
 	rldicl	r15,r16,64-PUD_SHIFT+3,64-PUD_INDEX_SIZE-3
@@ -193,6 +250,19 @@ ALT_MMU_FTR_SECTION_END_IFSET(MMU_FTR_USE_TLBRSRV)
 	tlbwe
 
 tlb_miss_done_bolted:
+	.macro	tlb_unlock_bolted
+BEGIN_FTR_SECTION
+	ld	r10,PACA_TCD_PTR(r13)
+	bf	31,1f
+	li	r15,0
+	isync
+	stb	r15,TCD_LOCK-1(r10)
+1:
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
+	.endm
+
+	tlb_unlock_bolted
+
 	TLB_MISS_STATS_X(MMSTAT_TLB_MISS_NORM_OK)
 	tlb_epilog_bolted
 	rfi
@@ -209,6 +279,7 @@ tlb_miss_kernel_bolted:
 	beq+	tlb_miss_common_bolted
 
 tlb_miss_fault_bolted:
+	tlb_unlock_bolted
 	/* We need to check if it was an instruction miss */
 	andi.	r10,r11,_PAGE_EXEC|_PAGE_BAP_SX
 	bne	itlb_miss_fault_bolted
@@ -230,6 +301,9 @@ itlb_miss_fault_bolted:
 	TLB_MISS_STATS_SAVE_INFO_BOLTED
 	bne-	itlb_miss_fault_bolted
 
+BEGIN_FTR_SECTION
+	ld	r10,PACA_TCD_PTR(r13)
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 	li	r11,_PAGE_PRESENT|_PAGE_EXEC	/* Base perm */
 
 	/* We do the user/kernel test for the PID here along with the RW test
@@ -287,38 +361,94 @@ itlb_miss_fault_bolted:
  * r10 = crap (free to use)
  */
 tlb_miss_common_e6500:
+	crmove	cr2*4+2,cr0*4+2		/* cr2.eq != 0 if kernel address */
+
+BEGIN_FTR_SECTION		/* CPU_FTR_SMT */
 	/*
 	 * Search if we already have an indirect entry for that virtual
 	 * address, and if we do, bail out.
 	 *
 	 * MAS6:IND should be already set based on MAS4
 	 */
-	addi	r10,r11,TCD_LOCK
-1:	lbarx	r15,0,r10
+	mtocrf  0x01,r11
+	addi    r11,r11,TCD_LOCK-1 /* -1 to compensate for low bit set */
+	bf      31,1f           /* no lock if TLB_PER_CORE_HAS_LOCK clear */
+2:	lbarx	r15,0,r11
+	lhz	r10,PACAPACAINDEX(r13)
 	cmpdi	r15,0
-	bne	2f
-	li	r15,1
-	stbcx.	r15,0,r10
-	bne	1b
-	.subsection 1
-2:	lbz	r15,0(r10)
-	cmpdi	r15,0
+	cmpdi	cr1,r15,1	/* set cr1.eq = 0 for non-recursive */
+	addi	r10,r10,1
+	bne	3f
+	stbcx.	r10,0,r11
 	bne	2b
-	b	1b
+4:
+	.subsection 1
+3:	cmpd	cr1,r15,r10	/* recursive lock due to mcheck/crit/etc? */
+	beq	cr1,4b		/* unlock will happen if cr1.eq = 0 */
+	lbz	r15,0(r11)
+	cmpdi	r15,0
+	bne	3b
+	b	2b
 	.previous
+1:      subi    r11,r11,TCD_LOCK-1
+
+	/*
+	 * Erratum A-008139 says that we can't use tlbwe to change
+	 * an indirect entry in any way (including replacing or
+	 * invalidating) if the other thread could be in the process
+	 * of a lookup.  The workaround is to invalidate the entry
+	 * with tlbilx before overwriting.
+	 */
+
+	rldicr  r11,r11,0,62
+	lbz	r15,TCD_ESEL_NEXT(r11)
+	rlwinm	r10,r15,16,0xff0000
+	oris	r10,r10,MAS0_TLBSEL(1)@h
+	mtspr	SPRN_MAS0,r10
+	isync
+	tlbre
+	mfspr	r15,SPRN_MAS1
+	andis.	r15,r15,MAS1_VALID@h
+	beq	5f
+
+BEGIN_FTR_SECTION_NESTED(532)
+	mfspr	r10,SPRN_MAS8
+	rlwinm	r10,r10,0,0x80000fff  /* tgs,tlpid -> sgs,slpid */
+	mtspr	SPRN_MAS5,r10
+END_FTR_SECTION_NESTED(CPU_FTR_EMB_HV,CPU_FTR_EMB_HV,532)
+
+	mfspr	r10,SPRN_MAS1
+	rlwinm	r15,r10,0,0x3fff0000  /* tid -> spid */
+	rlwimi	r15,r10,20,0x00000003 /* ind,ts -> sind,sas */
+	mfspr	r10,SPRN_MAS6
+	mtspr	SPRN_MAS6,r15
 
 	mfspr	r15,SPRN_MAS2
+	isync
+	tlbilxva 0,r15
+	isync
+
+	mtspr	SPRN_MAS6,r10
+
+5:
+BEGIN_FTR_SECTION_NESTED(532)
+	li	r10,0
+	mtspr	SPRN_MAS8,r10
+	mtspr	SPRN_MAS5,r10
+END_FTR_SECTION_NESTED(CPU_FTR_EMB_HV,CPU_FTR_EMB_HV,532)
 
 	tlbsx	0,r16
 	mfspr	r10,SPRN_MAS1
-	andis.	r10,r10,MAS1_VALID@h
+	andis.	r15,r10,MAS1_VALID@h
 	bne	tlb_miss_done_e6500
-
-	/* Undo MAS-damage from the tlbsx */
+FTR_SECTION_ELSE
 	mfspr	r10,SPRN_MAS1
+ALT_FTR_SECTION_END_IFSET(CPU_FTR_SMT)
+
 	oris	r10,r10,MAS1_VALID@h
-	mtspr	SPRN_MAS1,r10
-	mtspr	SPRN_MAS2,r15
+	beq	cr2,4f
+	rlwinm	r10,r10,0,16,1		/* Clear TID */
+4:	mtspr	SPRN_MAS1,r10
 
 	/* Now, we need to walk the page tables. First check if we are in
 	 * range.
@@ -379,9 +509,14 @@ tlb_miss_common_e6500:
 
 tlb_miss_done_e6500:
 	.macro	tlb_unlock_e6500
+BEGIN_FTR_SECTION
+	beq	cr1,1f		/* no unlock if lock was recursively grabbed */
 	li	r15,0
 	isync
-	stb	r15,TCD_LOCK(r11)
+	rldicr  r11,r11,0,62
+	stb	r15,0(r11)
+1:
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 	.endm
 
 	tlb_unlock_e6500
@@ -390,12 +525,9 @@ tlb_miss_done_e6500:
 	rfi
 
 tlb_miss_kernel_e6500:
-	mfspr	r10,SPRN_MAS1
 	ld	r14,PACA_KERNELPGD(r13)
-	cmpldi	cr0,r15,8		/* Check for vmalloc region */
-	rlwinm	r10,r10,0,16,1		/* Clear TID */
-	mtspr	SPRN_MAS1,r10
-	beq+	tlb_miss_common_e6500
+	cmpldi	cr1,r15,8		/* Check for vmalloc region */
+	beq+	cr1,tlb_miss_common_e6500
 
 tlb_miss_fault_e6500:
 	tlb_unlock_e6500

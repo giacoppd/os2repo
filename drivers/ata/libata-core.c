@@ -2117,6 +2117,21 @@ static int ata_dev_config_ncq(struct ata_device *dev,
 		dev->flags |= ATA_DFLAG_NCQ;
 	}
 
+	if ((ap->flags & ATA_FLAG_BROKENAA) &&
+		(ata_id_has_fpdma_aa(dev->id)) &&
+		(ata_id_enabled_fpdma_aa(dev->id))) {
+		err_mask = ata_dev_set_feature(dev, SETFEATURES_SATA_DISABLE,
+			SATA_FPDMA_AA);
+		if (err_mask) {
+			ata_dev_printk(dev, KERN_ERR, "failed to disable AA"
+				"(error_mask=0x%x)\n", err_mask);
+			/* turn off NCQ if failed disable SATA_FPDMA_AA */
+			hdepth = 1;
+			dev->flags &= ~ATA_DFLAG_NCQ;
+			dev->flags |= ATA_DFLAG_NCQ_OFF;
+		}
+	}
+
 	if (!(dev->horkage & ATA_HORKAGE_BROKEN_FPDMA_AA) &&
 		(ap->flags & ATA_FLAG_FPDMA_AA) &&
 		ata_id_has_fpdma_aa(dev->id)) {
@@ -6835,6 +6850,38 @@ u32 ata_wait_register(struct ata_port *ap, void __iomem *reg, u32 mask, u32 val,
 
 	return tmp;
 }
+
+/**
+ *	sata_lpm_ignore_phy_events - test if PHY event should be ignored
+ *	@link: Link receiving the event
+ *
+ *	Test whether the received PHY event has to be ignored or not.
+ *
+ *	LOCKING:
+ *	None:
+ *
+ *	RETURNS:
+ *	True if the event has to be ignored.
+ */
+bool sata_lpm_ignore_phy_events(struct ata_link *link)
+{
+	unsigned long lpm_timeout = link->last_lpm_change +
+				    msecs_to_jiffies(ATA_TMOUT_SPURIOUS_PHY);
+
+	/* if LPM is enabled, PHYRDY doesn't mean anything */
+	if (link->lpm_policy > ATA_LPM_MAX_POWER)
+		return true;
+
+	/* ignore the first PHY event after the LPM policy changed
+	 * as it is might be spurious
+	 */
+	if ((link->flags & ATA_LFLAG_CHANGED) &&
+	    time_before(jiffies, lpm_timeout))
+		return true;
+
+	return false;
+}
+EXPORT_SYMBOL_GPL(sata_lpm_ignore_phy_events);
 
 /*
  * Dummy port_ops

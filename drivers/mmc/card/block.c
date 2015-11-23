@@ -59,6 +59,8 @@ MODULE_ALIAS("mmc:block");
 #define INAND_CMD38_ARG_SECTRIM1 0x81
 #define INAND_CMD38_ARG_SECTRIM2 0x88
 #define MMC_BLK_TIMEOUT_MS  (10 * 60 * 1000)        /* 10 minute timeout */
+#define MMC_MIN_QUEUE_BOUNCESZ 4096
+#define MMC_MAX_QUEUE_BOUNCESZ 4194304
 #define MMC_SANITIZE_REQ_TIMEOUT 240000
 #define MMC_EXTRACT_INDEX_FROM_ARG(x) ((x & 0x00FF0000) >> 16)
 
@@ -118,6 +120,7 @@ struct mmc_blk_data {
 	unsigned int	part_curr;
 	struct device_attribute force_ro;
 	struct device_attribute power_ro_lock;
+	struct device_attribute bouncesz;
 	int	area_type;
 };
 
@@ -1961,9 +1964,20 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	unsigned long flags;
 	unsigned int cmd_flags = req ? req->cmd_flags : 0;
 
-	if (req && !mq->mqrq_prev->req)
+	if (req && !mq->mqrq_prev->req) {
+		/*
+		 * When we are here, card polling task will be blocked.
+		 * So disable it to avoid this useless schedule.
+		 */
+		if (host->caps & MMC_CAP_NEEDS_POLL) {
+			spin_lock_irqsave(&host->lock, flags);
+			host->rescan_disable = 1;
+			spin_unlock_irqrestore(&host->lock, flags);
+		}
+
 		/* claim host only for the first request */
 		mmc_get_card(card);
+	}
 
 	ret = mmc_blk_part_switch(card, md);
 	if (ret) {
@@ -2000,7 +2014,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 
 out:
 	if ((!req && !(mq->flags & MMC_QUEUE_NEW_REQUEST)) ||
-	     (cmd_flags & MMC_REQ_SPECIAL_MASK))
+	     (cmd_flags & MMC_REQ_SPECIAL_MASK)) {
 		/*
 		 * Release host when there are no more requests
 		 * and after special request(discard, flush) is done.
@@ -2008,6 +2022,18 @@ out:
 		 * the 'mmc_blk_issue_rq' with 'mqrq_prev->req'.
 		 */
 		mmc_put_card(card);
+		/*
+		 * Detecting card status immediately in case card being
+		 * removed just after the request is complete.
+		 */
+		if (host->caps & MMC_CAP_NEEDS_POLL) {
+			spin_lock_irqsave(&host->lock, flags);
+			host->rescan_disable = 0;
+			spin_unlock_irqrestore(&host->lock, flags);
+			mmc_detect_change(host, 0);
+		}
+	}
+
 	return ret;
 }
 
@@ -2237,6 +2263,7 @@ static void mmc_blk_remove_req(struct mmc_blk_data *md)
 			mmc_packed_clean(&md->queue);
 		if (md->disk->flags & GENHD_FL_UP) {
 			device_remove_file(disk_to_dev(md->disk), &md->force_ro);
+			device_remove_file(disk_to_dev(md->disk), &md->bouncesz);
 			if ((md->area_type & MMC_BLK_DATA_AREA_BOOT) &&
 					card->ext_csd.boot_ro_lockable)
 				device_remove_file(disk_to_dev(md->disk),
@@ -2247,6 +2274,33 @@ static void mmc_blk_remove_req(struct mmc_blk_data *md)
 		mmc_blk_put(md);
 	}
 }
+
+#ifdef CONFIG_MMC_BLOCK_BOUNCE
+static ssize_t mmc_bouncesz_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	 return sprintf(buf, "%u\n", mmc_queue_bouncesz);
+}
+
+static ssize_t mmc_bouncesz_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned int bouncesz;
+	struct mmc_blk_data *md;
+
+	if ((sscanf(buf, "%d", &bouncesz) != 1) ||
+			(bouncesz < MMC_MIN_QUEUE_BOUNCESZ) ||
+			(bouncesz > MMC_MAX_QUEUE_BOUNCESZ) ||
+			(bouncesz % 512 != 0))
+		return -EINVAL;
+
+	md = mmc_blk_get(dev_to_disk(dev));
+	mmc_reinit_bounce_queue(&md->queue, md->queue.card, bouncesz);
+	mmc_blk_put(md);
+	return mmc_queue_bouncesz;
+}
+#endif
 
 static void mmc_blk_remove_parts(struct mmc_card *card,
 				 struct mmc_blk_data *md)
@@ -2333,6 +2387,10 @@ static const struct mmc_fixup blk_fixups[] =
 	 *
 	 * N.B. This doesn't affect SD cards.
 	 */
+	MMC_FIXUP("SDMB-32", CID_MANFID_SANDISK, CID_OEMID_ANY, add_quirk_mmc,
+		MMC_QUIRK_BLK_NO_CMD23),
+	MMC_FIXUP("SDM032", CID_MANFID_SANDISK, CID_OEMID_ANY, add_quirk_mmc,
+		MMC_QUIRK_BLK_NO_CMD23),
 	MMC_FIXUP("MMC08G", CID_MANFID_TOSHIBA, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_BLK_NO_CMD23),
 	MMC_FIXUP("MMC16G", CID_MANFID_TOSHIBA, CID_OEMID_ANY, add_quirk_mmc,
@@ -2375,6 +2433,7 @@ static const struct mmc_fixup blk_fixups[] =
 static int mmc_blk_probe(struct mmc_card *card)
 {
 	struct mmc_blk_data *md, *part_md;
+	int err;
 	char cap_str[10];
 
 	/*
@@ -2407,6 +2466,17 @@ static int mmc_blk_probe(struct mmc_card *card)
 			goto out;
 	}
 
+#ifdef CONFIG_MMC_BLOCK_BOUNCE
+	md->bouncesz.show = mmc_bouncesz_show;
+	md->bouncesz.store = mmc_bouncesz_store;
+	sysfs_attr_init(&md->bouncesz.attr);
+	md->bouncesz.attr.name = "bouncesz";
+	md->bouncesz.attr.mode = S_IRUGO | S_IWUSR;
+	err = device_create_file(disk_to_dev(md->disk), &md->bouncesz);
+	if (err)
+		goto out;
+#endif
+
 	pm_runtime_set_autosuspend_delay(&card->dev, 3000);
 	pm_runtime_use_autosuspend(&card->dev);
 
@@ -2422,6 +2492,9 @@ static int mmc_blk_probe(struct mmc_card *card)
 	return 0;
 
  out:
+#ifdef CONFIG_MMC_BLOCK_BOUNCE
+	device_remove_file(disk_to_dev(md->disk), &md->bouncesz);
+#endif
 	mmc_blk_remove_parts(card, md);
 	mmc_blk_remove_req(md);
 	return 0;

@@ -104,6 +104,7 @@ obj-$(CONFIG_SOC_IMX6SL) += clk-imx6sl.o mach-imx6sl.o
 obj-$(CONFIG_SOC_IMX6Q) += pm-imx6q.o headsmp.o
 # i.MX6SL reuses i.MX6Q code
 obj-$(CONFIG_SOC_IMX6SL) += pm-imx6q.o headsmp.o
+obj-$(CONFIG_SOC_LS1021A) += pm-ls1.o sleep-ls1.o
 
 # i.MX5 based machines
 obj-$(CONFIG_MACH_MX51_BABBAGE) += mach-mx51_babbage.o
@@ -115,5 +116,9 @@ obj-$(CONFIG_SOC_IMX50) += mach-imx50.o
 obj-$(CONFIG_SOC_IMX53) += mach-imx53.o
 
 obj-$(CONFIG_SOC_VF610) += clk-vf610.o mach-vf610.o
+
+obj-$(CONFIG_SOC_LS1021A) += mach-ls1021a.o
+
+obj-$(CONFIG_SOC_LS1021A) += clk-ls1021a.o
 
 obj-y += devices/

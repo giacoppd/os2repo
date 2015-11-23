@@ -24,6 +24,11 @@ config AMD_PHY
 	---help---
 	  Currently supports the am79c874
 
+config ATHEROS_PHY
+	tristate "Drivers for Atheros PHYs"
+	---help---
+	  Currently supports the AR8035 PHY
+
 config MARVELL_PHY
 	tristate "Drivers for Marvell PHYs"
 	---help---
@@ -113,6 +118,11 @@ config NATIONAL_PHY
 	tristate "Drivers for National Semiconductor PHYs"
 	---help---
 	  Currently supports the DP83865 PHY.
+
+config DP8384x_PHY
+	tristate "Drivers for National Semiconductor dp83848 dp83849 PHYs"
+	---help---
+	  Currently supports the DP83848/DP83849 PHY.
 
 config STE10XP
 	tristate "Driver for STMicroelectronics STe10Xp PHYs"
@@ -226,6 +236,11 @@ config MDIO_BUS_MUX_MMIOREG
 	  the FPGA's registers.
 
 	  Currently, only 8-bit registers are supported.
+config FSL_10GBASE_KR
+	tristate "Support for 10GBASE-KR on Freescale XFI interface"
+	depends on OF_MDIO
+	help
+	  This module provides a driver for Freescale XFI's 10GBASE-KR.
 
 endif # PHYLIB
 

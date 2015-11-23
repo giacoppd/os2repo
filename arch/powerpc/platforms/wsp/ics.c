@@ -24,6 +24,7 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/xics.h>
+#include <asm/smp.h>
 
 #include "wsp.h"
 #include "ics.h"

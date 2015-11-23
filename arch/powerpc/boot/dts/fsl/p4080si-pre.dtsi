@@ -6,13 +6,13 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
+ *	 notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
+ *	 notice, this list of conditions and the following disclaimer in the
+ *	 documentation and/or other materials provided with the distribution.
  *     * Neither the name of Freescale Semiconductor nor the
- *       names of its contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
+ *	 names of its contributors may be used to endorse or promote products
+ *	 derived from this software without specific prior written permission.
  *
  *
  * ALTERNATIVELY, this software may be distributed under the terms of the
@@ -72,6 +72,12 @@
 		rtic_c = &rtic_c;
 		rtic_d = &rtic_d;
 		sec_mon = &sec_mon;
+
+		pme = &pme;
+		qman = &qman;
+		bman = &bman;
+		fman0 = &fman0;
+		fman1 = &fman1;
 	};
 
 	cpus {
@@ -81,6 +87,7 @@
 		cpu0: PowerPC,e500mc@0 {
 			device_type = "cpu";
 			reg = <0>;
+			clocks = <&mux0>;
 			next-level-cache = <&L2_0>;
 			L2_0: l2-cache {
 				next-level-cache = <&cpc>;
@@ -89,6 +96,7 @@
 		cpu1: PowerPC,e500mc@1 {
 			device_type = "cpu";
 			reg = <1>;
+			clocks = <&mux1>;
 			next-level-cache = <&L2_1>;
 			L2_1: l2-cache {
 				next-level-cache = <&cpc>;
@@ -97,6 +105,7 @@
 		cpu2: PowerPC,e500mc@2 {
 			device_type = "cpu";
 			reg = <2>;
+			clocks = <&mux2>;
 			next-level-cache = <&L2_2>;
 			L2_2: l2-cache {
 				next-level-cache = <&cpc>;
@@ -105,6 +114,7 @@
 		cpu3: PowerPC,e500mc@3 {
 			device_type = "cpu";
 			reg = <3>;
+			clocks = <&mux3>;
 			next-level-cache = <&L2_3>;
 			L2_3: l2-cache {
 				next-level-cache = <&cpc>;
@@ -113,6 +123,7 @@
 		cpu4: PowerPC,e500mc@4 {
 			device_type = "cpu";
 			reg = <4>;
+			clocks = <&mux4>;
 			next-level-cache = <&L2_4>;
 			L2_4: l2-cache {
 				next-level-cache = <&cpc>;
@@ -121,6 +132,7 @@
 		cpu5: PowerPC,e500mc@5 {
 			device_type = "cpu";
 			reg = <5>;
+			clocks = <&mux5>;
 			next-level-cache = <&L2_5>;
 			L2_5: l2-cache {
 				next-level-cache = <&cpc>;
@@ -129,6 +141,7 @@
 		cpu6: PowerPC,e500mc@6 {
 			device_type = "cpu";
 			reg = <6>;
+			clocks = <&mux6>;
 			next-level-cache = <&L2_6>;
 			L2_6: l2-cache {
 				next-level-cache = <&cpc>;
@@ -137,6 +150,7 @@
 		cpu7: PowerPC,e500mc@7 {
 			device_type = "cpu";
 			reg = <7>;
+			clocks = <&mux7>;
 			next-level-cache = <&L2_7>;
 			L2_7: l2-cache {
 				next-level-cache = <&cpc>;
