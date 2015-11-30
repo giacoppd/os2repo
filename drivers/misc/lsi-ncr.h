@@ -41,5 +41,4 @@ int ncr_write(unsigned long, unsigned long, int, void *);
 int ncr_read_nolock(unsigned long, unsigned long, int, void *);
 int ncr_write_nolock(unsigned long, unsigned long, int, void *);
 
-
 #endif /*  __DRIVERS_LSI_ACP_NCR_H */
