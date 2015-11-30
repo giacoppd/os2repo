@@ -75,10 +75,9 @@
 #include <linux/dma-mapping.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
+#include <linux/lsi-ncr.h>
 
 #include <asm/dma.h>
-
-#include "../../../misc/lsi-ncr.h"
 
 #include "lsi_acp_net.h"
 
@@ -314,8 +313,8 @@ err_out_1:
 }
 
 /* ======================================================================
- * NIC Interface
- * ======================================================================
+   NIC Interface
+   ======================================================================
 */
 
 #define DESCRIPTOR_GRANULARITY 64
@@ -637,8 +636,8 @@ static void disable_rx_tx(struct net_device *dev)
 
 
 /* ======================================================================
- *Linux Network Driver Interface
- * ======================================================================
+   Linux Network Driver Interface
+   ======================================================================
 */
 
 /* ----------------------------------------------------------------------
@@ -692,7 +691,7 @@ static void lsinet_rx_packet(struct net_device *dev)
 	} else {
 		/* Needs to be reviewed.  This fixed an aligment
 		 * exception when pinging to the target from a host.
-		*/
+		 */
 
 		/* Align IP on 16 byte boundaries */
 		skb_reserve(sk_buff, 2);
@@ -1125,7 +1124,6 @@ static int appnic_hard_start_xmit(struct sk_buff *skb,
 
 		write_mac(pdata->tx_head.raw, APPNIC_DMA_TX_HEAD_POINTER);
 		dev->trans_start = jiffies;
-
 	} else {
 		pdata->out_of_tx_descriptors++;
 		pr_err("%s: No transmit descriptors available!\n",

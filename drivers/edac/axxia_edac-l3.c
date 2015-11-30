@@ -25,8 +25,8 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/io.h>
+#include <linux/lsi-ncr.h>
 #include <linux/edac.h>
-#include <mach/ncr.h>
 #include <linux/of_platform.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -57,7 +57,7 @@ struct lsi_edac_dev_info {
 /* Check for L3 Errors */
 static void lsi_l3_error_check(struct edac_device_ctl_info *edac_dev)
 {
-	unsigned long regVal1, regVal2, set_val;
+	unsigned long regVal1, regVal2;
 	unsigned count = 0;
 	int i, instance;
 	struct lsi_edac_dev_info *dev_info;
