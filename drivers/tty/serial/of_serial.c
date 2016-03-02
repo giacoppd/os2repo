@@ -328,7 +328,6 @@ static struct of_device_id of_platform_serial_table[] = {
 #endif
 	{ .compatible = "fsl,16550-FIFO64",
 		.data = (void *)PORT_16550A_FSL64, },
-	{ .type = "serial",         .data = (void *)PORT_UNKNOWN, },
 	{ /* end of list */ },
 };
 
