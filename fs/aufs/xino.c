@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -729,7 +729,7 @@ struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
 {
 	struct file *file;
 	struct dentry *h_parent, *d;
-	struct inode *h_dir;
+	struct inode *h_dir, *inode;
 	int err;
 
 	/*
@@ -747,12 +747,16 @@ struct file *au_xino_create(struct super_block *sb, char *fname, int silent)
 	}
 
 	/* keep file count */
+	err = 0;
+	inode = file_inode(file);
 	h_parent = dget_parent(file->f_dentry);
 	h_dir = h_parent->d_inode;
 	mutex_lock_nested(&h_dir->i_mutex, AuLsc_I_PARENT);
 	/* mnt_want_write() is unnecessary here */
 	/* no delegation since it is just created */
-	err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL, /*force*/0);
+	if (inode->i_nlink)
+		err = vfsub_unlink(h_dir, &file->f_path, /*delegated*/NULL,
+				   /*force*/0);
 	mutex_unlock(&h_dir->i_mutex);
 	dput(h_parent);
 	if (unlikely(err)) {
@@ -1222,6 +1226,8 @@ int au_xino_set(struct super_block *sb, struct au_opt_xino *xino, int remount)
 
 	/* reset all */
 	AuIOErr("failed creating xino(%d).\n", err);
+	au_xigen_clr(sb);
+	xino_clear_xib(sb);
 
 out:
 	dput(parent);
@@ -1297,10 +1303,9 @@ int au_xino_path(struct seq_file *seq, struct file *file)
 	int err;
 
 	err = au_seq_path(seq, &file->f_path);
-	if (unlikely(err < 0))
+	if (unlikely(err))
 		goto out;
 
-	err = 0;
 #define Deleted "\\040(deleted)"
 	seq->count -= sizeof(Deleted) - 1;
 	AuDebugOn(memcmp(seq->buf + seq->count, Deleted,

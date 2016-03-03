@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,6 +49,7 @@ void au_set_h_fptr(struct file *file, aufs_bindex_t bindex, struct file *val)
 		au_hfput(hf, file);
 	if (val) {
 		FiMustWriteLock(file);
+		AuDebugOn(IS_ERR_OR_NULL(file->f_dentry));
 		hf->hf_file = val;
 		hf->hf_br = au_sbr(file->f_dentry->d_sb, bindex);
 	}
