@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -139,7 +139,7 @@ static char *au_hfsn_name(u32 mask)
 	test_ret(FS_UNMOUNT);
 	test_ret(FS_Q_OVERFLOW);
 	test_ret(FS_IN_IGNORED);
-	test_ret(FS_IN_ISDIR);
+	test_ret(FS_ISDIR);
 	test_ret(FS_IN_ONESHOT);
 	test_ret(FS_EVENT_ON_CHILD);
 	return "";
