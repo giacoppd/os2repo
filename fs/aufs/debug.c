@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@
  * debug print functions
  */
 
-#include <linux/vt_kern.h>
 #include "aufs.h"
 
 /* Returns 0, or -errno.  arg is in kp->arg. */
@@ -169,7 +168,7 @@ void au_dpri_dalias(struct inode *inode)
 	struct dentry *d;
 
 	spin_lock(&inode->i_lock);
-	hlist_for_each_entry(d, &inode->i_dentry, d_alias)
+	hlist_for_each_entry(d, &inode->i_dentry, d_u.d_alias)
 		au_dpri_dentry(d);
 	spin_unlock(&inode->i_lock);
 }
@@ -189,7 +188,7 @@ static int do_pri_dentry(aufs_bindex_t bindex, struct dentry *dentry)
 	dpri("d%d: %p, %pd2?, %s, cnt %d, flags 0x%x, %shashed\n",
 	     bindex, dentry, dentry,
 	     dentry->d_sb ? au_sbtype(dentry->d_sb) : "??",
-	     d_count(dentry), dentry->d_flags,
+	     au_dcount(dentry), dentry->d_flags,
 	     d_unhashed(dentry) ? "un" : "");
 	hn = -1;
 	if (bindex >= 0 && dentry->d_inode && au_test_aufs(dentry->d_sb)) {
@@ -238,7 +237,7 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 	}
 	a[0] = 0;
 	if (bindex < 0
-	    && file->f_dentry
+	    && !IS_ERR_OR_NULL(file->f_dentry)
 	    && au_test_aufs(file->f_dentry->d_sb)
 	    && au_fi(file))
 		snprintf(a, sizeof(a), ", gen %d, mmapped %d",
@@ -246,7 +245,7 @@ static int do_pri_file(aufs_bindex_t bindex, struct file *file)
 	dpri("f%d: mode 0x%x, flags 0%o, cnt %ld, v %llu, pos %llu%s\n",
 	     bindex, file->f_mode, file->f_flags, (long)file_count(file),
 	     file->f_version, file->f_pos, a);
-	if (file->f_dentry)
+	if (!IS_ERR_OR_NULL(file->f_dentry))
 		do_pri_dentry(bindex, file->f_dentry);
 	return 0;
 }
@@ -260,7 +259,9 @@ void au_dpri_file(struct file *file)
 	int err;
 
 	err = do_pri_file(-1, file);
-	if (err || !file->f_dentry || !au_test_aufs(file->f_dentry->d_sb))
+	if (err
+	    || IS_ERR_OR_NULL(file->f_dentry)
+	    || !au_test_aufs(file->f_dentry->d_sb))
 		return;
 
 	finfo = au_fi(file);
@@ -350,42 +351,6 @@ void au_dpri_sb(struct super_block *sb)
 
 /* ---------------------------------------------------------------------- */
 
-void au_dbg_sleep_jiffy(int jiffy)
-{
-	while (jiffy)
-		jiffy = schedule_timeout_uninterruptible(jiffy);
-}
-
-void au_dbg_iattr(struct iattr *ia)
-{
-#define AuBit(name)					\
-	do {						\
-		if (ia->ia_valid & ATTR_ ## name)	\
-			dpri(#name "\n");		\
-	} while (0)
-	AuBit(MODE);
-	AuBit(UID);
-	AuBit(GID);
-	AuBit(SIZE);
-	AuBit(ATIME);
-	AuBit(MTIME);
-	AuBit(CTIME);
-	AuBit(ATIME_SET);
-	AuBit(MTIME_SET);
-	AuBit(FORCE);
-	AuBit(ATTR_FLAG);
-	AuBit(KILL_SUID);
-	AuBit(KILL_SGID);
-	AuBit(FILE);
-	AuBit(KILL_PRIV);
-	AuBit(OPEN);
-	AuBit(TIMES_SET);
-#undef	AuBit
-	dpri("ia_file %p\n", ia->ia_file);
-}
-
-/* ---------------------------------------------------------------------- */
-
 void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 {
 	struct inode *h_inode, *inode = dentry->d_inode;
@@ -418,29 +383,6 @@ void __au_dbg_verify_dinode(struct dentry *dentry, const char *func, int line)
 			BUG();
 		}
 	}
-}
-
-void au_dbg_verify_dir_parent(struct dentry *dentry, unsigned int sigen)
-{
-	struct dentry *parent;
-
-	parent = dget_parent(dentry);
-	AuDebugOn(!S_ISDIR(dentry->d_inode->i_mode));
-	AuDebugOn(IS_ROOT(dentry));
-	AuDebugOn(au_digen_test(parent, sigen));
-	dput(parent);
-}
-
-void au_dbg_verify_nondir_parent(struct dentry *dentry, unsigned int sigen)
-{
-	struct dentry *parent;
-	struct inode *inode;
-
-	parent = dget_parent(dentry);
-	inode = dentry->d_inode;
-	AuDebugOn(inode && S_ISDIR(dentry->d_inode->i_mode));
-	AuDebugOn(au_digen_test(parent, sigen));
-	dput(parent);
 }
 
 void au_dbg_verify_gen(struct dentry *parent, unsigned int sigen)
@@ -477,26 +419,6 @@ void au_dbg_verify_kthread(void)
 
 /* ---------------------------------------------------------------------- */
 
-void au_debug_sbinfo_init(struct au_sbinfo *sbinfo __maybe_unused)
-{
-#ifdef AuForceNoPlink
-	au_opt_clr(sbinfo->si_mntflags, PLINK);
-#endif
-#ifdef AuForceNoXino
-	au_opt_clr(sbinfo->si_mntflags, XINO);
-#endif
-#ifdef AuForceNoRefrof
-	au_opt_clr(sbinfo->si_mntflags, REFROF);
-#endif
-#ifdef AuForceHnotify
-	au_opt_set_udba(sbinfo->si_mntflags, UDBA_HNOTIFY);
-#endif
-#ifdef AuForceRd0
-	sbinfo->si_rdblk = 0;
-	sbinfo->si_rdhash = 0;
-#endif
-}
-
 int __init au_debug_init(void)
 {
 	aufs_bindex_t bindex;
@@ -510,10 +432,6 @@ int __init au_debug_init(void)
 
 #ifdef CONFIG_4KSTACKS
 	pr_warn("CONFIG_4KSTACKS is defined.\n");
-#endif
-
-#ifdef AuForceNoBrs
-	sysaufs_brs = 0;
 #endif
 
 	return 0;
