@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@
  * sub-routines for VFS
  */
 
-#include <linux/ima.h>
 #include <linux/namei.h>
 #include <linux/security.h>
 #include <linux/splice.h>
@@ -75,6 +74,57 @@ struct file *vfsub_filp_open(const char *path, int oflags, int mode)
 
 out:
 	return file;
+}
+
+/*
+ * Ideally this function should call VFS:do_last() in order to keep all its
+ * checkings. But it is very hard for aufs to regenerate several VFS internal
+ * structure such as nameidata. This is a second (or third) best approach.
+ * cf. linux/fs/namei.c:do_last(), lookup_open() and atomic_open().
+ */
+int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
+		      struct vfsub_aopen_args *args, struct au_branch *br)
+{
+	int err;
+	struct file *file = args->file;
+	/* copied from linux/fs/namei.c:atomic_open() */
+	struct dentry *const DENTRY_NOT_SET = (void *)-1UL;
+
+	IMustLock(dir);
+	AuDebugOn(!dir->i_op->atomic_open);
+
+	err = au_br_test_oflag(args->open_flag, br);
+	if (unlikely(err))
+		goto out;
+
+	args->file->f_path.dentry = DENTRY_NOT_SET;
+	args->file->f_path.mnt = au_br_mnt(br);
+	err = dir->i_op->atomic_open(dir, dentry, file, args->open_flag,
+				     args->create_mode, args->opened);
+	if (err >= 0) {
+		/* some filesystems don't set FILE_CREATED while succeeded? */
+		if (*args->opened & FILE_CREATED)
+			fsnotify_create(dir, dentry);
+	} else
+		goto out;
+
+
+	if (!err) {
+		/* todo: call VFS:may_open() here */
+		err = open_check_o_direct(file);
+		/* todo: ima_file_check() too? */
+		if (!err && (args->open_flag & __FMODE_EXEC))
+			err = deny_write_access(file);
+		if (unlikely(err))
+			/* note that the file is created and still opened */
+			goto out;
+	}
+
+	atomic_inc(&br->br_count);
+	fsnotify_open(file);
+
+out:
+	return err;
 }
 
 int vfsub_kern_path(const char *name, unsigned int flags, struct path *path)
@@ -732,7 +782,7 @@ static void call_unlink(void *args)
 	struct dentry *d = a->path->dentry;
 	struct inode *h_inode;
 	const int stop_sillyrename = (au_test_nfs(d->d_sb)
-				      && d_count(d) == 1);
+				      && au_dcount(d) == 1);
 
 	IMustLock(a->dir);
 

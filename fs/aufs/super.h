@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -117,7 +117,7 @@ struct au_sbinfo {
 	/* branch management */
 	unsigned int		si_generation;
 
-	/* see above flags */
+	/* see AuSi_ flags */
 	unsigned char		au_si_status;
 
 	aufs_bindex_t		si_bend;
@@ -166,6 +166,9 @@ struct au_sbinfo {
 	atomic_t		si_xigen_next;
 #endif
 
+	/* dirty trick to suppoer atomic_open */
+	struct au_sphlhead	si_aopen;
+
 	/* vdir parameters */
 	unsigned long		si_rdcache;	/* max cache time in jiffies */
 	unsigned int		si_rdblk;	/* deblk size */
@@ -178,12 +181,6 @@ struct au_sbinfo {
 	 * Otherwise, remove all whiteouts and the dir in rmdir(2).
 	 */
 	unsigned int		si_dirwh;
-
-	/*
-	 * rename(2) a directory with all children.
-	 */
-	/* reserved for future use */
-	/* int			si_rendir; */
 
 	/* pseudo_link list */
 	struct au_sphlhead	si_plink[AuPlink_NHASH];
@@ -382,10 +379,7 @@ AuStubVoid(au_xigen_inc, struct inode *inode)
 AuStubInt0(au_xigen_new, struct inode *inode)
 AuStubInt0(au_xigen_set, struct super_block *sb, struct file *base)
 AuStubVoid(au_xigen_clr, struct super_block *sb)
-static inline int au_busy_or_stale(void)
-{
-	return -EBUSY;
-}
+AuStub(int, au_busy_or_stale, return -EBUSY, void)
 #endif /* CONFIG_AUFS_EXPORT */
 
 /* ---------------------------------------------------------------------- */
@@ -427,8 +421,8 @@ AuStubVoid(au_sbilist_unlock, void)
 #endif /* CONFIG_AUFS_MAGIC_SYSRQ */
 #else
 AuStubVoid(au_sbilist_init, void)
-AuStubVoid(au_sbilist_add, struct super_block*)
-AuStubVoid(au_sbilist_del, struct super_block*)
+AuStubVoid(au_sbilist_add, struct super_block *sb)
+AuStubVoid(au_sbilist_del, struct super_block *sb)
 AuStubVoid(au_sbilist_lock, void)
 AuStubVoid(au_sbilist_unlock, void)
 #define AuGFP_SBILIST	GFP_NOFS
@@ -439,7 +433,7 @@ AuStubVoid(au_sbilist_unlock, void)
 static inline void dbgaufs_si_null(struct au_sbinfo *sbinfo)
 {
 	/*
-	 * This function is a dynamic '__init' fucntion actually,
+	 * This function is a dynamic '__init' function actually,
 	 * so the tiny check for si_rwsem is unnecessary.
 	 */
 	/* AuRwMustWriteLock(&sbinfo->si_rwsem); */
@@ -542,7 +536,7 @@ static inline int si_noflush_write_trylock(struct super_block *sb)
 	return locked;
 }
 
-#if 0 /* unused */
+#if 0 /* reserved */
 static inline int si_read_trylock(struct super_block *sb, int flags)
 {
 	if (au_ftest_lock(flags, FLUSH))
@@ -557,7 +551,7 @@ static inline void si_read_unlock(struct super_block *sb)
 	__si_read_unlock(sb);
 }
 
-#if 0 /* unused */
+#if 0 /* reserved */
 static inline int si_write_trylock(struct super_block *sb, int flags)
 {
 	if (au_ftest_lock(flags, FLUSH))
@@ -572,7 +566,7 @@ static inline void si_write_unlock(struct super_block *sb)
 	__si_write_unlock(sb);
 }
 
-#if 0 /* unused */
+#if 0 /* reserved */
 static inline void si_downgrade_lock(struct super_block *sb)
 {
 	__si_downgrade_lock(sb);

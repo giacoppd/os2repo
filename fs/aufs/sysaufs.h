@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,14 +84,8 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex);
 #define sysaufs_attr_group	NULL
 
 AuStubInt0(sysaufs_si_xi_path, struct seq_file *seq, struct super_block *sb)
-
-static inline
-ssize_t sysaufs_si_show(struct kobject *kobj, struct attribute *attr,
-			 char *buf)
-{
-	return 0;
-}
-
+AuStub(ssize_t, sysaufs_si_show, return 0, struct kobject *kobj,
+       struct attribute *attr, char *buf)
 AuStubVoid(sysaufs_br_init, struct au_branch *br)
 AuStubVoid(sysaufs_brs_add, struct super_block *sb, aufs_bindex_t bindex)
 AuStubVoid(sysaufs_brs_del, struct super_block *sb, aufs_bindex_t bindex)
