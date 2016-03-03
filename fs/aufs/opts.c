@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,11 +28,11 @@
 
 enum {
 	Opt_br,
-	Opt_add, Opt_del, Opt_mod, Opt_reorder, Opt_append, Opt_prepend,
-	Opt_idel, Opt_imod, Opt_ireorder,
-	Opt_dirwh, Opt_rdcache, Opt_rdblk, Opt_rdhash, Opt_rendir,
+	Opt_add, Opt_del, Opt_mod, Opt_append, Opt_prepend,
+	Opt_idel, Opt_imod,
+	Opt_dirwh, Opt_rdcache, Opt_rdblk, Opt_rdhash,
 	Opt_rdblk_def, Opt_rdhash_def,
-	Opt_xino, Opt_zxino, Opt_noxino,
+	Opt_xino, Opt_noxino,
 	Opt_trunc_xino, Opt_trunc_xino_v, Opt_notrunc_xino,
 	Opt_trunc_xino_path, Opt_itrunc_xino,
 	Opt_trunc_xib, Opt_notrunc_xib,
@@ -40,8 +40,6 @@ enum {
 	Opt_plink, Opt_noplink, Opt_list_plink,
 	Opt_udba,
 	Opt_dio, Opt_nodio,
-	/* Opt_lock, Opt_unlock, */
-	Opt_cmd, Opt_cmd_args,
 	Opt_diropq_a, Opt_diropq_w,
 	Opt_warn_perm, Opt_nowarn_perm,
 	Opt_wbr_copyup, Opt_wbr_create,
@@ -50,6 +48,7 @@ enum {
 	Opt_verbose, Opt_noverbose,
 	Opt_sum, Opt_nosum, Opt_wsum,
 	Opt_dirperm1, Opt_nodirperm1,
+	Opt_acl, Opt_noacl,
 	Opt_tail, Opt_ignore, Opt_ignore_silent, Opt_err
 };
 
@@ -129,8 +128,6 @@ static match_table_t options = {
 	{Opt_dirperm1, "dirperm1"},
 	{Opt_nodirperm1, "nodirperm1"},
 
-	{Opt_rendir, "rendir=%d"},
-
 	{Opt_refrof, "refrof"},
 	{Opt_norefrof, "norefrof"},
 
@@ -156,6 +153,15 @@ static match_table_t options = {
 	{Opt_wbr_copyup, "cpup=%s"},
 	{Opt_wbr_copyup, "copyup=%s"},
 	{Opt_wbr_copyup, "copyup_policy=%s"},
+
+	/* generic VFS flag */
+#ifdef CONFIG_FS_POSIX_ACL
+	{Opt_acl, "acl"},
+	{Opt_noacl, "noacl"},
+#else
+	{Opt_ignore_silent, "acl"},
+	{Opt_ignore_silent, "noacl"},
+#endif
 
 	/* internal use for the scripts */
 	{Opt_ignore_silent, "si=%s"},
@@ -194,14 +200,19 @@ static const char *au_optstr(int *val, match_table_t tbl)
 	int v;
 
 	v = *val;
+	if (!v)
+		goto out;
 	p = tbl;
-	while (p->token) {
-		if ((v & p->token) == p->token) {
+	while (p->pattern) {
+		if (p->token
+		    && (v & p->token) == p->token) {
 			*val &= ~p->token;
 			return p->pattern;
 		}
 		p++;
 	}
+
+out:
 	return NULL;
 }
 
@@ -219,7 +230,17 @@ static match_table_t brattr = {
 	{AuBrAttr_COO_REG, AUFS_BRATTR_COO_REG},
 	{AuBrAttr_COO_ALL, AUFS_BRATTR_COO_ALL},
 	{AuBrAttr_UNPIN, AUFS_BRATTR_UNPIN},
+#ifdef CONFIG_AUFS_FHSM
 	{AuBrAttr_FHSM, AUFS_BRATTR_FHSM},
+#endif
+#ifdef CONFIG_AUFS_XATTR
+	{AuBrAttr_ICEX, AUFS_BRATTR_ICEX},
+	{AuBrAttr_ICEX_SEC, AUFS_BRATTR_ICEX_SEC},
+	{AuBrAttr_ICEX_SYS, AUFS_BRATTR_ICEX_SYS},
+	{AuBrAttr_ICEX_TR, AUFS_BRATTR_ICEX_TR},
+	{AuBrAttr_ICEX_USR, AUFS_BRATTR_ICEX_USR},
+	{AuBrAttr_ICEX_OTH, AUFS_BRATTR_ICEX_OTH},
+#endif
 
 	/* ro/rr branch */
 	{AuBrRAttr_WH, AUFS_BRRATTR_WH},
@@ -265,7 +286,6 @@ static int au_do_optstr_br_attr(au_br_perm_str_t *str, int perm)
 	const char *p;
 	char *q;
 
-	sz = 0;
 	q = str->a;
 	*q = 0;
 	p = au_optstr(&perm, brattr);
@@ -287,7 +307,7 @@ static int au_do_optstr_br_attr(au_br_perm_str_t *str, int perm)
 	} while (p);
 
 out:
-	return sz;
+	return q - str->a;
 }
 
 static int noinline_for_stack br_perm_val(char *perm)
@@ -612,7 +632,6 @@ static void dump_opts(struct au_opts *opts)
 			u.xino_itrunc = &opt->xino_itrunc;
 			AuDbg("trunc_xino %d\n", u.xino_itrunc->bindex);
 			break;
-
 		case Opt_noxino:
 			AuLabel(noxino);
 			break;
@@ -713,6 +732,12 @@ static void dump_opts(struct au_opts *opts)
 			break;
 		case Opt_fhsm_sec:
 			AuDbg("fhsm_sec %u\n", opt->fhsm_second);
+			break;
+		case Opt_acl:
+			AuLabel(acl);
+			break;
+		case Opt_noacl:
+			AuLabel(noacl);
 			break;
 		default:
 			BUG();
@@ -1160,6 +1185,8 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		case Opt_wsum:
 		case Opt_rdblk_def:
 		case Opt_rdhash_def:
+		case Opt_acl:
+		case Opt_noacl:
 			err = 0;
 			opt->type = token;
 			break;
@@ -1429,6 +1456,13 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		au_fclr_opts(opts->flags, TRUNC_XIB);
 		break;
 
+	case Opt_acl:
+		sb->s_flags |= MS_POSIXACL;
+		break;
+	case Opt_noacl:
+		sb->s_flags &= ~MS_POSIXACL;
+		break;
+
 	default:
 		err = 0;
 		break;
@@ -1579,8 +1613,17 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		skip = 0;
 		h_dir = au_h_iptr(dir, bindex);
 		br = au_sbr(sb, bindex);
-		do_free = 0;
 
+		if ((br->br_perm & AuBrAttr_ICEX)
+		    && !h_dir->i_op->listxattr)
+			br->br_perm &= ~AuBrAttr_ICEX;
+#if 0
+		if ((br->br_perm & AuBrAttr_ICEX_SEC)
+		    && (au_br_sb(br)->s_flags & MS_NOSEC))
+			br->br_perm &= ~AuBrAttr_ICEX_SEC;
+#endif
+
+		do_free = 0;
 		wbr = br->br_wbr;
 		if (wbr)
 			wbr_wh_read_lock(wbr);
