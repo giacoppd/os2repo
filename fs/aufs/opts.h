@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@
 #ifdef __KERNEL__
 
 #include <linux/path.h>
-#include "branch.h"
 
 struct file;
 struct super_block;
@@ -193,6 +192,7 @@ struct au_opts {
 
 /* ---------------------------------------------------------------------- */
 
+/* opts.c */
 void au_optstr_br_perm(au_br_perm_str_t *str, int perm);
 const char *au_optstr_udba(int udba);
 const char *au_optstr_wbr_copyup(int wbr_copyup);
@@ -206,8 +206,6 @@ int au_opts_mount(struct super_block *sb, struct au_opts *opts);
 int au_opts_remount(struct super_block *sb, struct au_opts *opts);
 
 unsigned int au_opt_udba(struct super_block *sb);
-
-/* ---------------------------------------------------------------------- */
 
 #endif /* __KERNEL__ */
 #endif /* __AUFS_OPTS_H__ */

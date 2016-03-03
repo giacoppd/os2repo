@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,8 +73,11 @@ int au_wh_test(struct dentry *h_parent, struct qstr *wh_name, int try_sio)
 	else
 		wh_dentry = au_sio_lkup_one(wh_name, h_parent);
 	err = PTR_ERR(wh_dentry);
-	if (IS_ERR(wh_dentry))
+	if (IS_ERR(wh_dentry)) {
+		if (err == -ENAMETOOLONG)
+			err = 0;
 		goto out;
+	}
 
 	err = 0;
 	if (!wh_dentry->d_inode)
@@ -316,7 +319,7 @@ static int au_whdir(struct inode *h_dir, struct path *path)
 		if (au_test_nfs(path->dentry->d_sb))
 			mode |= S_IXUGO;
 		err = vfsub_mkdir(h_dir, path, mode);
-	} else if (S_ISDIR(path->dentry->d_inode->i_mode))
+	} else if (d_is_dir(path->dentry))
 		err = 0;
 	else
 		pr_err("unknown %pd exists\n", path->dentry);
@@ -342,9 +345,9 @@ static void au_wh_init_ro(struct inode *h_dir, struct au_wh_base base[],
 
 /*
  * returns tri-state,
- * minus: error, caller should print the mesage
+ * minus: error, caller should print the message
  * zero: succuess
- * plus: error, caller should NOT print the mesage
+ * plus: error, caller should NOT print the message
  */
 static int au_wh_init_rw_nolink(struct dentry *h_root, struct au_wbr *wbr,
 				int do_plink, struct au_wh_base base[],
@@ -933,6 +936,7 @@ int au_whtmp_rmdir(struct inode *dir, aufs_bindex_t bindex,
 		   struct dentry *wh_dentry, struct au_nhash *whlist)
 {
 	int err;
+	unsigned int h_nlink;
 	struct path h_tmp;
 	struct inode *wh_inode, *h_dir;
 	struct au_branch *br;
@@ -969,14 +973,18 @@ int au_whtmp_rmdir(struct inode *dir, aufs_bindex_t bindex,
 	if (!err) {
 		h_tmp.dentry = wh_dentry;
 		h_tmp.mnt = au_br_mnt(br);
+		h_nlink = h_dir->i_nlink;
 		err = vfsub_rmdir(h_dir, &h_tmp);
+		/* some fs doesn't change the parent nlink in some cases */
+		h_nlink -= h_dir->i_nlink;
 	}
 
 	if (!err) {
 		if (au_ibstart(dir) == bindex) {
 			/* todo: dir->i_mutex is necessary */
 			au_cpup_attr_timesizes(dir);
-			vfsub_drop_nlink(dir);
+			if (h_nlink)
+				vfsub_drop_nlink(dir);
 		}
 		return 0; /* success */
 	}

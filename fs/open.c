@@ -280,6 +280,7 @@ int do_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 	sb_end_write(inode->i_sb);
 	return ret;
 }
+EXPORT_SYMBOL(do_fallocate);
 
 SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
 {
@@ -663,6 +664,7 @@ int open_check_o_direct(struct file *f)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(open_check_o_direct);
 
 static int do_dentry_open(struct file *f,
 			  int (*open)(struct inode *, struct file *),

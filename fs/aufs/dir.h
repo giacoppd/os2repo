@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -90,6 +90,7 @@ extern const struct file_operations aufs_dir_fop;
 void au_add_nlink(struct inode *dir, struct inode *h_dir);
 void au_sub_nlink(struct inode *dir, struct inode *h_dir);
 loff_t au_dir_size(struct file *file, struct dentry *dentry);
+void au_dir_ts(struct inode *dir, aufs_bindex_t bsrc);
 int au_test_empty_lower(struct dentry *dentry);
 int au_test_empty(struct dentry *dentry, struct au_nhash *whlist);
 
@@ -118,17 +119,11 @@ long au_rdu_compat_ioctl(struct file *file, unsigned int cmd,
 			 unsigned long arg);
 #endif
 #else
-static inline long au_rdu_ioctl(struct file *file, unsigned int cmd,
-				unsigned long arg)
-{
-	return -EINVAL;
-}
+AuStub(long, au_rdu_ioctl, return -EINVAL, struct file *file,
+       unsigned int cmd, unsigned long arg)
 #ifdef CONFIG_COMPAT
-static inline long au_rdu_compat_ioctl(struct file *file, unsigned int cmd,
-				       unsigned long arg)
-{
-	return -EINVAL;
-}
+AuStub(long, au_rdu_compat_ioctl, return -EINVAL, struct file *file,
+       unsigned int cmd, unsigned long arg)
 #endif
 #endif
 
