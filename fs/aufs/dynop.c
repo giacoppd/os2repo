@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 Junjiro R. Okajima
+ * Copyright (C) 2010-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -258,7 +258,7 @@ out:
 /* ---------------------------------------------------------------------- */
 /*
  * Aufs prohibits O_DIRECT by defaut even if the branch supports it.
- * This behaviour is neccessary to return an error from open(O_DIRECT) instead
+ * This behaviour is necessary to return an error from open(O_DIRECT) instead
  * of the succeeding I/O. The dio mount option enables O_DIRECT and makes
  * open(O_DIRECT) always succeed, but the succeeding I/O may return an error.
  * See the aufs manual in detail.
