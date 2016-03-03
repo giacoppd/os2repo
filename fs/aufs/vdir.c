@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2014 Junjiro R. Okajima
+ * Copyright (C) 2005-2015 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -468,7 +468,6 @@ static int fillvdir(struct dir_context *ctx, const char *__name, int nlen,
 		    || au_nhash_test_known_wh(&arg->whlist, name, nlen))
 			goto out; /* already exists or whiteouted */
 
-		sb = arg->file->f_dentry->d_sb;
 		arg->err = au_ino(sb, arg->bindex, h_ino, d_type, &ino);
 		if (!arg->err) {
 			if (unlikely(nlen > AUFS_MAX_NAMELEN))
