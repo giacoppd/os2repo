@@ -34,8 +34,6 @@ static uint8_t mode;
 static uint8_t bits = 8;
 static uint32_t speed = 500000;
 static uint16_t delay;
-static uint8_t auto_pio_dma_mode;
-static uint32_t auto_pio_dma_threshold;
 
 static void transfer(int fd)
 {
@@ -57,8 +55,6 @@ static void transfer(int fd)
 		.delay_usecs = delay,
 		.speed_hz = speed,
 		.bits_per_word = bits,
-		.auto_pio_dma_mode = auto_pio_dma_mode,
-		.auto_pio_dma_threshold = auto_pio_dma_threshold,
 	};
 
 	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
@@ -85,8 +81,6 @@ static void print_usage(const char *prog)
 	     "  -O --cpol     clock polarity\n"
 	     "  -L --lsb      least significant bit first\n"
 	     "  -C --cs-high  chip select active high\n"
-	     "  -P --auto-pio auto switch PIO/DMA mode\n"
-	     "  -T --thresh   auto switch PIO/DMA threshold\n"
 	     "  -3 --3wire    SI/SO signals shared\n");
 	exit(1);
 }
@@ -104,8 +98,6 @@ static void parse_opts(int argc, char *argv[])
 			{ "cpol",    0, 0, 'O' },
 			{ "lsb",     0, 0, 'L' },
 			{ "cs-high", 0, 0, 'C' },
-			{ "auto-pio", 0, 0, 'P' },
-			{ "thresh",   1, 0, 'T' },
 			{ "3wire",   0, 0, '3' },
 			{ "no-cs",   0, 0, 'N' },
 			{ "ready",   0, 0, 'R' },
@@ -113,7 +105,7 @@ static void parse_opts(int argc, char *argv[])
 		};
 		int c;
 
-		c = getopt_long(argc, argv, "D:s:d:b:lHOLCPT:3NR", lopts, NULL);
+		c = getopt_long(argc, argv, "D:s:d:b:lHOLC3NR", lopts, NULL);
 
 		if (c == -1)
 			break;
@@ -145,12 +137,6 @@ static void parse_opts(int argc, char *argv[])
 			break;
 		case 'C':
 			mode |= SPI_CS_HIGH;
-			break;
-		case 'P':
-			auto_pio_dma_mode = 1;
-			break;
-		case 'T':
-			auto_pio_dma_threshold = atoi(optarg);
 			break;
 		case '3':
 			mode |= SPI_3WIRE;
@@ -215,11 +201,6 @@ int main(int argc, char *argv[])
 	printf("spi mode: %d\n", mode);
 	printf("bits per word: %d\n", bits);
 	printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
-	printf("auto switch PIO/DMA: %s\n",
-		auto_pio_dma_mode ? "enabled" : "disabled");
-	if (auto_pio_dma_mode)
-		printf("auto switch PIO/DMA threshold: %d\n",
-			auto_pio_dma_threshold);
 
 	transfer(fd);
 
