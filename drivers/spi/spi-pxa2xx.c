@@ -904,16 +904,6 @@ static int setup(struct spi_device *spi)
 		rx_thres = RX_THRESH_DFLT;
 	}
 
-	/* Override default FIFO trigger level, with new value. */
-	if (spi->fifo_trigger_level) {
-		if (rx_thres != (spi->fifo_trigger_level >> 16) & 0xff)
-			rx_thres = (spi->fifo_trigger_level >> 16) & 0xff;
-		if (tx_thres != (spi->fifo_trigger_level >> 8) & 0xff)
-			tx_thres = (spi->fifo_trigger_level >> 8) & 0xff;
-		if (tx_hi_thres != spi->fifo_trigger_level & 0xff)
-			tx_hi_thres = spi->fifo_trigger_level & 0xff;
-	}
-
 	/* Only alloc on first setup */
 	chip = spi_get_ctldata(spi);
 	if (!chip) {
@@ -970,9 +960,6 @@ static int setup(struct spi_device *spi)
 	chip->lpss_rx_threshold = SSIRF_RxThresh(rx_thres);
 	chip->lpss_tx_threshold = SSITF_TxLoThresh(tx_thres)
 				| SSITF_TxHiThresh(tx_hi_thres);
-
-	spi->fifo_trigger_level = (chip->lpss_rx_threshold + 1) << 16
-				| (chip->lpss_tx_threshold + 0x101);
 
 	/* set dma burst and threshold outside of chip_info path so that if
 	 * chip_info goes away after setting chip->enable_dma, the

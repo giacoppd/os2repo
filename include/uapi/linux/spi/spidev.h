@@ -128,9 +128,6 @@ struct spi_ioc_transfer {
 #define SPI_IOC_RD_MAX_SPEED_HZ		_IOR(SPI_IOC_MAGIC, 4, __u32)
 #define SPI_IOC_WR_MAX_SPEED_HZ		_IOW(SPI_IOC_MAGIC, 4, __u32)
 
-/* Read / Write SPI FIFO threshold */
-#define SPI_IOC_RD_FIFO_TRIGGER_LEVEL	_IOR(SPI_IOC_MAGIC, 5, __u32)
-#define SPI_IOC_WR_FIFO_TRIGGER_LEVEL	_IOW(SPI_IOC_MAGIC, 5, __u32)
 
 
 #endif /* SPIDEV_H */
