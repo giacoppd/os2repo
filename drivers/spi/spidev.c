@@ -271,8 +271,6 @@ static int spidev_message(struct spidev_data *spidev,
 		k_tmp->bits_per_word = u_tmp->bits_per_word;
 		k_tmp->delay_usecs = u_tmp->delay_usecs;
 		k_tmp->speed_hz = u_tmp->speed_hz;
-		k_tmp->auto_pio_dma_mode = u_tmp->auto_pio_dma_mode;
-		k_tmp->auto_pio_dma_threshold = u_tmp->auto_pio_dma_threshold;
 #ifdef VERBOSE
 		dev_dbg(&spidev->spi->dev,
 			"  xfer len %zd %s%s%s%dbits %u usec %uHz\n",

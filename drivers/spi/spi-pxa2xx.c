@@ -619,7 +619,6 @@ static void pump_transfers(unsigned long data)
 	u32 cr1;
 	u32 dma_thresh = drv_data->cur_chip->dma_threshold;
 	u32 dma_burst = drv_data->cur_chip->dma_burst_size;
-	u8 auto_pio_dma_use_pio;
 
 	/* Get current state information */
 	message = drv_data->cur_msg;
@@ -653,20 +652,8 @@ static void pump_transfers(unsigned long data)
 			cs_deassert(drv_data);
 	}
 
-	/*
-	 * Check if in auto switch PIO/DMA mode.
-	 * If true, use PIO if the length is less than threshold value.
-	 */
-	auto_pio_dma_use_pio = chip->enable_dma ? 0 : 1;
-	if (transfer->auto_pio_dma_mode) {
-		if (transfer->len <= transfer->auto_pio_dma_threshold) {
-			auto_pio_dma_use_pio = 1;
-		}
-	}
-
 	/* Check if we can DMA this transfer */
-	if ((!pxa2xx_spi_dma_is_possible(transfer->len) && chip->enable_dma)
-		|| auto_pio_dma_use_pio) {
+	if (!pxa2xx_spi_dma_is_possible(transfer->len) && chip->enable_dma) {
 
 		/* reject already-mapped transfers; PIO won't always work */
 		if (message->is_dma_mapped
@@ -760,7 +747,7 @@ static void pump_transfers(unsigned long data)
 	message->state = RUNNING_STATE;
 
 	drv_data->dma_mapped = 0;
-	if (pxa2xx_spi_dma_is_possible(drv_data->len) && !auto_pio_dma_use_pio)
+	if (pxa2xx_spi_dma_is_possible(drv_data->len))
 		drv_data->dma_mapped = pxa2xx_spi_map_dma_buffers(drv_data);
 	if (drv_data->dma_mapped) {
 
