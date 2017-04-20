@@ -25,18 +25,17 @@ int * curitem = (int *)(dummy);
 pthread_mutex_unlock(&lock2);
 while(1)
 {
-if(*curitem < 0)
-	pthread_cond_wait(&empty, &lock); //wait for something to feed it
-if(pthread_mutex_lock(&lock) == 0){
-	sleep(buffer[*curitem].sleeptime);
-	printf("%d is my number", buffer[*curitem].val);
-		*curitem = *curitem - 1;
-	pthread_mutex_unlock(&lock);
-        if(*curitem == 31)
-		pthread_cond_signal(&full); //if it was full (at 31), now signal that it's empty
+pthread_mutex_lock(&lock);
+while(*curitem < 0)
+  pthread_cond_wait(&empty, &lock); //wait for something to feed it
+sleep(buffer[*curitem].sleeptime);
+printf("%d is my number", buffer[*curitem].val);
+*curitem = *curitem - 1;
+pthread_mutex_unlock(&lock);
+if(*curitem == 31)
+  pthread_cond_signal(&full); //if it was full (at 31), now signal that it's empty
 }
 //not handling errors here
-}
 return NULL;
 }
 
@@ -45,24 +44,27 @@ void * producer(void *dummy)
 pthread_mutex_lock(&lock2);
 int * curitem = (int *)(dummy);
 pthread_mutex_unlock(&lock2);
-printf("%d\n", *curitem);
+int i = 0;
 while(1)
 {
-if(*curitem > 31)
-	pthread_cond_wait(&full, &lock); //wait for something to come eat
-if(pthread_mutex_lock(&lock) == 0){
-	*curitem = *curitem + 1;
-//	sleep(generate_rand(3,7));
-        printf("%d\n", buffer[*curitem].val);
-	buffer[*curitem].val = (int)generate_rand(0,10);
-	buffer[*curitem].sleeptime = (int)generate_rand(2,9);
-	pthread_mutex_unlock(&lock);
-	if(*curitem == 0) //if it was empty, now there is something to eat, so wake him up
-		pthread_cond_signal(&empty);
+for(i = 0; i < *curitem; i++)
+  printf("%d ", buffer[i].val);
+printf("\n");
+printf("\n");
+pthread_mutex_lock(&lock);
+while(*curitem > 31)
+  pthread_cond_wait(&full, &lock); //wait for something to come eat
+*curitem = *curitem + 1;
+//sleep(generate_rand(3,7));
+//printf("%d\n", buffer[*curitem].val);
+buffer[*curitem].val = 5;//(int)generate_rand(0,10);
+buffer[*curitem].sleeptime = 6;//(int)generate_rand(2,9);
+if(*curitem == 0) //if it was empty, now there is something to eat, so wake him up
+  pthread_cond_signal(&empty);
+  pthread_mutex_unlock(&lock);
 }
 //rand in here somewhere
-}
- return NULL;
+return NULL;
 }
 
 int main(int argc, char **argv)
