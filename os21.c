@@ -40,13 +40,12 @@ if(*curitem > 32 - 1)
 	pthread_cond_wait(&full, &lock); //wait for something to come eat
 if(pthread_mutex_lock(&lock)){
 	sleep(buffer[*curitem].sleeptime);
-        curitem++;
-buffer[*curitem].val = rand() % 100;
-buffer[*curitem].sleeptime = 2 + rand() % 8;
-*curitem = *curitem + 1;
-if(*curitem == 1) //if it was empty, now there is something to eat, so wake him up
-	pthread_cond_signal (&empty);
-pthread_mutex_unlock(&lock);
+	buffer[*curitem].val = rand() % 100;
+	buffer[*curitem].sleeptime = 2 + rand() % 8;
+	*curitem = *curitem + 1;
+	if(*curitem == 1) //if it was empty, now there is something to eat, so wake him up
+		pthread_cond_signal (&empty);
+	pthread_mutex_unlock(&lock);
 }
 //rand in here somewhere
  return NULL;
