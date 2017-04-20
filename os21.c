@@ -12,43 +12,43 @@ pthread_cond_t full;
 struct item{
 int val;
 int sleeptime;
-}; 
+};
 
 int * curitem = malloc(sizeof(int));
 struct item buffer[32]; //the main buffer
 
-void * consumer(int done)
+void * consumer(void *done)
 {
 if(*curitem < 1)
-	pthread_cond_wait(&empty); //wait for something to feed it
+	pthread_cond_wait(&empty, &lock); //wait for something to feed it
 if(pthread_mutex_lock(&lock)){
-	sleep(buffer[curitem].sleeptime);
-	printf("%d is my number", buffer[curitem].val);
+	sleep(buffer[*curitem].sleeptime);
+	printf("%d is my number", buffer[*curitem].val);
 	*curitem = *curitem - 1;
 	if(*curitem == 31)
 		pthread_cond_signal (&full); //if it was full, now signal that it's empty
 	pthread_mutex_unlock(&lock);
 }
 //not handling errors here
-return;
+// return;
 }
 
-void producer(int done)
+void * producer(void *done)
 {
-if(curitem > 32 - 1)
-	pthread_cond_wait(&full); //wait for something to come eat
+if(*curitem > 32 - 1)
+	pthread_cond_wait(&full, &lock); //wait for something to come eat
 if(pthread_mutex_lock(&lock)){
-	sleep(buffer[curitem].sleeptime);
+	sleep(buffer[*curitem].sleeptime);
 curitem++;
-buffer[curitem].val = rander() % 100;
-buffer[curitem].sleeptime = 2 + rander() % 8;
-*curitem = *curitem + 1;	
-if(curitem == 1) //if it was empty, now there is something to eat, so wake him up
+buffer[*curitem].val = rand() % 100;
+buffer[*curitem].sleeptime = 2 + rand() % 8;
+*curitem = *curitem + 1;
+if(*curitem == 1) //if it was empty, now there is something to eat, so wake him up
 	pthread_cond_signal (&empty);
 pthread_mutex_unlock(&lock);
 }
 //rand in here somewhere
-return;
+// return;
 }
 
 int main(int argc, char **argv)
@@ -63,19 +63,19 @@ pthread_t totalthreads[threadcap]; //list of threads to manage
 int threadcontrol[threadcap];
 char cbuffer; //i/o buffer
 int i = 0; int j = 0; //loop chaos vars
-while(true){
+while(1){
 //p producer
 //c consumer
-	if(curthread < threadcap-1) {//max size 
+	if(curthread < threadcap-1) {//max size
 		cbuffer = getchar(); //read the 1 char of input
 		if(cbuffer == 'p'){
 			threadcontrol[curthread] = 1;
-			pthread_create(totalthreads[*curthread], NULL, producer, threadcontrol[curthread])
+			pthread_create(&totalthreads[threadcap], NULL, producer, NULL);
 			curthread++;
 		}
 		if(cbuffer == 'c'){
 			threadcontrol[curthread] = 1;
-			pthread_create(totalthreads[*curthread], NULL, consumer, threadcontrol[curthread])
+			pthread_create(&totalthreads[threadcap], NULL, consumer, NULL);
 			curthread++;
 		}
 	}
