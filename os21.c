@@ -14,11 +14,11 @@ int val;
 int sleeptime;
 };
 
-int * curitem = malloc(sizeof(int));
 struct item buffer[32]; //the main buffer
 
-void * consumer(void *done)
+void * consumer(void *dummy)
 {
+int * curitem = (int *)(dummy);
 if(*curitem < 1)
 	pthread_cond_wait(&empty, &lock); //wait for something to feed it
 if(pthread_mutex_lock(&lock)){
@@ -30,16 +30,17 @@ if(pthread_mutex_lock(&lock)){
 	pthread_mutex_unlock(&lock);
 }
 //not handling errors here
-// return;
+return NULL;
 }
 
-void * producer(void *done)
+void * producer(void *dummy)
 {
+int * curitem = (int *)(dummy);
 if(*curitem > 32 - 1)
 	pthread_cond_wait(&full, &lock); //wait for something to come eat
 if(pthread_mutex_lock(&lock)){
 	sleep(buffer[*curitem].sleeptime);
-curitem++;
+        curitem++;
 buffer[*curitem].val = rand() % 100;
 buffer[*curitem].sleeptime = 2 + rand() % 8;
 *curitem = *curitem + 1;
@@ -48,11 +49,12 @@ if(*curitem == 1) //if it was empty, now there is something to eat, so wake him 
 pthread_mutex_unlock(&lock);
 }
 //rand in here somewhere
-// return;
+ return NULL;
 }
 
 int main(int argc, char **argv)
 {
+int * curitem = malloc(sizeof(int));
 int curthread = 0;
 *curitem = 0;
 pthread_mutex_init(&lock, NULL);
@@ -70,12 +72,12 @@ while(1){
 		cbuffer = getchar(); //read the 1 char of input
 		if(cbuffer == 'p'){
 			threadcontrol[curthread] = 1;
-			pthread_create(&totalthreads[threadcap], NULL, producer, NULL);
+			pthread_create(&totalthreads[threadcap], NULL, producer, (void*)curitem);
 			curthread++;
 		}
 		if(cbuffer == 'c'){
 			threadcontrol[curthread] = 1;
-			pthread_create(&totalthreads[threadcap], NULL, consumer, NULL);
+			pthread_create(&totalthreads[threadcap], NULL, consumer, (void*)curitem);
 			curthread++;
 		}
 	}
