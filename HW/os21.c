@@ -15,7 +15,7 @@ int val;
 int sleeptime;
 };
 
-struct item buffer[32]; //the main buffer
+struct item * buffer; //the main buffer pointer
 
 void * consumer(void *dummy)
 {
@@ -46,7 +46,7 @@ if(*curitem > 31)
 	pthread_cond_wait(&full, &lock); //wait for something to come eat
 if(pthread_mutex_lock(&lock) == 0){
 	*curitem = *curitem + 1;
-	//sleep(generate_rand(3,7));
+	sleep(generate_rand(3,7));
 	buffer[*curitem].val = (int)generate_rand(0,99);
         printf("%d\n", buffer[*curitem].val);
 	buffer[*curitem].sleeptime = (int)generate_rand(2,9);
@@ -63,6 +63,7 @@ int main(int argc, char **argv)
 {
 int * curitem = malloc(sizeof(int));
 int curthread = 0; //loopvar
+buffer = malloc(sizeof(struct item)*32);
 *curitem = -1;
 pthread_mutex_init(&lock, NULL);
 pthread_cond_init(&full, NULL);
