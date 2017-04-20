@@ -6,6 +6,7 @@
 #include "random.c"
 
 pthread_mutex_t lock;
+pthread_mutex_t lock2; //current item lock
 pthread_cond_t empty;
 pthread_cond_t full;
 //its a global no bully
@@ -19,7 +20,9 @@ struct item * buffer; //the main buffer pointer
 
 void * consumer(void *dummy)
 {
+pthread_mutex_lock(&lock2);
 int * curitem = (int *)(dummy);
+pthread_mutex_unlock(&lock2);
 while(1)
 {
 if(*curitem < 0)
@@ -39,16 +42,19 @@ return NULL;
 
 void * producer(void *dummy)
 {
+pthread_mutex_lock(&lock2);
 int * curitem = (int *)(dummy);
+pthread_mutex_unlock(&lock2);
+printf("%d\n", *curitem);
 while(1)
 {
 if(*curitem > 31)
 	pthread_cond_wait(&full, &lock); //wait for something to come eat
 if(pthread_mutex_lock(&lock) == 0){
 	*curitem = *curitem + 1;
-	sleep(generate_rand(3,7));
-	buffer[*curitem].val = (int)generate_rand(0,99);
+//	sleep(generate_rand(3,7));
         printf("%d\n", buffer[*curitem].val);
+	buffer[*curitem].val = (int)generate_rand(0,10);
 	buffer[*curitem].sleeptime = (int)generate_rand(2,9);
 	pthread_mutex_unlock(&lock);
 	if(*curitem == 0) //if it was empty, now there is something to eat, so wake him up
@@ -66,6 +72,7 @@ int curthread = 0; //loopvar
 buffer = malloc(sizeof(struct item)*32);
 *curitem = -1;
 pthread_mutex_init(&lock, NULL);
+pthread_mutex_init(&lock2, NULL);
 pthread_cond_init(&full, NULL);
 pthread_cond_init(&empty, NULL); //setup our conditional flags
 int threadcap = atoi(argv[1]); //max number of threads from line
