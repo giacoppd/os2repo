@@ -62,7 +62,7 @@ unsigned long genrand_int32(void)
 
     return y;
 }
-int cpuid(int *ecx)
+void cpuid(int *ecx)
 {
     __asm__ __volatile__(
                         "cpuid;"
@@ -70,7 +70,7 @@ int cpuid(int *ecx)
                         :"a"(0x01)
                       );
 }
-int rand_16(uint16_t *rand)
+void rand_16(uint16_t *rand)
 {
     char ok;
 
@@ -78,12 +78,12 @@ int rand_16(uint16_t *rand)
                       "rdrand %0; setc %1"
                       :"=r" (*rand), "=qm" (ok)
                 );
-    return (int) ok;
 }
+
 int generate_rand(int low, int high)
 {
     uint16_t rand;
-    unsigned int ecx;
+    int ecx;
     cpuid(&ecx);
     if(ecx & 0x40000000){
         rand_16(&rand);
@@ -96,12 +96,13 @@ int generate_rand(int low, int high)
         rand = (rand % (high - 1)) + low;
         printf("MTWISTER\n");
     }
-    return rand;
+    printf("Random #: %d\n",rand);
+    return (int) rand;
 }
-
+/*
 int main()
 {
   int rand = generate_rand(2,9);
   printf("RANDOM # is: %d\n", rand);
     return 0;
-}
+}*/
