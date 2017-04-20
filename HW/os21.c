@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <pthread.h>
-#include "rand.c"
+#include "random.c"
 
 pthread_mutex_t lock;
 pthread_cond_t empty;
@@ -20,6 +20,8 @@ struct item buffer[32]; //the main buffer
 void * consumer(void *dummy)
 {
 int * curitem = (int *)(dummy);
+while(1)
+{
 if(*curitem < 0)
 	pthread_cond_wait(&empty, &lock); //wait for something to feed it
 if(pthread_mutex_lock(&lock) == 0){
@@ -31,24 +33,29 @@ if(pthread_mutex_lock(&lock) == 0){
 		pthread_cond_signal(&full); //if it was full (at 31), now signal that it's empty
 }
 //not handling errors here
+}
 return NULL;
 }
 
 void * producer(void *dummy)
 {
 int * curitem = (int *)(dummy);
+while(1)
+{
 if(*curitem > 31)
 	pthread_cond_wait(&full, &lock); //wait for something to come eat
 if(pthread_mutex_lock(&lock) == 0){
 	*curitem = *curitem + 1;
-	sleep(generate_rand(3,7));
-	buffer[*curitem].val = generate_rand(0,99);
-	buffer[*curitem].sleeptime = generate_rand(2,9);
+	//sleep(generate_rand(3,7));
+	buffer[*curitem].val = (int)generate_rand(0,99);
+        printf("%d\n", buffer[*curitem].val);
+	buffer[*curitem].sleeptime = (int)generate_rand(2,9);
 	pthread_mutex_unlock(&lock);
 	if(*curitem == 0) //if it was empty, now there is something to eat, so wake him up
 		pthread_cond_signal(&empty);
 }
 //rand in here somewhere
+}
  return NULL;
 }
 
@@ -61,11 +68,13 @@ pthread_mutex_init(&lock, NULL);
 pthread_cond_init(&full, NULL);
 pthread_cond_init(&empty, NULL); //setup our conditional flags
 int threadcap = atoi(argv[1]); //max number of threads from line
-pthread_t totalthreads[threadcap]; //list of threads to manage
+pthread_t conthreads[threadcap]; //list of consumers
 pthread_t prod;
 pthread_create(&prod, NULL, producer, (void*)curitem);
 for(; curthread < threadcap; curthread++)
-  pthread_create(&totalthreads[curthread], NULL, consumer, (void*)curitem);
-
+  pthread_create(&conthreads[curthread], NULL, consumer, (void*)curitem);
+pthread_join(prod, NULL);
+for(curthread = 0; curthread < threadcap; curthread++)
+  pthread_join(conthreads[curthread], NULL);
 return 0;
 }
