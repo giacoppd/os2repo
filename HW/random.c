@@ -35,21 +35,21 @@ unsigned long genrand_int32(void)
         if (mti >= N) { /* generate N words at one time */
                 int kk;
 
-        if (mti == N+1)   /* if init_genrand() has not been called, */
-                init_genrand(5489UL); /* a default initial seed is used */
+                if (mti == N+1)   /* if init_genrand() has not been called, */
+                        init_genrand(5489UL); /* a default initial seed is used */
 
-        for (kk=0;kk<N-M;kk++) {
-                y = (mt[kk]&UPPER_MASK)|(mt[kk+1]&LOWER_MASK);
-                mt[kk] = mt[kk+M] ^ (y >> 1) ^ mag01[y & 0x1UL];
+                for (kk=0;kk<N-M;kk++) {
+                        y = (mt[kk]&UPPER_MASK)|(mt[kk+1]&LOWER_MASK);
+                        mt[kk] = mt[kk+M] ^ (y >> 1) ^ mag01[y & 0x1UL];
+                }
+                for (;kk<N-1;kk++) {
+                        y = (mt[kk]&UPPER_MASK)|(mt[kk+1]&LOWER_MASK);
+                        mt[kk] = mt[kk+(M-N)] ^ (y >> 1) ^ mag01[y & 0x1UL];
+                }
+                        y = (mt[N-1]&UPPER_MASK)|(mt[0]&LOWER_MASK);
+                        mt[N-1] = mt[M-1] ^ (y >> 1) ^ mag01[y & 0x1UL];
+                        mti = 0;
         }
-        for (;kk<N-1;kk++) {
-                y = (mt[kk]&UPPER_MASK)|(mt[kk+1]&LOWER_MASK);
-                mt[kk] = mt[kk+(M-N)] ^ (y >> 1) ^ mag01[y & 0x1UL];
-        }
-                y = (mt[N-1]&UPPER_MASK)|(mt[0]&LOWER_MASK);
-                mt[N-1] = mt[M-1] ^ (y >> 1) ^ mag01[y & 0x1UL];
-                mti = 0;
-    }
 
          y = mt[mti++];
 
