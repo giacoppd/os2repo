@@ -29,7 +29,10 @@ pthread_mutex_lock(&lock);
 while(*curitem < 0)
   pthread_cond_wait(&empty, &lock); //wait for something to feed it
 sleep(buffer[*curitem].sleeptime);
-printf("%d is my number", buffer[*curitem].val);
+printf("%d is my number\n", buffer[*curitem].val);
+fflush(stdout);
+buffer[*curitem].val = 0;
+buffer[*curitem].sleeptime = 0;
 *curitem = *curitem - 1;
 pthread_mutex_unlock(&lock);
 if(*curitem == 31)
@@ -47,18 +50,20 @@ pthread_mutex_unlock(&lock2);
 int i = 0;
 while(1)
 {
-for(i = 0; i < *curitem; i++)
-  printf("%d ", buffer[i].val);
-printf("\n");
-printf("\n");
+//for(i = 0; i < 32; i++)
+//  printf("%d ", buffer[i].val);
+//printf("\n");
+fflush(stdout);
 pthread_mutex_lock(&lock);
 while(*curitem > 31)
   pthread_cond_wait(&full, &lock); //wait for something to come eat
 *curitem = *curitem + 1;
-//sleep(generate_rand(3,7));
+sleep(generate_rand(3,7));
+i = (int)generate_rand(0,10);
 //printf("%d\n", buffer[*curitem].val);
-buffer[*curitem].val = 5;//(int)generate_rand(0,10);
-buffer[*curitem].sleeptime = 6;//(int)generate_rand(2,9);
+buffer[*curitem].val = i;
+i = (int)generate_rand(2,9);
+buffer[*curitem].sleeptime = i;
 if(*curitem == 0) //if it was empty, now there is something to eat, so wake him up
   pthread_cond_signal(&empty);
   pthread_mutex_unlock(&lock);
