@@ -35,7 +35,7 @@ buffer[*curitem].val = 0;
 buffer[*curitem].sleeptime = 0;
 *curitem = *curitem - 1;
 pthread_mutex_unlock(&lock);
-if(*curitem == 31)
+if(*curitem == 30)
   pthread_cond_signal(&full); //if it was full (at 31), now signal that it's empty
 }
 //not handling errors here
@@ -55,7 +55,7 @@ while(1)
 //printf("\n");
 fflush(stdout);
 pthread_mutex_lock(&lock);
-while(*curitem > 31)
+while(*curitem > 30)
   pthread_cond_wait(&full, &lock); //wait for something to come eat
 *curitem = *curitem + 1;
 sleep(generate_rand(3,7));
