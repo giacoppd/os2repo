@@ -23,11 +23,13 @@ void * consumer(void *dummy)
         pthread_mutex_lock(&lock2);
         int * curitem = (int *)(dummy);
         pthread_mutex_unlock(&lock2);
-while(1)
-{
-        pthread_mutex_lock(&lock);
-        while(*curitem < 0)
-                pthread_cond_wait(&empty, &lock); /*wait for producer*/
+        while(1)
+        {
+                pthread_mutex_lock(&lock);
+                
+                while(*curitem < 0)
+                        pthread_cond_wait(&empty, &lock); /*wait for producer*/
+                
                 sleep(buffer[*curitem].sleeptime);
                 printf("%d is my number\n", buffer[*curitem].val);
                 fflush(stdout);
@@ -43,6 +45,7 @@ while(1)
         return NULL;
 
         }
+}
 
 void * producer(void *dummy)
 {
