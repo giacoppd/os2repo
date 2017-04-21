@@ -88,21 +88,24 @@ int generate_rand(int low, int high)
     if(ecx & 0x40000000){
         rand_16(&rand);
         rand = (rand % (high - 1)) + low;
-        printf("RDRAND\n");
+     //   printf("RDRAND\n");
     }
     else{
         init_genrand(time(0));
         rand = genrand_int32();
         rand = (rand % (high - 1)) + low;
-        printf("MTWISTER\n");
+        //printf("MTWISTER\n");
     }
-    printf("Random #: %d\n",rand);
+   // printf("Random #: %d\n",rand);
     return (int) rand;
 }
 /*
 int main()
 {
   int rand = generate_rand(2,9);
-  printf("RANDOM # is: %d\n", rand);
+  rand = generate_rand(2,6);
+  rand = generate_rand(1,9);
+  rand = generate_rand(2,11);
     return 0;
-}*/
+}
+*/
