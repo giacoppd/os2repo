@@ -16,4 +16,4 @@ os21:
 	gcc -o os21 os21.c -Wall -pthread
 
 clean:
-	rm -f *.dvi *.out *.aux *.log *.bbl *.blg *.ps *.pdf assignment1 *.o
+	rm -f *.dvi *.out *.aux *.log *.bbl *.blg *.ps *.pdf os21
