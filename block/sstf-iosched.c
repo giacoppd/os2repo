@@ -1,5 +1,5 @@
 /*
- * elevator noop
+ * elevator look
  */
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
@@ -61,9 +61,14 @@ noop_latter_request(struct request_queue *q, struct request *rq)
 
 static int noop_init_queue(struct request_queue *q, struct elevator_type *e)
 {
+        //I think we change stuff in here but I'm not sure
 	struct noop_data *nd;
 	struct elevator_queue *eq;
-
+        //before this happens we need to play with q and organize it 
+        //figure out current location
+        //pick direction
+        //sort list in that direction
+        //then let the rest of the code go
 	eq = elevator_alloc(q, e);
 	if (!eq)
 		return -ENOMEM;
@@ -74,7 +79,6 @@ static int noop_init_queue(struct request_queue *q, struct elevator_type *e)
 		return -ENOMEM;
 	}
 	eq->elevator_data = nd;
-
 	INIT_LIST_HEAD(&nd->queue);
 
 	spin_lock_irq(q->queue_lock);
@@ -101,7 +105,7 @@ static struct elevator_type elevator_noop = {
 		.elevator_init_fn		= noop_init_queue,
 		.elevator_exit_fn		= noop_exit_queue,
 	},
-	.elevator_name = "noop",
+	.elevator_name = "LOOK",
 	.elevator_owner = THIS_MODULE,
 };
 
