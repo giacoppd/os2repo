@@ -34,8 +34,13 @@ static int sstf_dispatch(struct request_queue *q, int force)
 
 static void sstf_add_request(struct request_queue *q, struct request *rq)
 {
-//HERE?
 	struct sstf_data *nd = q->elevator->elevator_data;
+        //HERE!!!!!! so rq is the head, nd is the list of things to add 
+        //before this happens we need to play with q and organize it 
+        //front of the queue is the start
+        //pick direction
+        //sort list in that direction
+        //then let the rest of the code go
         
 	list_add_tail(&rq->queuelist, &nd->queue);
 }
@@ -62,15 +67,9 @@ sstf_latter_request(struct request_queue *q, struct request *rq)
 
 static int sstf_init_queue(struct request_queue *q, struct elevator_type *e)
 {
-        //I think we change stuff in here but I'm not sure
 	struct sstf_data *nd;
 	struct elevator_queue *eq;
-        //before this happens we need to play with q and organize it 
-        //front of the queue is the start
-        //pick direction
-        //sort list in that direction
-        //then let the rest of the code go
-	eq = elevator_alloc(q, e);
+        eq = elevator_alloc(q, e);
 	if (!eq)
 		return -ENOMEM;
 
