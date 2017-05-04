@@ -11,7 +11,7 @@
 struct sstf_data {
 	struct list_head queue;
         sector_t head_pos;
-        int direction;
+        int direction; //wisdom from TA
 };
 
 static void sstf_merged_requests(struct request_queue *q, struct request *rq,
@@ -25,7 +25,7 @@ static int sstf_dispatch(struct request_queue *q, int force)
 	struct sstf_data *nd = q->elevator->elevator_data;
         printk("In dispatch\n");
 	if (!list_empty(&nd->queue)) { //if nothing in queue, why bother
-		struct request *cur. *prev, *next;
+		struct request *cur, *prev, *next;
 		prev = list_entry(nd->queue.prev, struct request, queuelist);
 		next = list_entry(nd->queue.next, struct request, queuelist);
 		if(prev = next) {
@@ -52,9 +52,9 @@ static int sstf_dispatch(struct request_queue *q, int force)
                   }
                 }
                 list_del_init(&cur->queuelist);
-                nd->head_pos = blk_rq_pos(cur) + blk_rq_sectors(cur);
+                nd->head_pos = blk_rq_pos(cur) + blk_rq_sectors(cur); //update current head pos
                 elv_dispatch_add_tail(q, cur);      
-                printk("Going to sec %llu\n",(unsigned long long) cur->__sector);
+                printk("Going to sec %llu\n",(unsigned long long)cur->__sector);
                 printk("Which was in the %i direction\n", nd->direction);
 		return 1;
 	}
@@ -78,15 +78,11 @@ static void sstf_add_request(struct request_queue *q, struct request *rq)
                   prev = list_entry(prev->queuelist.prev, struct request, queuelist);
                   //cycle until the current request location is less than the next
                   //thus doing insertion sort as you never didn't do that
-                  // 1 7 3 
-                  // 1
-                  //
             }
             list_add(&rq->queuelist, &prev->queuelist);//add new guy to head of prev
           }
-        printk("Added a sector\n");
+        printk("Added a sector, num %llu\n", (unsigned long long)cur->__sector);
         return;
-        // 
 }
 
 static struct request *
@@ -169,5 +165,5 @@ module_exit(sstf_exit);
 
 
 MODULE_AUTHOR("OS2 Group 11-3");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Who cares");
 MODULE_DESCRIPTION("SSTF I/O scheduler");
