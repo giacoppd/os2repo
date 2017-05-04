@@ -118,6 +118,7 @@ static int sstf_init_queue(struct request_queue *q, struct elevator_type *e)
 		return -ENOMEM;
 	}
         nd->head_pos = 0; //the head starts at 0 for our purposes
+        nd->direction = 1; //we also start going forwards
         eq->elevator_data = nd;
 	INIT_LIST_HEAD(&nd->queue);
 
