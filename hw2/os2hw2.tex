@@ -1,0 +1,93 @@
+\documentclass[IEEEtran,letterpaper,10pt,notitlepage,draftclsnofoot,onecolumn]{article}
+
+\usepackage{nopageno}
+\usepackage{alltt}
+\usepackage{float}
+\usepackage{color}
+\usepackage{url}
+\usepackage{balance}
+\usepackage{enumitem}
+\usepackage{pstricks, pst-node}
+\usepackage{geometry}
+\geometry{textheight=9.5in, textwidth=7in}
+\newcommand{\cred}[1]{{\color{red}#1}}
+\newcommand{\cblue}[1]{{\color{blue}#1}}
+\usepackage{hyperref}
+\usepackage{textcomp}
+\usepackage{listings}
+\usepackage{titling}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{setspace}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+\lstset{frame=tb,
+  language=python,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+\begin{document}
+\section{Name and such}
+Group 11-3, OS2, HW2
+
+\begin{enumerate}
+\item 
+\textbf{What do you think the point of this assignment was?}
+To make us muck around in the really gross parts of the kernel. 
+Having us write an I/O scheduler forces us to play around
+in the real underbelly of the OS. Also, you made us practice
+looking up things about kernel memory structures, which turns
+out to be doable with some proper grepping/google. I'm sure
+we'll see lists again soon....
+
+\item 
+\textbf{How did you approach the problem?}
+First, we looked up LOOK and CLOOK and picked LOOK because
+it sounded easier than wrapping at 0/MAX. Then I thought
+about how I would build the queue, as I figured it would
+be the most important part. It was. My first idea for 
+queue building was that I was going to resort it in
+init, which was very wrong, but I also thought that
+the command to launch the I/O was done there. Then I 
+was less foolish and figured out that was what dispatch 
+was for, and also that if we are doing insertion sort like
+you mentioned in class then I should probably be sorting
+while I'm inserting in add\_request. From there it was just
+me figuring out how to access things in the current queue
+so I could put the new thing in the right spot.
+I also edited dispatch so that it'd know when to turn around
+but didn't take much.
+
+\item
+\textbf{Testing details}
+The short answer: Lots of testing prints. Thank god for
+printk I guess. But I did I/O in the machine and made sure
+the traversal order made sense given the input to the best
+of my ability. It seems to, although I really wish there
+was a common fflush for printk so I didn't have to sort 
+output, that made it hard to read things.
+\item
+\textbf{What did we learn?}
+Most major is how to do patch files, add system files,
+and using basic kernel hoodoo especially lists.
+Also, that kernel level stuff in Linux is much more
+accessible than I thought it would be. I was expecting
+assembly hell, it turns out to be linked lists and regular
+looking C. I'm sure I just haven't seen the real gross
+macro stuff yet though....
+Maybe that's the next assignment.
+\end{enumerate}
+\end{document}
