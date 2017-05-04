@@ -10,6 +10,8 @@
 
 struct sstf_data {
 	struct list_head queue;
+        sector_t head_pos;
+        int direction;
 };
 
 static void sstf_merged_requests(struct request_queue *q, struct request *rq,
@@ -21,12 +23,39 @@ static void sstf_merged_requests(struct request_queue *q, struct request *rq,
 static int sstf_dispatch(struct request_queue *q, int force)
 {
 	struct sstf_data *nd = q->elevator->elevator_data;
-
-	if (!list_empty(&nd->queue)) {
-		struct request *rq;
-		rq = list_entry(nd->queue.next, struct request, queuelist);
-		list_del_init(&rq->queuelist);
-		elv_dispatch_sort(q, rq);
+        printk("In dispatch\n");
+	if (!list_empty(&nd->queue)) { //if nothing in queue, why bother
+		struct request *cur. *prev, *next;
+		prev = list_entry(nd->queue.prev, struct request, queuelist);
+		next = list_entry(nd->queue.next, struct request, queuelist);
+		if(prev = next) {
+                  printk("First or only 1 req\n");
+                  cur = next; //only 1 thing to do, so do it
+                }else{
+                  printk("More than 1\n");
+                  if(nd->direction == 1) {
+                    printk("Thinking forward\n");
+                    if(next->__sector > nd->head_pos)
+                      cur = next; //if you can keep going, go
+                    else{
+                      nd->direction = -1;//turn around
+                      cur = prev;
+                    }
+                  }else{
+                    printk("Thinking backwards\n");
+                    if(prev->__sector < nd->head_pos)
+                      cur = prev; //go go go go
+                    else{
+                          nd->direction = 1;//turn around
+                          cur = next;
+                    }
+                  }
+                }
+                list_del_init(&cur->queuelist);
+                nd->head_pos = blk_rq_pos(cur) + blk_rq_sectors(cur);
+                elv_dispatch_add_tail(q, cur);      
+                printk("Going to sec %llu\n",(unsigned long long) cur->__sector);
+                printk("Which was in the %i direction\n", nd->direction);
 		return 1;
 	}
 	return 0;
@@ -34,15 +63,30 @@ static int sstf_dispatch(struct request_queue *q, int force)
 
 static void sstf_add_request(struct request_queue *q, struct request *rq)
 {
+        struct request *next, *prev;  
 	struct sstf_data *nd = q->elevator->elevator_data;
-        //HERE!!!!!! so rq is the head, nd is the list of things to add 
-        //before this happens we need to play with q and organize it 
-        //front of the queue is the start
-        //pick direction
-        //sort list in that direction
-        //then let the rest of the code go
-        
-	list_add_tail(&rq->queuelist, &nd->queue);
+        printk("In add\n");
+        if(list_empty(&nd->queue)){
+            printk("First item in list added\n");
+            list_add(&rq->queuelist, &nd->queue);
+        }else{
+            next = list_entry(nd->queue.next, struct request, queuelist);
+            prev = list_entry(nd->queue.prev, struct request, queuelist);
+            while(blk_rq_pos(rq) > blk_rq_pos(next)){
+                  printk("Looping\n");
+                  next = list_entry(next->queuelist.next, struct request, queuelist);
+                  prev = list_entry(prev->queuelist.prev, struct request, queuelist);
+                  //cycle until the current request location is less than the next
+                  //thus doing insertion sort as you never didn't do that
+                  // 1 7 3 
+                  // 1
+                  //
+            }
+            list_add(&rq->queuelist, &prev->queuelist);//add new guy to head of prev
+          }
+        printk("Added a sector\n");
+        return;
+        // 
 }
 
 static struct request *
@@ -78,7 +122,8 @@ static int sstf_init_queue(struct request_queue *q, struct elevator_type *e)
 		kobject_put(&eq->kobj);
 		return -ENOMEM;
 	}
-	eq->elevator_data = nd;
+        nd->head_pos = 0; //the head starts at 0 for our purposes
+        eq->elevator_data = nd;
 	INIT_LIST_HEAD(&nd->queue);
 
 	spin_lock_irq(q->queue_lock);
@@ -105,7 +150,7 @@ static struct elevator_type elevator_sstf = {
 		.elevator_init_fn		= sstf_init_queue,
 		.elevator_exit_fn		= sstf_exit_queue,
 	},
-	.elevator_name = "LOOK",
+	.elevator_name = "SSTF",
 	.elevator_owner = THIS_MODULE,
 };
 
@@ -123,6 +168,6 @@ module_init(sstf_init);
 module_exit(sstf_exit);
 
 
-MODULE_AUTHOR("OS2 Group 3");
+MODULE_AUTHOR("OS2 Group 11-3");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("LOOK IO scheduler");
+MODULE_DESCRIPTION("SSTF I/O scheduler");
