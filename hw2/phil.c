@@ -51,18 +51,18 @@ int main()
 
 /* check for the other fork */
 long check_fork(long num)
-{
-        if (num == 0)
-                return 0;
-        else if (num == 1)
-                return 0;
-        else if (num == 2)
-                return 1;
-        else if (num == 3)
-                return 2;
-        else if (num == 4)
-                return 3;
-
+{					//We want Philosopher 0 and 1 to take the	
+        if (num == 0)			//same fork first. This stops deadlock
+                return 0;		//         [4]       [3] 
+        else if (num == 1)		//	         3 	 
+                return 0;		//	     4       2
+        else if (num == 2)		//	[0]             [2]
+                return 1;		//	      0     1
+        else if (num == 3)		//	       	
+                return 2;		//              [1]
+        else if (num == 4)		//Everyone else can take the fork to their 
+                return 3;		//left.
+					//
         return 0;
 }
 
