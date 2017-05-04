@@ -46,12 +46,12 @@ static int sstf_dispatch(struct request_queue *q, int force)
                     if(prev->__sector < nd->head_pos)
                       cur = prev; //go go go go
                     else{
-                          nd->direction = 1;//turn around
-                          cur = next;
+                      nd->direction = 1;//turn around
+                      cur = next;
                     }
                   }
                 }
-                list_del_init(&cur->queuelist);
+                list_del_init(&cur->queuelist); //delete done item
                 nd->head_pos = blk_rq_pos(cur) + blk_rq_sectors(cur); //update current head pos
                 elv_dispatch_add_tail(q, cur);      
                 printk("Going to sec %llu\n",(unsigned long long)cur->__sector);
@@ -73,13 +73,12 @@ static void sstf_add_request(struct request_queue *q, struct request *rq)
             next = list_entry(nd->queue.next, struct request, queuelist);
             prev = list_entry(nd->queue.prev, struct request, queuelist);
             while(blk_rq_pos(rq) > blk_rq_pos(next)){
-                  printk("Looping\n");
                   next = list_entry(next->queuelist.next, struct request, queuelist);
                   prev = list_entry(prev->queuelist.prev, struct request, queuelist);
                   //cycle until the current request location is less than the next
                   //thus doing insertion sort as you never didn't do that
             }
-            list_add(&rq->queuelist, &prev->queuelist);//add new guy to head of prev
+            __list_add(&rq->queuelist, &prev->queuelist, &next->queuelist);//add new guy between next and prev
           }
         printk("Added a sector, num %llu\n", (unsigned long long)rq->__sector);
         return;
