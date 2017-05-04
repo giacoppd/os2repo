@@ -7,7 +7,7 @@
 #include "random.c"
 
 #define THREAD_AMT 5
-#define LEFT
+
 void *philosopher_spawn(void *num);
 void think(long num);
 void get_forks(long num);
@@ -52,21 +52,16 @@ int main()
 /* check for the other fork */
 long check_fork(long num)
 {
-        if (num == 0) {
+        if (num == 0)
                 return 0;
-        }
-        else if (num == 1) {
+        else if (num == 1)
                 return 0;
-        }
-        else if (num == 2) {
+        else if (num == 2)
                 return 1;
-        }
-        else if (num == 3) {
+        else if (num == 3)
                 return 2;
-        }
-        else if (num == 4) {
+        else if (num == 4)
                 return 3;
-        }
 
         return 0;
 }
@@ -98,12 +93,10 @@ void get_forks(long num)
 {
         /* locks the semaphore */
         sem_wait(&forks[check_fork(num)]);
-        if(num == 0){
+        if (num == 0)
             sem_wait(&forks[4]);
-        }
-        else{
+        else
             sem_wait(&forks[num]);
-        }
         printf("%s PICKED UP the forks\n\n", philosopher[num]);
 }
 
@@ -118,12 +111,10 @@ void put_forks(long num)
 {
         /* release the semaphore */
         sem_post(&forks[check_fork(num)]);
-        if(num == 0){
+        if (num == 0)
             sem_post(&forks[4]);
-        }
-        else{
+        else
             sem_post(&forks[num]);
-        }
 
         printf("%s PUTS DOWN the forks\n\n", philosopher[num]);
 }
