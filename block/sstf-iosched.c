@@ -28,7 +28,7 @@ static int sstf_dispatch(struct request_queue *q, int force)
 		struct request *cur, *prev, *next;
 		prev = list_entry(nd->queue.prev, struct request, queuelist);
 		next = list_entry(nd->queue.next, struct request, queuelist);
-		if(prev = next) {
+		if(prev == next) {
                   printk("First or only 1 req\n");
                   cur = next; //only 1 thing to do, so do it
                 }else{
@@ -81,7 +81,7 @@ static void sstf_add_request(struct request_queue *q, struct request *rq)
             }
             list_add(&rq->queuelist, &prev->queuelist);//add new guy to head of prev
           }
-        printk("Added a sector, num %llu\n", (unsigned long long)cur->__sector);
+        printk("Added a sector, num %llu\n", (unsigned long long)rq->__sector);
         return;
 }
 
