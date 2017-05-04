@@ -49,8 +49,7 @@ int main()
         return 0;
 }
 
-/* check for the other fork */
-long check_fork(long num)
+long left_hand(long num)
 {					//We want Philosopher 0 and 1 to take the	
         if (num == 0)			//same fork first. This stops deadlock
                 return 0;		//         [4]       [3] 
@@ -61,9 +60,19 @@ long check_fork(long num)
         else if (num == 3)		//	       	
                 return 2;		//              [1]
         else if (num == 4)		//Everyone else can take the fork to their 
-                return 3;		//left.
+                return 3;		//left. 
 					//
         return 0;
+}
+
+long right_hand(long num)
+{
+	if(num == 0)
+		return 4;
+	else
+		return num;
+	return 0;
+	
 }
 
 void *philosopher_spawn(void *num)
@@ -92,11 +101,8 @@ void think(long num)
 void get_forks(long num)
 {
         /* locks the semaphore */
-        sem_wait(&forks[check_fork(num)]);
-        if (num == 0)
-            sem_wait(&forks[4]);
-        else
-            sem_wait(&forks[num]);
+        sem_wait(&forks[left_hand(num)]);
+        sem_wait(&forks[right_hand(num)]);
         printf("%s PICKED UP the forks\n\n", philosopher[num]);
 }
 
@@ -110,11 +116,7 @@ void eat(long num)
 void put_forks(long num)
 {
         /* release the semaphore */
-        sem_post(&forks[check_fork(num)]);
-        if (num == 0)
-            sem_post(&forks[4]);
-        else
-            sem_post(&forks[num]);
-
+        sem_post(&forks[left_hand(num)]);
+        sem_post(&forks[right_hand(num)]);
         printf("%s PUTS DOWN the forks\n\n", philosopher[num]);
 }
