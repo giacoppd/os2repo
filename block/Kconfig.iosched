@@ -61,7 +61,7 @@ choice
 	config DEFAULT_NOOP
 		bool "No-op"
 
-        confid DEFAULT_SSTF
+        config DEFAULT_SSTF
                 bool "sstf" 
 
 endchoice
