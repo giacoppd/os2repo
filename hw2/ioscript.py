@@ -1,0 +1,5 @@
+name = raw_input("enter name ")
+text = raw_input("enter text ")
+f = open(name, "wb")
+f.write(text)
+f.close()
