@@ -26,10 +26,9 @@ void * consumer(void *dummy)
 	while (1)
 	{
 		pthread_mutex_lock(&lock);
-
 		while (*curitem < 0)
-			/* wait for producer */
 			pthread_cond_wait(&empty, &lock);
+			/* wait for producer */
 
 		sleep(buffer[*curitem].sleeptime);
 		printf("%d is my number\n", buffer[*curitem].val);
@@ -44,9 +43,8 @@ void * consumer(void *dummy)
 			pthread_cond_signal(&full);
 
 	/* not handling errors here */
-	return NULL;
-
 	}
+	return NULL;
 }
 
 void * producer(void *dummy)
@@ -62,24 +60,25 @@ void * producer(void *dummy)
 		*printf("\n");
 		*/
 		fflush(stdout);
-		pthread_mutex_lock(&lock);
+		sleep(generate_rand(3,7));
+                pthread_mutex_lock(&lock);
 
 		while (*curitem > 30)
 			/* wait for something to come eat */
 			pthread_cond_wait(&full, &lock);
 
 		*curitem = *curitem + 1;
-		sleep(generate_rand(3,7));
 		i = (int)generate_rand(0,10);
-		/*printf("%d\n", buffer[*curitem].val);*/
 		buffer[*curitem].val = i;
+		printf("%d\n", buffer[*curitem].val);
+                fflush(stdout);
 		i = (int)generate_rand(2,9);
 		buffer[*curitem].sleeptime = i;
 		/* if it was empty, now there is something to eat, so wake up */
-		if (*curitem == 0) {
-			pthread_cond_signal(&empty);
-			pthread_mutex_unlock(&lock);
-		}
+		if (*curitem == 0) 
+		  pthread_cond_signal(&empty);
+		pthread_mutex_unlock(&lock);
+	      
 	}
 
 	return NULL;
@@ -102,11 +101,11 @@ int main(int argc, char **argv)
 
 	for(; curthread < threadcap; curthread++)
 		pthread_create(&conthreads[curthread], NULL, consumer, (void*)curitem);
-
+        
 	pthread_join(prod, NULL);
 
 	for(curthread = 0; curthread < threadcap; curthread++)
 		pthread_join(conthreads[curthread], NULL);
-
+        
 	return 0;
 }
