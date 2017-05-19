@@ -3,6 +3,8 @@
 #include <sys/queue.h>
 #include <stdlib.h>
 #include "random.c"
+#include <unistd.h>
+
 #define THREADS 5
 
 SLIST_HEAD(listhead, entry) head = SLIST_HEAD_INITIALIZER(head);
@@ -18,7 +20,7 @@ struct entry{
 	pthread_mutex_t ninsert;
 	pthread_mutex_t insertl;
 	pthread_mutex_t searchl;
-	int searchc;	
+	int searchc;
 	int insertc;
 
 void *searcher(void * n)
@@ -32,17 +34,17 @@ void *searcher(void * n)
 	pthread_mutex_unlock(&searchl);
 
 	char id = (intptr_t) n;
-	struct entry *itr;
+	// struct entry *itr;
 	if(!SLIST_EMPTY(&head)){
 			printf("I am  a searcher my thread ID is %c and I see this integer at the top: %d\n", id, SLIST_FIRST(&head)->data);
-		
+
 	}
 	else
 		printf("I am a searcher my thread ID is %c and I do not see any integers!\n", id);
 	pthread_mutex_lock(&searchl);
 	searchc--;
 	if(searchc == 0){
-		pthread_mutex_unlock(&nsearch);	
+		pthread_mutex_unlock(&nsearch);
 	//	printf("RELEASE\n");
 	}
 	pthread_mutex_unlock(&searchl);
@@ -80,7 +82,7 @@ void *insert(void * n)
 	pthread_mutex_unlock(&insertl);
    }
 }
- 
+
 void *delete(void * n)
 {
 while(1)
