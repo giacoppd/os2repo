@@ -2,7 +2,6 @@
  * Sample disk driver, from the beginning.
  */
 
-#include <linux/config.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -37,7 +36,11 @@ module_param(ndevices, int, 0);
 
 static char *c_key = "1231231231";
 static int   c_key_len = 10;
+module_param_array(c_key, char, &c_key_len, 0); //makes this a command line option but also allows for a default
 struct crypto_cipher *cipher;
+
+
+
 /*
  * The different "request modes" we can use.
  */
