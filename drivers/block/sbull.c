@@ -110,8 +110,8 @@ static void sbull_transfer(struct sbull_dev *dev, unsigned long sector,
 	unsigned long offset = sector*KERNEL_SECTOR_SIZE;
 	unsigned long nbytes = nsect*KERNEL_SECTOR_SIZE;
 
-	u8 *source;
-	u8 *dest;
+	// u8 *source;
+	// u8 *dest;
 	int n;
 
 	// crypto_cipher_setkey(tfm, c_key, c_key_len);
@@ -136,7 +136,7 @@ static void sbull_transfer(struct sbull_dev *dev, unsigned long sector,
 		if (c_key_len) {
 			for (n = 0; n < nbytes / ccbs; n++) {
 				crypto_cipher_decrypt_one(tfm, buffer + n * ccbs,
-							dev->data + offset + i * ccbs);
+							dev->data + offset + n * ccbs);
 			}
 		}
 		else {
@@ -157,7 +157,7 @@ static void sbull_request(struct request_queue *q)
 	while (req) {
 		struct sbull_dev *dev = req->rq_disk->private_data;
 		if (req->cmd_type != REQ_TYPE_FS) {
-			printk (KERN NOTICE "Skip non-fs request\n");
+			printk (KERN_NOTICE "Skip non-fs request\n");
 			ret = -EIO;
 			goto done;
 		}
@@ -378,7 +378,7 @@ static void setup_device(struct sbull_dev *dev, int which)
 	memset (dev, 0, sizeof (struct sbull_dev));
 	dev->size = nsectors*hardsect_size;
 	dev->data = kmalloc(dev->size, GFP_KERNEL);
-	printk (KERN_NOTICE "Allocating %lu bytes at %lu\n",
+	printk (KERN_NOTICE "Allocating %ld bytes at %ld\n",
 			dev->size, virt_to_phys((void *)dev->data));
 	if (dev->data == NULL) {
 		printk (KERN_NOTICE "vmalloc failure.\n");
@@ -455,7 +455,7 @@ static int __init sbull_init(void)
 	 * Get registered.
 	 */
 
-	c_key_len = strlen(c_key_len);
+	c_key_len = strlen(c_key);
 
 	if (c_key_len == 0) {
 		printk(KERN_WARNING "Test: [INIT] sbull with no key\n");
