@@ -55,6 +55,12 @@ config BLK_DEV_SWIM
 	  You should select this option if you want floppy support
 	  and you don't have a II, IIfx, Q900, Q950 or AV series.
 
+config HW3
+        tristate "Homework 3 11-03"
+        help
+          you wish man
+
+
 config AMIGA_Z2RAM
 	tristate "Amiga Zorro II ramdisk support"
 	depends on ZORRO
