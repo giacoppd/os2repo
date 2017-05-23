@@ -1,0 +1,112 @@
+\documentclass[IEEEtran,letterpaper,10pt,notitlepage,draftclsnofoot,onecolumn]{article}
+
+\usepackage{nopageno}
+\usepackage{alltt}
+\usepackage{float}
+\usepackage{color}
+\usepackage{url}
+\usepackage{balance}
+\usepackage{enumitem}
+\usepackage{pstricks, pst-node}
+\usepackage{geometry}
+\geometry{textheight=9.5in, textwidth=7in}
+\newcommand{\cred}[1]{{\color{red}#1}}
+\newcommand{\cblue}[1]{{\color{blue}#1}}
+\usepackage{hyperref}
+\usepackage{textcomp}
+\usepackage{listings}
+\usepackage{titling}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{setspace}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+\lstset{frame=tb,
+  language=python,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+\begin{document}
+\textbf{Group 11-3, OS2, HW3}
+
+\begin{enumerate}
+\item 
+\textbf{What do you think the main point of this assignment was?}
+The point of this assignment was to learn how to implement a device driver
+as a module for the Linux kernel. Also to learn how to use Linux commands 
+for setting up a device driver performing some crypto in transferring data with
+the help of crypto function calls. 
+
+\item 
+\textbf{How did you approach the problem?}
+Initially we looked at the difference between the sbd and 
+the sbull implementations and we decided to go with sbull.
+Once we selected our method, we looked up the function calls
+to see where they originated from. Then we tried to make changes
+in the sbull\_transfer function since this where the data transferring
+will happen and to apply the crypto calls so that encryption and 
+decryption would occur to and from the device. The encryption
+applied was the Advanced Encryption Standard or AES.
+
+\item
+\textbf{Testing details}
+There were some uses of printk to see what was going on at
+certain points of the program. To test the encryption, there was a
+key and key length involved that had to be passed in as a module
+parameter. Once the key is passed in, then with the use of the dd
+command, we can create an encrypted ramdisk dump and try to
+write it back to the ramdisk for checking if the encryption occurred.
+
+\item
+\textbf{What did we learn?}
+We learned how to compile and make the device driver kernel object.
+Also learned how to SCP the device driver kernel object to the VM and
+inserting the module. Learned how to read parts of the crypto library of
+Linux.
+
+\item
+\textbf{gitlog}
+\begin{itemize}
+\item 5c7c802 was zhaobe, 16 hours ago, message: Fixing compile errors.
+\item f1357fd was 1ryan3, 17 hours ago, message: This one makes!
+\item ab8bbad was zhaobe, 19 hours ago, message: Made changes to Ryans initial sbull.
+\item 3903944 was 1ryan3, 19 hours ago, message: Adding the rest of the sample files from ldd3
+\item 10e824b was dominic, 23 hours ago, message: Added some flags
+\item 1f7f326 was dominic, 23 hours ago, message: Added some flags
+\item d9462bf was dominic, 23 hours ago, message: Moved it to the working directory
+\item ff846e0 was dominic, 24 hours ago, message: Added a line for command line key entry and also removed the config.h bit
+\item 57dc289 was dominic, 27 hours ago, message: Merge branch 'master' of https://github.com/giacoppd/os2repo
+\item bce399c was dominic, 27 hours ago, message: git is making me but I'll merge over it
+\item d177cad was 1ryan3, 28 hours ago, message: Finished(?) encryption
+\item 03e06b2 was zhaobe, 3 days ago, message: Adding Makefile and cleaning up warnings.
+\item 27f968b was 1ryan3, 3 days ago, message: Seems to work correctly. Threads ID themselves etc. 
+\end{itemize}
+
+\item
+\textbf{Work Log}
+Initial weekend: We all looked into and tried to do our own
+research for the sbd or sbull implementations.
+Expo week May 15: Ryan worked on the concurrency 3 assignment
+and Benny worked on the compilation errors and testing.
+Weekend of May 20: Ryan added sbull implementation. Benny checked
+over the implementation and tried fixing it. Dom ran the compilation and
+looked into the inserting modules and mounting process for the device.
+Ryan tried to find out the issue of compatibility between deprecated things
+in the Linux core or just compiling it on os class.
+Monday May 22: Finishing up final edits, compilation, and making things work.
+
+\end{enumerate}
+\end{document}
