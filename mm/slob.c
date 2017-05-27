@@ -86,6 +86,8 @@ typedef s16 slobidx_t;
 typedef s32 slobidx_t;
 #endif
 
+static unsigned long print_counter = 0;
+
 struct slob_block {
     slobidx_t units;
 };
@@ -273,12 +275,22 @@ static void slob_free_pages(void *b, int order)
  */
 static void *slob_page_alloc(struct slob_page *sp, size_t size, int align)
 {
+    //printk("Entered slob_page_alloc\n");
+    //https://courses.engr.illinois.edu/cs423/sp2011/mps/mp4/mp4.pdf
+    //http://pastebin.com/Ny2xqPti
 
     slob_t *prev, *cur, *aligned = NULL;
     slob_t *best = NULL, *best_prev = NULL, *best_aligned = NULL;
     slobidx_t avail;
 
     int delta = 0, best_delta = 0, units = SLOB_UNITS(size);
+    int print = 0;
+
+    if (print_counter > 5000) {
+        print = 1;
+        printk("Request Size: %u\n", units);
+        printk("Avalible Spaces:");
+    } 
 
     slobidx_t best_size = 0;
 
@@ -289,14 +301,21 @@ static void *slob_page_alloc(struct slob_page *sp, size_t size, int align)
             aligned = (slob_t *)ALIGN((unsigned long)cur, align);
             delta = aligned - cur;
         }
+        if (print) {
+            printk("[%u]", slob_units(cur));
+        }
+        
         if (avail >= units + delta && (best == NULL || avail - (units + delta) < best_size)) { /* room enough? */
+            //if (print && best != NULL) {
+            //    printk("\nNew Best Fit: [%u], Old: [%u]\n", slob_units(cur), slob_units(best));
+            //}
             best_aligned = aligned;
             best_prev = prev;
             best = cur;
             best_delta = delta;
             best_size = avail - (units + delta);
             
-            if (best_size == 0) { // exact fit so just stop here
+            if (best_size == 0) { // exact fit no need to keep checking
                 break;
             }
 
@@ -304,9 +323,12 @@ static void *slob_page_alloc(struct slob_page *sp, size_t size, int align)
         if (slob_last(cur)) { 
             break;
         }
-    } 
+    } // Loop End
 
     if (best != NULL) {
+        if (print) {
+            printk(", Best: %u\n", slob_units(best));
+        }
         
         slob_t *next = NULL;
         avail = slob_units(best);
@@ -356,6 +378,7 @@ static void *slob_page_alloc(struct slob_page *sp, size_t size, int align)
  */
 static int best_fit_page(struct slob_page *sp, size_t size, int align)
 {
+    //printk("Entered best_fit_page\n");
     slob_t *prev, *cur, *aligned = NULL;
     int delta = 0, units = SLOB_UNITS(size);
 
@@ -386,7 +409,7 @@ static int best_fit_page(struct slob_page *sp, size_t size, int align)
                 return -1;
             }
         }
-    } 
+    } // Loop end
 }
 
 
@@ -395,6 +418,12 @@ static int best_fit_page(struct slob_page *sp, size_t size, int align)
  */
 static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 {
+    // Increment and reset printing varible
+    if (print_counter > 5000) {
+        print_counter = 0;
+    }
+    ++print_counter;
+
     struct slob_page *sp;
     struct list_head *slob_list;
     slob_t *b = NULL;
@@ -422,7 +451,6 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
         /*
          * If there's a node specification, search for a partial
          * page with a matching node id in the freelist.
-	 * this is evil no touch
          */
         if (node != -1 && page_to_nid(&sp->page) != node)
             continue;
@@ -435,7 +463,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
         
         if (fit == 0) { // Found a page with an exact fit
             best_sp = sp;
-            break; //get out of loop early since it works
+            break;
         } else if (fit > 0 && (best_fit == -1 || fit < best_fit)) {
             best_sp = sp;
             best_fit = fit;
@@ -443,7 +471,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
         continue;
     } // End loop
     
-    if (best_fit >= 0) { // we got something
+    if (best_fit >= 0) { // Actually found a page
 
         if (best_sp != NULL) {
             /* Attempt to alloc */
