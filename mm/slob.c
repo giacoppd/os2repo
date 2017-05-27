@@ -223,7 +223,6 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 	slobidx_t curbest = 9999999; //best fit, with a hueg number so it triggers on first pass
 	for (prev = NULL, cur = sp->freelist; ; prev = cur, cur = slob_next(cur)) {
 		slobidx_t avail = slob_units(cur);
-
 		if (align) {
 			aligned = (slob_t *)ALIGN((unsigned long)cur, align);
 			delta = aligned - cur;
@@ -295,6 +294,8 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 {
 	struct page *sp;
+	struct page *bp = NULL; //best page
+	slobidx_t bestsize = 9999999; //another hueg default
 	struct list_head *prev;
 	struct list_head *slob_list;
 	slob_t *b = NULL;
@@ -316,28 +317,24 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 		 * page with a matching node id in the freelist.
 		 *
 		 * Dominic: I have no idea what this does
-		 * /
+		 */
 		if (node != NUMA_NO_NODE && page_to_nid(sp) != node)
 			continue;
 #endif
-		/* Enough room on this page? */
+		/* Enough room on this page? If not, skip */
 		if (sp->units < SLOB_UNITS(size))
 			continue;
 
-		/* Attempt to alloc */
-		prev = sp->list.prev;
-		b = slob_page_alloc(sp, size, align);
-		if (!b)
-			continue;
-
-		/* Improve fragment distribution and reduce our average
-		 * search time by starting our next search here. (see
-		 * Knuth vol 1, sec 2.5, pg 449) */
-		if (prev != slob_list->prev &&
-				slob_list->next != prev->next)
-			list_move_tail(slob_list, prev->next);
-		break;
+		if (SLOB_UNITS(sp->units) < bestsize) //if new best fit page found, use it
+		{
+		bestsize = SLOB_UNITS(sp->units);
+		bp = sp;
+		}
 	}
+	/* Attempt to alloc */
+	if(bp != NULL)
+		b = slob_page_alloc(bp, size, align);
+
 	spin_unlock_irqrestore(&slob_lock, flags);
 
 	/* Not enough space: must allocate a new page */
