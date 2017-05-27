@@ -295,7 +295,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 {
 	struct page *sp;
 	struct page *bp = NULL; //best page
-	slobidx_t bestsize = 9999999; //another hueg default
+	slobidx_t bestsize = 999; //another hueg default
 	struct list_head *prev;
 	struct list_head *slob_list;
 	slob_t *b = NULL;
