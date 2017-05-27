@@ -289,10 +289,6 @@ static void *slob_page_alloc(struct slob_page *sp, size_t size, int align)
             aligned = (slob_t *)ALIGN((unsigned long)cur, align);
             delta = aligned - cur;
         }
-        if (print) {
-            printk("[%u]", slob_units(cur));
-        }
-        
         if (avail >= units + delta && (best == NULL || avail - (units + delta) < best_size)) { /* room enough? */
             best_aligned = aligned;
             best_prev = prev;
