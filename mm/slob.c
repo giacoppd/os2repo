@@ -221,7 +221,7 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 	int delta = 0, units = SLOB_UNITS(size);
 	int bdelta = 0;
 	slob_t *curbp, *curb, *curba , *curbn = NULL; //markers for best position
-	slobidx_t curbest = 99999; //best fit, with a hueg number so it triggers on first pass
+	slobidx_t curbest = 999; //best fit, with a hueg number so it triggers on first pass
 	for (prev = NULL, cur = sp->freelist; ; prev = cur, cur = slob_next(cur)) {
 		slobidx_t avail = slob_units(cur);
 		if (align) {
@@ -261,31 +261,30 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 
 			if(slob_last(cur)) {
 				if(curb != NULL) {
-				slobidx_t curbav = slob_units(curb);
-				curbn = slob_next(curb);
+					slobidx_t curbav = slob_units(curb);
+					curbn = slob_next(curb);
 
-				if (bdelta) { /* need to fragment head to align? */
-					set_slob(curba, curbav - bdelta, curbn);
-					set_slob(curb, bdelta, curba);
-					curbp = curb;
-					curb = curba;
-					curbav = slob_units(curb);
-				}			
-				/* fragment */
-				if (curbp)
-					set_slob(curbp, slob_units(curbp), curb + units);
-				else
-					sp->freelist = cur + units;
-				set_slob(curb + units, curbav - units, curbn);
-			}
+					if (bdelta) { /* need to fragment head to align? */
+						set_slob(curba, curbav - bdelta, curbn);
+						set_slob(curb, bdelta, curba);
+						curbp = curb;
+						curb = curba;
+						curbav = slob_units(curb);
+					}			
+					/* fragment */
+					if (curbp)
+						set_slob(curbp, slob_units(curbp), curb + units);
+					else
+						sp->freelist = cur + units;
+					set_slob(curb + units, curbav - units, curbn);
+				}
 
-			sp->units -= units;
-			if (!sp->units)
-				clear_slob_page_free(sp);
-			return curb;
+				sp->units -= units;
+				if (!sp->units)
+					clear_slob_page_free(sp);
+				return curb;
 			}
 		}
-	}
 	return NULL;
 }
 
