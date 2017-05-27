@@ -1,0 +1,7 @@
+This isn't before edits because I just put them in the file, but the jist is
+first, we need to scan all pages for one with enough blocks. We in theory
+find the one with the least blocks wasted, then call slob alloc page on it.
+That one finds the set of blocks that is the best fit and shoves it in there.
+For this case, if it finds a perfect fit, it stops and shoves it there,
+otherwise it checks all lists of blocks and shoves it in the best fit.
+I have no idea how to do the defragger at this time.
