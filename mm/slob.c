@@ -216,11 +216,12 @@ static void slob_free_pages(void *b, int order)
  */
 static void *slob_page_alloc(struct page *sp, size_t size, int align)
 {
-	slob_t *prev, *cur, *aligned = NULL;
+	slob_t *prev, *cur, *aligned;
+	aligned = NULL;
 	int delta = 0, units = SLOB_UNITS(size);
 	int bdelta = 0;
 	slob_t *curbp, *curb, *curba , *curbn = NULL; //markers for best position
-	slobidx_t curbest = 9999999; //best fit, with a hueg number so it triggers on first pass
+	slobidx_t curbest = 99999; //best fit, with a hueg number so it triggers on first pass
 	for (prev = NULL, cur = sp->freelist; ; prev = cur, cur = slob_next(cur)) {
 		slobidx_t avail = slob_units(cur);
 		if (align) {
@@ -275,7 +276,7 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 					set_slob(curbp, slob_units(curbp), curb + units);
 				else
 					sp->freelist = cur + units;
-				set_slob(curb + units, curbava - units, curbn);
+				set_slob(curb + units, curbav - units, curbn);
 			}
 
 			sp->units -= units;
