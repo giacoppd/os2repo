@@ -331,12 +331,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
     list_for_each_entry(sp, temp, list) {
         free_units += sp->units;
     }
-        float fragmented;
-        printk("Our syscalls for project 4...\n");
-        fragmented = (float)get_free / (float)get_claimed;
-        printk("Free Memory: %i bytes\n", get_free);
-        printk("Claimed Memory: %i bytes\n", get_claimed);
-        printk("Fragmented: %f\n", fragmented);
+
 	spin_unlock_irqrestore(&slob_lock, flags);
 
 	/* Not enough space: must allocate a new page */
