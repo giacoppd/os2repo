@@ -7,7 +7,6 @@
 int main() {
         float fragmented;
         printf("Our syscalls for project 4...\n");
-
         fragmented = (float)get_free / (float)get_claimed;
         printf("Free Memory: %lu bytes\n", get_free);
         printf("Claimed Memory: %lu bytes\n", get_claimed);
