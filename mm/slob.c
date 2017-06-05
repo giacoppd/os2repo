@@ -70,10 +70,7 @@
 #include <linux/syscalls.h>
 #include <trace/events/kmem.h>
 
-#define get_free syscall(353)
-#define get_claimed syscall(354)
 #include <linux/linkage.h>
-//for asm stuff
 #include <linux/atomic.h>
 
 #include "slab.h"
@@ -88,7 +85,7 @@
 #if PAGE_SIZE <= (32767 * 2)
 typedef s16 slobidx_t;
 #else
-itypedef s32 slobidx_t;
+typedef s32 slobidx_t;
 #endif
 
 unsigned long page_count_slob = 0; 
@@ -274,12 +271,13 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 {
 	struct page *sp;
-        struct page *bp = NULL;
+    struct page *sp_other = NULL;
+	struct list_head *prev;
 	struct list_head *slob_list;
-        struct list_head *temp;
+    struct list_head *temp;
 	slob_t *b = NULL;
 	unsigned long flags;
-        free_units = 0;
+    free_units = 0;
 
 	if (size < SLOB_BREAK1)
 		slob_list = &free_slob_small;
@@ -295,7 +293,6 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 		/*
 		 * If there's a node specification, search for a partial
 		 * page with a matching node id in the freelist.
-                 * I have no idea what this numa stuff is 
 		 */
 		if (node != NUMA_NO_NODE && page_to_nid(sp) != node)
 			continue;
@@ -303,19 +300,19 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 		/* Enough room on this page? */
 		if (sp->units < SLOB_UNITS(size))
 			continue;
-        //if first page that works
-        if(bp == NULL)
-                bp = sp;
+
+        if(sp_other == NULL)
+                sp_other = sp;
 
         //Make sure we get the smallest page for what we need
-        if(sp->units < bp->units)
-                bp = sp;
+        if(sp->units < sp_other->units)
+                sp_other = sp;
 	}
 
     //Now try to allocate
-    if(bp != NULL)
+    if(sp_other != NULL)
     {
-        b = slob_page_alloc(bp, size, align);
+        b = slob_page_alloc(sp_other, size, align);
     }
 
     //Loop through each linked list to find free space
@@ -330,7 +327,9 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
     temp = &free_slob_large;
     list_for_each_entry(sp, temp, list) {
         free_units += sp->units;
+
     }
+
 
 	spin_unlock_irqrestore(&slob_lock, flags);
 
@@ -387,7 +386,7 @@ static void slob_free(void *block, int size)
 		__ClearPageSlab(sp);
 		page_mapcount_reset(sp);
 		slob_free_pages(b, 0);
-        //Freed page, so 1 less page
+        //Freed page, decremeount page count
         page_count_slob--;
 		return;
 	}
@@ -669,7 +668,7 @@ asmlinkage long sys_slob_used(void) {
 }
 
 asmlinkage long sys_slob_free(void) {
-    //thankfully we've been keeping track
+
     return free_units;
 }
 
