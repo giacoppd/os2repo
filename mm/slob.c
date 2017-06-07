@@ -68,7 +68,6 @@ struct slob_rcu {
 	struct rcu_head head;
 	int size;
 };
-
 /*
  * slob_lock protects all slob allocator structures.
  */
@@ -216,6 +215,8 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 			}
 			return NULL;
 		}
+		if (slob_last(cur))
+			return NULL;
 	}
 }
 
@@ -227,8 +228,10 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 	struct page *sp;
 	struct list_head *prev;
 	struct list_head *slob_list;
+    struct list_head *temp;
 	slob_t *b = NULL;
 	unsigned long flags;
+    free_units = 0;
 
 	if (size < SLOB_BREAK1)
 		slob_list = &free_slob_small;
@@ -326,6 +329,8 @@ static void slob_free(void *block, int size)
 		__ClearPageSlab(sp);
 		page_mapcount_reset(sp);
 		slob_free_pages(b, 0);
+        //Freed page, decremeount page count
+        page_count_slob--;
 		return;
 	}
 
@@ -597,6 +602,19 @@ struct kmem_cache kmem_cache_boot = {
 	.flags = SLAB_PANIC,
 	.align = ARCH_KMALLOC_MINALIGN,
 };
+
+asmlinkage long sys_slob_used(void) {
+
+    //used = page size * number of pages
+    long slob_total_used = SLOB_UNITS(PAGE_SIZE) * page_count_slob;
+
+    return slob_total_used;
+}
+
+asmlinkage long sys_slob_free(void) {
+
+    return free_units;
+}
 
 void __init kmem_cache_init(void)
 {
