@@ -626,36 +626,7 @@ void __init kmem_cache_init_late(void)
 {
 	slab_state = FULL;
 }
-/*
-asmlinkage unsigned long sys_largest_block (void) {
-   
-   struct page *sp;
-   struct list_head *slob_list;
-   unsigned long flag;
-   unsigned long largest_free_memory = 0;
-   spin_lock_irqsave(&slob_lock, flag);
 
-   slob_list = &free_slob_small;
-   list_for_each_entry(sp, slob_list, list){
-   	if (sp->units > largest_free_memory)
-	   largest_free_memory = sp->units;
-   }
-
-   slob_list = &free_slob_medium;
-   list_for_each_entry(sp, slob_list, list){
-   	if (sp->units > largest_free_memory)
-	   largest_free_memory = sp->units;
-   }
-
-   slob_list = &free_slob_large;
-   list_for_each_entry(sp, slob_list, list){
-   	if (sp->units > largest_free_memory)
-	   largest_free_memory = sp->units;
-   }
-   spin_unlock_irqrestore(&slob_lock, flag);
-   return largest_free_memory;
-}
-*/
 //ASM stuff for class
 asmlinkage unsigned long sys_slob_free(void){
 //count up all the free space on each page and return it
