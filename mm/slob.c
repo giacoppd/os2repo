@@ -1,64 +1,8 @@
-/*
- * SLOB Allocator: Simple List Of Blocks
- *
- * Matt Mackall <mpm@selenic.com> 12/30/03
- *
- * NUMA support by Paul Mundt, 2007.
- *
- * How SLOB works:
- *
- * The core of SLOB is a traditional K&R style heap allocator, with
- * support for returning aligned objects. The granularity of this
- * allocator is as little as 2 bytes, however typically most architectures
- * will require 4 bytes on 32-bit and 8 bytes on 64-bit.
- *
- * The slob heap is a set of linked list of pages from alloc_pages(),
- * and within each page, there is a singly-linked list of free blocks
- * (slob_t). The heap is grown on demand. To reduce fragmentation,
- * heap pages are segregated into three lists, with objects less than
- * 256 bytes, objects less than 1024 bytes, and all other objects.
- *
- * Allocation from heap involves first searching for a page with
- * sufficient free blocks (using a next-fit-like approach) followed by
- * a first-fit scan of the page. Deallocation inserts objects back
- * into the free list in address order, so this is effectively an
- * address-ordered first fit.
- *
- * Above this is an implementation of kmalloc/kfree. Blocks returned
- * from kmalloc are prepended with a 4-byte header with the kmalloc size.
- * If kmalloc is asked for objects of PAGE_SIZE or larger, it calls
- * alloc_pages() directly, allocating compound pages so the page order
- * does not have to be separately tracked.
- * These objects are detected in kfree() because PageSlab()
- * is false for them.
- *
- * SLAB is emulated on top of SLOB by simply calling constructors and
- * destructors for every SLAB allocation. Objects are returned with the
- * 4-byte alignment unless the SLAB_HWCACHE_ALIGN flag is set, in which
- * case the low-level allocator will fragment blocks to create the proper
- * alignment. Again, objects of page-size or greater are allocated by
- * calling alloc_pages(). As SLAB objects know their size, no separate
- * size bookkeeping is necessary and there is essentially no allocation
- * space overhead, and compound pages aren't needed for multi-page
- * allocations.
- *
- * NUMA support in SLOB is fairly simplistic, pushing most of the real
- * logic down to the page allocator, and simply doing the node accounting
- * on the upper levels. In the event that a node id is explicitly
- * provided, alloc_pages_exact_node() with the specified node id is used
- * instead. The common case (or when the node id isn't explicitly provided)
- * will default to the current node, as per numa_node_id().
- *
- * Node aware pages are still inserted in to the global freelist, and
- * these are scanned for by matching against the node id encoded in the
- * page flags. As a result, block allocations that can be satisfied from
- * the freelist will only be done so on pages residing on the same node,
- * in order to prevent random node placement.
- */
-
+//90000 lines of comments removed
+//os2 group 11-03 slob file
+//even kinda boots fast because we moved the book keeping to the assembly calls
 #include <linux/kernel.h>
 #include <linux/slab.h>
-
 #include <linux/mm.h>
 #include <linux/swap.h> /* struct reclaim_state */
 #include <linux/cache.h>
@@ -67,25 +11,16 @@
 #include <linux/rcupdate.h>
 #include <linux/list.h>
 #include <linux/kmemleak.h>
-
 #include <trace/events/kmem.h>
-
 #include <linux/atomic.h>
-
 #include "slab.h"
-/*
- * slob_block has a field 'units', which indicates size of block if +ve,
- * or offset of next block if -ve (in SLOB_UNITs).
- *
- * Free blocks of size 1 unit simply contain the offset of the next block.
- * Those with larger size contain their size in the first SLOB_UNIT of
- * memory, and the offset of the next free block in the second SLOB_UNIT.
- */
+
 #if PAGE_SIZE <= (32767 * 2)
 typedef s16 slobidx_t;
 #else
 typedef s32 slobidx_t;
 #endif
+
 
 struct slob_block {
 	slobidx_t units;
@@ -217,75 +152,71 @@ static void slob_free_pages(void *b, int order)
 static void *slob_page_alloc(struct page *sp, size_t size, int align)
 {
 	slob_t *prev, *cur, *aligned = NULL;
+	slob_t *best_prev = NULL, *best_cur = NULL, *best_aligned = NULL;
+        //marker vars so we know which page is the cur best fit
 	int delta = 0, units = SLOB_UNITS(size);
-	int bdelta = 0;
-	slob_t *curbp, *curb, *curba , *curbn = NULL; //markers for best position
-	slobidx_t curbest = 9999999; //best fit, with a hueg number so it triggers on first pass
+	int best_delta = 0;
+
+	slobidx_t best_diff = 0;
 	for (prev = NULL, cur = sp->freelist; ; prev = cur, cur = slob_next(cur)) {
 		slobidx_t avail = slob_units(cur);
+
 		if (align) {
 			aligned = (slob_t *)ALIGN((unsigned long)cur, align);
 			delta = aligned - cur;
 		}
-		if (avail == units + delta) //if exact fit, stop looking and plop here.
-		{
-			slob_t *next;		
-			next = slob_next(cur);
-			if (delta) { /* shouldn't happen but can't hurt */
-				set_slob(aligned, avail - delta, next);
-				set_slob(cur, delta, aligned);
-				prev = cur;
-				cur = aligned;
-				avail = slob_units(cur);
+
+		//Check to see if we got space
+		if (avail >= units + delta) {
+			//I wanted to skip the null check but I can't just have a really big default for best_diff it seems
+                        //anywho check to see if it's the first pass or if it beats the current best
+			if (best_cur == NULL || avail - (units + delta) < best_diff) {
+				best_prev = prev;
+				best_cur = cur;
+				best_aligned = aligned;
+				best_delta = delta;
+				best_diff = avail - (units + delta);
 			}
-			if (prev)
-				set_slob(prev, slob_units(prev), next);
-			else
-				sp->freelist = next;		
-			set_slob(cur + units, avail - units, next);
-			sp->units -= units;
-			if (!sp->units)
-				clear_slob_page_free(sp);
-			return cur;
 
 		}
-		if (avail > units + delta && (avail - (units + delta) < curbest)) { 
+		//if we are at the last page in the list, if we have a best fit, alloc there. Else return null and die I guess
+                if (slob_last(cur)) {
+			if (best_cur != NULL) {
+                                //fragment book keeping
+				slob_t *best_next = NULL;
+				slobidx_t best_avail = slob_units(best_cur);
+                                //this fragment thing again incase it matters
+				if (best_delta) {
+					best_next = slob_next(best_cur);
+					set_slob(best_aligned, best_avail - best_delta, best_next);
+					set_slob(best_cur, best_delta, best_aligned);
+					best_prev = best_cur;
+					best_cur = best_aligned;
+					best_avail = slob_units(best_cur);
+				}
+				if (best_avail == units) { 
+				   	if (best_prev)
+						set_slob(best_prev, slob_units(best_prev), slob_next(best_cur));
+					else
+						sp->freelist = slob_next(best_cur);
+				}
+				else { 
+					if (best_prev)
+						set_slob(best_prev, slob_units(best_prev), best_cur + units);
+					else
+						sp->freelist = best_cur + units;
+					set_slob(best_cur + units, best_avail - units, slob_next(best_cur));
+				}
 
-			curbp = prev;
-			curb = cur;
-			curba = aligned;
-			bdelta = delta;
-			curbest = avail - (units + delta);
+				sp->units -= units;
+				if (!sp->units)
+					clear_slob_page_free(sp);
+				return best_cur;
+
 			}
-
-			if(slob_last(cur)) {
-				if(curb != NULL) {
-				slobidx_t curbav = slob_units(curb);
-				curbn = slob_next(curb);
-
-				if (bdelta) { /* need to fragment head to align? */
-					set_slob(curba, curbav - bdelta, curbn);
-					set_slob(curb, bdelta, curba);
-					curbp = curb;
-					curb = curba;
-					curbav = slob_units(curb);
-				}			
-				/* fragment */
-				if (curbp)
-					set_slob(curbp, slob_units(curbp), curb + units);
-				else
-					sp->freelist = cur + units;
-				set_slob(curb + units, curbava - units, curbn);
-			}
-
-			sp->units -= units;
-			if (!sp->units)
-				clear_slob_page_free(sp);
-			return curb;
-			}
+			return NULL;
 		}
 	}
-	return NULL;
 }
 
 /*
@@ -294,8 +225,6 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 {
 	struct page *sp;
-	struct page *bp = NULL; //best page
-	slobidx_t bestsize = 9999999; //another hueg default
 	struct list_head *prev;
 	struct list_head *slob_list;
 	slob_t *b = NULL;
@@ -309,36 +238,41 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 		slob_list = &free_slob_large;
 
 	spin_lock_irqsave(&slob_lock, flags);
-	/* Iterate through each partially free page, try to find room */
+	// go through each page, looking for a freespot
 	list_for_each_entry(sp, slob_list, list) {
 #ifdef CONFIG_NUMA
 		/*
 		 * If there's a node specification, search for a partial
 		 * page with a matching node id in the freelist.
-		 *
-		 * Dominic: I have no idea what this does
+                 * No idea what this shit is, hopefully doesn't matter
 		 */
 		if (node != NUMA_NO_NODE && page_to_nid(sp) != node)
 			continue;
 #endif
-		/* Enough room on this page? If not, skip */
+		/* Enough room on this page? */
 		if (sp->units < SLOB_UNITS(size))
 			continue;
 
-		if (SLOB_UNITS(sp->units) < bestsize) //if new best fit page found, use it
-		{
-		bestsize = SLOB_UNITS(sp->units);
-		bp = sp;
-		}
-	}
-	/* Attempt to alloc */
-	if(bp != NULL)
-		b = slob_page_alloc(bp, size, align);
+		/* Attempt to alloc */
+		prev = sp->list.prev;
+		b = slob_page_alloc(sp, size, align);
+		if (!b)
+			continue;
 
+		/* Improve fragment distribution and reduce our average
+		 * search time by starting our next search here. (see
+		 * Knuth vol 1, sec 2.5, pg 449) 
+                 * I think we can leave this alone? Doesn't seem to break anything
+                 * */
+		if (prev != slob_list->prev &&
+				slob_list->next != prev->next)
+			list_move_tail(slob_list, prev->next);
+		break;
+	}
 	spin_unlock_irqrestore(&slob_lock, flags);
 
 	/* Not enough space: must allocate a new page */
-	//no touch methinks
+        //not touching this
 	if (!b) {
 		b = slob_new_pages(gfp & ~__GFP_ZERO, 0, node);
 		if (!b)
@@ -355,6 +289,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 		b = slob_page_alloc(sp, size, align);
 		BUG_ON(!b);
 		spin_unlock_irqrestore(&slob_lock, flags);
+
 	}
 	if (unlikely((gfp & __GFP_ZERO) && b))
 		memset(b, 0, size);
@@ -363,6 +298,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 
 /*
  * slob_free: entry point into the slob allocator.
+ * not touching this either....
  */
 static void slob_free(void *block, int size)
 {
@@ -378,6 +314,7 @@ static void slob_free(void *block, int size)
 
 	sp = virt_to_page(block);
 	units = SLOB_UNITS(size);
+	
 
 	spin_lock_irqsave(&slob_lock, flags);
 
@@ -448,6 +385,7 @@ out:
 
 /*
  * End of slob allocator proper. Begin kmem_cache_alloc and kmalloc frontend.
+ * don't think we touch this shit either. Looks scary
  */
 
 static __always_inline void *
@@ -670,3 +608,94 @@ void __init kmem_cache_init_late(void)
 {
 	slab_state = FULL;
 }
+/*
+asmlinkage unsigned long sys_largest_block (void) {
+   
+   struct page *sp;
+   struct list_head *slob_list;
+   unsigned long flag;
+   unsigned long largest_free_memory = 0;
+   spin_lock_irqsave(&slob_lock, flag);
+
+   slob_list = &free_slob_small;
+   list_for_each_entry(sp, slob_list, list){
+   	if (sp->units > largest_free_memory)
+	   largest_free_memory = sp->units;
+   }
+
+   slob_list = &free_slob_medium;
+   list_for_each_entry(sp, slob_list, list){
+   	if (sp->units > largest_free_memory)
+	   largest_free_memory = sp->units;
+   }
+
+   slob_list = &free_slob_large;
+   list_for_each_entry(sp, slob_list, list){
+   	if (sp->units > largest_free_memory)
+	   largest_free_memory = sp->units;
+   }
+   spin_unlock_irqrestore(&slob_lock, flag);
+   return largest_free_memory;
+}
+*/
+//ASM stuff for class
+asmlinkage unsigned long sys_slob_free(void){
+//count up all the free space on each page and return it
+   struct page *sp;
+   struct list_head *slob_list;
+   unsigned long flag;
+   unsigned long free_memory = 0;
+   spin_lock_irqsave(&slob_lock, flag);
+
+   slob_list = &free_slob_small;
+   list_for_each_entry(sp, slob_list, list){
+      free_memory += sp->units;
+   }
+
+   slob_list = &free_slob_medium;
+   list_for_each_entry(sp, slob_list, list){
+      free_memory += sp->units;
+   }
+
+   slob_list = &free_slob_large;
+   list_for_each_entry(sp, slob_list, list){
+      free_memory += sp->units;
+   }
+
+   spin_unlock_irqrestore(&slob_lock, flag);
+   return free_memory;
+}
+
+asmlinkage unsigned long sys_slob_used (void){
+   //count total number of pages times the page size minus what we know is free. Kinda has free shoved in here as well,
+   //a deep part of me wants to make this 1 function that just returns the frag% but you can't have floats in ASM
+   struct page *sp;
+   struct list_head *slob_list;
+   unsigned long free_memory = 0;
+   unsigned long flag;
+   int count = 0;
+   spin_lock_irqsave(&slob_lock, flag);
+
+   slob_list = &free_slob_small;
+   list_for_each_entry(sp, slob_list, list){
+     free_memory += sp->units;
+      count++;
+   }
+
+   slob_list = &free_slob_medium;
+   list_for_each_entry(sp, slob_list, list){
+     free_memory += sp->units;
+      count++;
+   }
+
+   slob_list = &free_slob_large;
+   list_for_each_entry(sp, slob_list, list){
+     free_memory += sp->units;
+      count++;
+   }
+
+   spin_unlock_irqrestore(&slob_lock, flag);
+   return (count * SLOB_UNITS(PAGE_SIZE) - free_memory);
+}
+
+
